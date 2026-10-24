@@ -115,10 +115,12 @@ export function soundView(app: App, screen: HTMLElement): View {
   const ew = win(root, { x: 266, y: 84, w: 640, h: 470, title: 'SYNTH', area: 'sound', id: 'synth' });
   const synth = new Panel();
   const et = ew.tools;
-  button(synth, et, 'BASIC', () => app.setEditMode('basic'), { cls: 'small', on: () => app.ui.editMode === 'basic', title: 'The parameters that matter most' });
-  button(synth, et, 'ADVANCED', () => app.setEditMode('advanced'), { cls: 'small', on: () => app.ui.editMode === 'advanced', title: 'Every parameter of the voice' });
-  button(synth, et, 'LOCK VOICE', () => app.lockVoice(editVoice()), { cls: 'small', on: () => !!app.project.soundLocks.voices[editVoice()] });
-  button(synth, et, 'MUTATE VOICE', () => void app.mutateKit(0.4, [editVoice()]), { cls: 'small', disabled: () => app.ui.busy });
+  /** the title-bar tools outlive the editor's rebuilds */
+  const ep = new Panel();
+  button(ep, et, 'BASIC', () => app.setEditMode('basic'), { cls: 'small', on: () => app.ui.editMode === 'basic', title: 'The parameters that matter most' });
+  button(ep, et, 'ADVANCED', () => app.setEditMode('advanced'), { cls: 'small', on: () => app.ui.editMode === 'advanced', title: 'Every parameter of the voice' });
+  button(ep, et, 'LOCK VOICE', () => app.lockVoice(editVoice()), { cls: 'small', on: () => !!app.project.soundLocks.voices[editVoice()] });
+  button(ep, et, 'MUTATE VOICE', () => void app.mutateKit(0.4, [editVoice()]), { cls: 'small', disabled: () => app.ui.busy });
   const eb = ew.body;
   const cols = h('div', '', eb);
   Object.assign(cols.style, { columnCount: '3', columnGap: '6px', columnFill: 'balance', maxHeight: '100%' });
@@ -159,6 +161,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   };
   let shown = '';
   const buildSynth = () => {
+    ep.refresh();
     const v = editVoice();
     const key = `${v}:${app.ui.editMode}`;
     if (key === shown) return synth.refresh();
@@ -187,7 +190,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   };
   buildSynth();
   subscribe(app, ['kit', 'tracks', 'selection', 'view', 'project'], buildSynth);
-  app.on('status', () => synth.refresh());
+  app.on('status', () => (synth.refresh(), ep.refresh()));
 
   // ---------------------------------------------------------------- SAMPLE
   const smw = win(root, { x: 914, y: 84, w: 358, h: 470, title: 'SAMPLE', area: 'sound', id: 'sample' });
@@ -438,7 +441,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   void tip;
   subscribe(app, ['kit', 'status', 'project'], () => kp.refresh());
 
-  const all = [lp, synth, sp, mp, kp];
+  const all = [lp, ep, synth, sp, mp, kp];
   return {
     root,
     frame: () => {

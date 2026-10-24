@@ -5,9 +5,10 @@
 #   lxr/tools/import-upstream.sh /path/to/lxr-desktop-app
 #
 # The list below is the complete set of upstream files CLATTER uses. Files are copied
-# unchanged; CLATTER's modifications are applied afterwards by lxr/tools/apply-patches.sh
-# and documented in docs/LXR_PORT.md. Hardware headers (HAL, GPIO, menu, sequencer) are
-# NOT imported: lxr/shim/ replaces them.
+# unchanged and stay unchanged: CLATTER's modifications live beside them (lxr/shim/ replaces
+# the hardware headers: HAL, GPIO, menu, sequencer; lxr/bridge/ is the WebAssembly interface
+# and the C library) and are documented in docs/LXR_PORT.md. MidiParser.c is not compiled:
+# lxr/tools/extract-params.py derives lxr/bridge/lxr_params.c from it.
 set -euo pipefail
 SRC="${1:?usage: import-upstream.sh /path/to/lxr-desktop-app}"
 DST="$(cd "$(dirname "$0")/.." && pwd)/upstream"

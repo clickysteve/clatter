@@ -1,0 +1,65 @@
+# Test, build and deploy CLATTER to GitHub Pages (a static site; no server).
+#
+# Every push and pull request is type-checked, tested (unit and browser tests) and built.
+# Only main is deployed. The LXR WebAssembly engine is rebuilt from the C sources in lxr/
+# first, so the published page always runs an engine built from the published source (a
+# warning is shown if the committed binary differs from the rebuilt one).
+name: Test and deploy
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'pages' || format('ci-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install clang and wasm-ld
+        run: sudo apt-get update -q && sudo apt-get install -y -q clang lld
+      - run: npm ci
+      - name: Build the LXR engine from source
+        run: |
+          npm run build:lxr
+          git diff --quiet -- src/audio/lxr/lxr.wasm || echo "::warning::lxr.wasm rebuilt from source differs from the committed binary (toolchain version?). The rebuilt engine is tested and deployed."
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx vite build
+      # The custom domain travels with the site.
+      - run: cp CNAME dist/CNAME
+      - name: Browser tests
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

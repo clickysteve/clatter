@@ -67,10 +67,12 @@ WILDCARD after <b>The Breakery</b>; the 1-bit interface after <b>emmm</b>; palet
 output engines and WAV/ZIP export from <b>Slop Factory Core</b> (all MIT, see THIRD_PARTY_NOTICES.md).</p>
 <p><b>Licence.</b> CLATTER is free software under the <b>GNU General Public License version 3 only</b>, with the
 LXR firmware's additional terms (GPL-3.0 section 7: trademarks; modified versions marked as modified). It comes with
-<b>no warranty</b>. You may study, change and share it; if you share it, share its source under the same licence.</p>
+<b>no warranty</b>. You may study, change and share it; if you share it, share its source under the same licence.
+Full texts with this page: <a href="LICENSE.txt" target="_blank">LICENSE</a>, <a href="NOTICE.md" target="_blank">NOTICE</a>,
+<a href="THIRD_PARTY_NOTICES.md" target="_blank">THIRD-PARTY NOTICES</a>, <a href="LXR_FIRMWARE_NOTICE.md" target="_blank">LXR FIRMWARE NOTICE</a>.</p>
 <p><b>Source.</b> The complete corresponding source of this page, including the extracted firmware files, the
 WebAssembly build script and every modification, is at <a href="${SOURCE_URL}" target="_blank" rel="noopener">${SOURCE_URL}</a>
-(the commit that built it is shown below). The page itself is built from that source with <code>npm ci && npm run build</code>;
+(<a href="${SOURCE_URL}/commit/${__BUILD_COMMIT__}" target="_blank" rel="noopener">the commit that built it</a> is shown below). The page itself is built from that source with <code>npm ci && npm run build</code>;
 <code>node scripts/build-lxr.mjs</code> rebuilds the engine.</p>
 <p class="tiny">BUILD ${__BUILD_COMMIT__} · ${__BUILD_DATE__}</p>`;
   buttons(box, [['OK', closeDialog, true]]);

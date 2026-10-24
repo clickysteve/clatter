@@ -1573,11 +1573,11 @@ input.mtext:focus {
 /* ------------------------------------------------------------ PATTERN: sequencer and workspace
    The work area does not scroll on this view: the sequencer takes what the workspace leaves. */
 html[data-view='pattern'] #main {
-  overflow: hidden;
   padding-bottom: calc(14 * var(--px));
 }
 .view.pattern-view {
   height: 100%;
+  min-height: calc(560 * var(--px)); /* a window shorter than this (at this scale) scrolls instead of crushing the grid */
   gap: calc(14 * var(--px));
 }
 .view.pattern-view > .sequencer {

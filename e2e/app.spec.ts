@@ -36,29 +36,239 @@ test('starts with a preset, plays audio and moves the playhead', async ({ page }
   expect(errors).toEqual([]);
 });
 
-test('a click inside a grid cell edits exactly that cell', async ({ page }) => {
-  await boot(page);
+/** The grid canvas and its geometry (the canvas carries it). */
+async function gridGeo(page: Page) {
   const canvas = page.locator('#pattern .gridwrap canvas').first();
   const box = (await canvas.boundingBox())!;
-  const geo = await page.evaluate(() => {
+  const geo = await canvas.evaluate((c) => ({ head: Number((c as HTMLCanvasElement).dataset.head), rowh: Number((c as HTMLCanvasElement).dataset.rowh), cellw: Number((c as HTMLCanvasElement).dataset.cellw) }));
+  return { box, ...geo };
+}
+
+test('a click inside a grid cell edits exactly that cell', async ({ page }) => {
+  await boot(page);
+  const g = await gridGeo(page);
+  const info = await page.evaluate(() => {
     const a = (window as unknown as W).clatter;
-    return { steps: a.pattern.steps, tracks: a.project.tracks.length, id: a.project.tracks[5]!.id };
+    return { steps: a.pattern.steps, id: a.project.tracks[5]!.id };
   });
-  const rowH = (box.height - 14) / geo.tracks;
-  const cellW = box.width / geo.steps;
   // near the right/bottom edge of step 6 on track 6 (floors, never rounds)
-  const x = box.x + 6 * cellW + cellW * 0.9;
-  const y = box.y + 14 + 5 * rowH + rowH * 0.9;
-  const before = await page.evaluate((id) => !!(window as unknown as W).clatter.hitAt(id, 6), geo.id);
+  const x = g.box.x + 6 * g.cellw + g.cellw * 0.9;
+  const y = g.box.y + g.head + 5 * g.rowh + g.rowh * 0.9;
+  const before = await page.evaluate((id) => !!(window as unknown as W).clatter.hitAt(id, 6), info.id);
   await page.mouse.click(x, y);
   const after = await page.evaluate((id) => {
     const a = (window as unknown as W).clatter;
-    return { six: !!a.hitAt(id, 6), seven: !!a.hitAt(id, 7) };
-  }, geo.id);
+    return { six: !!a.hitAt(id, 6), seven: !!a.hitAt(id, 7), five: !!a.hitAt(id, 5), cursor: a.cursorCell() };
+  }, info.id);
   expect(after.six).toBe(!before);
+  expect(after.seven).toBe(false);
+  expect(after.five).toBe(false);
+  // the clicked step is the one being edited
+  expect(after.cursor).toEqual({ track: info.id, step: 6 });
   await page.keyboard.press('Control+z');
-  const undone = await page.evaluate((id) => !!(window as unknown as W).clatter.hitAt(id, 6), geo.id);
+  const undone = await page.evaluate((id) => !!(window as unknown as W).clatter.hitAt(id, 6), info.id);
   expect(undone).toBe(before);
+});
+
+test('click adds, click removes, right-click opens the step editor, Escape closes it', async ({ page }) => {
+  await boot(page);
+  const g = await gridGeo(page);
+  const tr = 6;
+  const id = await page.evaluate((t) => (window as unknown as W).clatter.project.tracks[t]!.id, tr);
+  const at = (s: number) => [g.box.x + (s + 0.5) * g.cellw, g.box.y + g.head + (tr + 0.5) * g.rowh] as const;
+  const has = (s: number) => page.evaluate(([i, st]) => !!(window as unknown as W).clatter.hitAt(i as string, st as number), [id, s]);
+  expect(await has(3)).toBe(false);
+  await page.mouse.click(...at(3));
+  expect(await has(3)).toBe(true);
+  await page.mouse.click(...at(3));
+  expect(await has(3)).toBe(false);
+  await page.mouse.click(...at(3));
+  // the step editor under the grid shows the step
+  await expect(page.locator('#pattern .stepstrip')).toContainText('STEP 4');
+  await page.mouse.click(...at(3), { button: 'right' });
+  await expect(page.locator('.popover')).toBeVisible();
+  await expect(page.locator('.popover')).toContainText('VELOCITY');
+  await expect(page.locator('.popover')).toContainText('CHANCE');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.popover')).toHaveCount(0);
+  // drag paints, one undo
+  await page.mouse.move(...at(8));
+  await page.mouse.down();
+  await page.mouse.move(...at(10), { steps: 4 });
+  await page.mouse.up();
+  expect(await has(8)).toBe(true);
+  expect(await has(9)).toBe(true);
+  expect(await has(10)).toBe(true);
+  await page.keyboard.press('Control+z');
+  expect(await has(8)).toBe(false);
+  expect(await has(10)).toBe(false);
+});
+
+test('the grid draws a boundary for every step, heavier at beats, heaviest at bars', async ({ page }) => {
+  await boot(page);
+  const g = await gridGeo(page);
+  const px = await page.evaluate(() => {
+    const c = document.querySelector('#pattern .gridwrap canvas') as HTMLCanvasElement;
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = c.getContext('2d')!;
+    const head = Number(c.dataset.head);
+    const rowh = Number(c.dataset.rowh);
+    const cellw = Number(c.dataset.cellw);
+    const a = (window as unknown as W).clatter;
+    // an empty row (the second-to-last track plays nothing on beats 1..4 of the preset?) use the row with fewest hits
+    const grids = a.project.tracks.map((t) => a.pattern.gen[t.id] ?? []);
+    let row = 0;
+    let fewest = 1e9;
+    grids.forEach((gr, i) => {
+      const n = gr.filter(Boolean).length;
+      if (n < fewest) ((fewest = n), (row = i));
+    });
+    // sample the middle of the row, 3 px above the bottom (clear of hits and labels), at each edge
+    const y = Math.round((head + row * rowh + rowh * 0.12) * dpr);
+    const lum = (x: number) => {
+      const d = ctx.getImageData(Math.round(x * dpr), y, 1, 1).data;
+      return (d[0]! + d[1]! + d[2]!) / 3;
+    };
+    const out: number[] = [];
+    for (let s = 1; s <= 16; s++) out.push(lum(Math.round(s * cellw)));
+    const inside = lum(Math.round(cellw * 0.5));
+    return { edges: out, inside };
+  });
+  // every step edge is visibly drawn (darker than the open cell), 16 sixteenths = 4 beats = 1 bar
+  for (let s = 1; s <= 16; s++) expect(px.edges[s - 1]!).toBeLessThan(px.inside > 200 ? 215 : px.inside);
+  const step = px.edges[0]!;
+  const beat = px.edges[3]!;
+  const bar = px.edges[15]!;
+  expect(beat).toBeLessThan(step);
+  expect(bar).toBeLessThan(beat + 1);
+  expect(g.cellw).toBeGreaterThanOrEqual(28);
+});
+
+test('a deleted generated hit is an empty cell; SHOW ORIGINAL reveals it', async ({ page }) => {
+  await boot(page);
+  const g = await gridGeo(page);
+  const found = await page.evaluate(() => {
+    const a = (window as unknown as W).clatter;
+    const t = a.project.tracks[0]!;
+    const step = (a.pattern.gen[t.id] ?? []).findIndex((h) => !!h);
+    a.toggleCell(t.id, step); // delete the generated hit
+    return { step, hit: !!a.hitAt(t.id, step) };
+  });
+  expect(found.hit).toBe(false);
+  const cellInk = async () => {
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(150);
+    return page.evaluate(
+      ([step, head, cellw, rowh]) => {
+        const c = document.querySelector('#pattern .gridwrap canvas') as HTMLCanvasElement;
+        const dpr = window.devicePixelRatio || 1;
+        const ctx = c.getContext('2d')!;
+        const x0 = Math.round((step! * cellw! + 3) * dpr);
+        const w = Math.round((cellw! - 6) * dpr);
+        const y0 = Math.round((head! + 3) * dpr);
+        const h = Math.round((rowh! - 8) * dpr);
+        const d = ctx.getImageData(x0, y0, w, h).data;
+        let dark = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i]! < 100) dark++;
+        return dark;
+      },
+      [found.step, g.head, g.cellw, g.rowh],
+    );
+  };
+  // nothing to see (a few dither dots at most) ...
+  expect(await cellInk()).toBeLessThan(40);
+  await page.click('[data-test=show-original]');
+  // ... until the overlay is on: a crossed outline appears
+  expect(await cellInk()).toBeGreaterThan(20);
+  await page.click('[data-test=show-original]');
+  expect(await cellInk()).toBeLessThan(40);
+});
+
+test('a long pattern scrolls inside the grid; the track names stay put', async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => (window as unknown as W).clatter.setLength(64));
+  await page.waitForTimeout(200);
+  const m = await page.evaluate(() => {
+    const sc = document.querySelector('#pattern .gridscroll') as HTMLElement;
+    const lab = document.querySelector('#pattern .trackrow .tname') as HTMLElement;
+    const x0 = lab.getBoundingClientRect().left;
+    sc.scrollLeft = 400;
+    const canvas = sc.querySelector('canvas') as HTMLCanvasElement;
+    return { scroll: sc.scrollWidth, client: sc.clientWidth, cell: Number(canvas.dataset.cellw), labelMoved: lab.getBoundingClientRect().left !== x0, pageOverflow: document.documentElement.scrollWidth > window.innerWidth, mainOverflow: (document.getElementById('main') as HTMLElement).scrollWidth > (document.getElementById('main') as HTMLElement).clientWidth };
+  });
+  expect(m.scroll).toBeGreaterThan(m.client);
+  expect(m.cell).toBeGreaterThanOrEqual(30);
+  expect(m.labelMoved).toBe(false);
+  expect(m.pageOverflow).toBe(false);
+  expect(m.mainOverflow).toBe(false);
+});
+
+for (const [w, h] of [
+  [1920, 1080],
+  [1440, 900],
+  [1366, 768],
+] as const) {
+  test(`readable at ${w} × ${h}: type sizes, no overflow, no clipped controls`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await boot(page);
+    for (const view of ['pattern', 'sound', 'perform'] as const) {
+      await page.click(`[data-test=view-${view}]`);
+      await page.waitForTimeout(250);
+      const r = await page.evaluate(() => {
+        const bad: string[] = [];
+        const tiny: string[] = [];
+        const main = document.getElementById('main')!;
+        const visible = (e: Element) => {
+          const r = e.getBoundingClientRect();
+          const cs = getComputedStyle(e);
+          return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && !(e.closest('.hidden'));
+        };
+        // every element that holds its own text
+        const walker = document.createTreeWalker(document.getElementById('app')!, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          if (!n.textContent?.trim()) continue;
+          const el = n.parentElement!;
+          if (!visible(el)) continue;
+          const fs = parseFloat(getComputedStyle(el).fontSize);
+          if (fs < 14) tiny.push(`${el.className || el.tagName}:${fs}:${n.textContent!.trim().slice(0, 20)}`);
+        }
+        // text must fit its control
+        for (const el of document.querySelectorAll<HTMLElement>('.btn, .num, .msel, .pad, .range .val, .xtab, .strip .sname')) {
+          if (!visible(el)) continue;
+          if (el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible' && !el.classList.contains('sname')) bad.push(`${el.className}:${el.textContent}`);
+        }
+        return { tiny, bad, pageX: document.documentElement.scrollWidth > window.innerWidth, mainX: main.scrollWidth > main.clientWidth + 1 };
+      });
+      expect(r.tiny, `${view}: small text`).toEqual([]);
+      expect(r.bad, `${view}: clipped controls`).toEqual([]);
+      expect(r.pageX, `${view}: page overflows sideways`).toBe(false);
+      expect(r.mainX, `${view}: work area overflows sideways`).toBe(false);
+    }
+  });
+}
+
+test('every palette keeps the grid and tabs legible', async ({ page }) => {
+  await boot(page);
+  const lum = (hex: string) => {
+    const n = parseInt(hex.replace('#', ''), 16);
+    const f = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
+  };
+  const ratio = (a: string, b: string) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  for (const name of ['Classic', 'Dark', 'Colour', 'Amber', 'C64']) {
+    await page.locator('#menubar .menu', { hasText: 'VIEW' }).click();
+    await page.locator('.dropdown .item', { hasText: 'Palette' }).click();
+    await page.locator('.dialog').getByText(name, { exact: true }).first().click();
+    await page.getByRole('button', { name: 'DONE' }).click();
+    const c = await page.evaluate(() => {
+      const cs = getComputedStyle(document.querySelector('#viewtabs .tab:not(.on)')!);
+      const root = getComputedStyle(document.documentElement);
+      const rgb = (s: string) => '#' + (s.match(/\d+/g) ?? []).slice(0, 3).map((x) => Number(x).toString(16).padStart(2, '0')).join('');
+      return { tab: rgb(cs.color), tabBg: rgb(cs.backgroundColor), ink: root.getPropertyValue('--ink').trim(), paper: root.getPropertyValue('--paper').trim() };
+    });
+    expect(ratio(c.tab, c.tabBg), `${name}: view tab text on its tab`).toBeGreaterThan(3);
+    expect(ratio(c.ink, c.paper), `${name}: ink on paper`).toBeGreaterThan(3);
+  }
 });
 
 test('generate, variation, wildcard and a new kit change the music; undo restores it', async ({ page }) => {
@@ -141,6 +351,32 @@ test('saves and opens a project; exports a WAV and a MIDI file', async ({ page }
     return String.fromCharCode(d[0]!, d[1]!, d[2]!, d[3]!);
   });
   expect(mid).toBe('MThd');
+});
+
+test('dialogs are set in readable body type with room between the lines', async ({ page }) => {
+  await boot(page);
+  await page.locator('#menubar .menu', { hasText: 'CLATTER' }).click();
+  await page.locator('.dropdown .item', { hasText: 'About CLATTER' }).click();
+  const about = await page.evaluate(() => {
+    const ps = [...document.querySelectorAll<HTMLElement>('.dialog .scroll p')];
+    return ps.map((p) => {
+      const cs = getComputedStyle(p);
+      return { size: parseFloat(cs.fontSize), line: parseFloat(cs.lineHeight), fits: p.scrollWidth <= p.clientWidth + 1 };
+    });
+  });
+  expect(about.length).toBeGreaterThan(4);
+  for (const p of about) {
+    expect(p.size).toBeGreaterThanOrEqual(15);
+    expect(p.line / p.size).toBeGreaterThanOrEqual(1.5);
+    expect(p.fits).toBe(true);
+  }
+  // the legal notices are all still there
+  const text = await page.locator('.dialog').innerText();
+  for (const s of ['Erica Synths', 'GNU General Public License', 'no warranty', 'trademarks', 'modified version', 'LXR firmware', 'DOWNBEAT', 'The Breakery', 'emmm', 'Slop Factory Core', 'corresponding source']) expect(text).toContain(s);
+  // the dialog fits the window and scrolls inside itself
+  const box = await page.locator('.dialog').boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
 });
 
 test('menu items work with ordinary clicks (About, Keys)', async ({ page }) => {

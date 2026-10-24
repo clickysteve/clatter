@@ -14,11 +14,13 @@ export interface Prefs {
   exportTail: number;
   /** keyboard plays the selected track on number keys etc. */
   seenHelp: boolean;
+  /** collapsible panels the user closed (window id -> collapsed) */
+  collapsed: Record<string, boolean>;
 }
 
 const KEY = 'clatter.prefs';
 
-export const defaultPrefs = (): Prefs => ({ view: 'pattern', editMode: 'basic', midi: defaultMidiPrefs(), exportBars: 8, exportTail: 2, seenHelp: false });
+export const defaultPrefs = (): Prefs => ({ view: 'pattern', editMode: 'basic', midi: defaultMidiPrefs(), exportBars: 8, exportTail: 2, seenHelp: false, collapsed: {} });
 
 export function loadPrefs(): Prefs {
   try {
@@ -33,6 +35,7 @@ export function loadPrefs(): Prefs {
       exportBars: typeof v.exportBars === 'number' ? Math.max(1, Math.min(256, v.exportBars)) : d.exportBars,
       exportTail: typeof v.exportTail === 'number' ? Math.max(0, Math.min(20, v.exportTail)) : d.exportTail,
       seenHelp: v.seenHelp === true,
+      collapsed: v.collapsed && typeof v.collapsed === 'object' ? Object.fromEntries(Object.entries(v.collapsed).filter(([, x]) => typeof x === 'boolean')) : {},
     };
   } catch {
     return defaultPrefs();

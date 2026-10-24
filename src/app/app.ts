@@ -74,6 +74,10 @@ export interface UiState {
   busy: boolean;
   /** the velocity new hits get */
   paintVel: number;
+  /** the step being looked at or edited (a click, a right-click or the arrow keys on the grid) */
+  cursor: { track: string; step: number } | null;
+  /** the grid also shows what the pattern was before hand edits (deleted generated hits, edit marks) */
+  showOriginal: boolean;
 }
 
 type DocState = Omit<Project, 'snapshots'>;
@@ -120,6 +124,8 @@ export class App {
       record: false,
       busy: false,
       paintVel: 100,
+      cursor: null,
+      showOriginal: false,
     };
     this.host = new AudioHost(opts.trackCount ?? 12, 1);
     let store: IndexedDbSampleStore | null = null;
@@ -665,7 +671,31 @@ export class App {
 
   selectTrack(id: string): void {
     this.ui.track = id;
+    if (this.ui.cursor) this.ui.cursor = { ...this.ui.cursor, track: id };
     this.emit(['selection', 'tracks']);
+  }
+
+  /** Look at (and edit) one step of one track. */
+  setCursor(c: { track: string; step: number } | null): void {
+    this.ui.cursor = c;
+    this.emit(['selection']);
+  }
+
+  /** The step the editors work on: a single selected cell, else the cursor (if it is still on the pattern). */
+  cursorCell(): { track: string; step: number } | null {
+    const s = this.ui.sel;
+    if (s && s.t0 === s.t1 && s.s0 === s.s1) {
+      const t = this.project.tracks[s.t0];
+      if (t && s.s0 < this.pattern.steps) return { track: t.id, step: s.s0 };
+    }
+    const c = this.ui.cursor;
+    if (c && c.step < this.pattern.steps && this.project.tracks.some((t) => t.id === c.track)) return c;
+    return null;
+  }
+
+  setShowOriginal(on: boolean): void {
+    this.ui.showOriginal = on;
+    this.emit(['pattern']);
   }
 
   copy(): void {

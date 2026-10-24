@@ -38,7 +38,7 @@ pattern can play any kit.
 | `src/midi/` | Web MIDI, messages, Standard MIDI Files (after DOWNBEAT), the controller (ports, clock in/out, notes in/out, panic). |
 | `src/export/` | The MIDI file of the performance. |
 | `src/app/` | The application: every action on the project, history, the sequence, sound configuration, preferences. |
-| `src/ui/` | The interface: widgets, grid, views, menus, dialogs, keys, palettes. |
+| `src/ui/` | The interface (real-pixel layout, see [UI_REDESIGN.md](UI_REDESIGN.md)): widgets, the pattern grid (`grid.ts`, with `gridModel.ts` deciding what each cell shows), views, menus, dialogs, tooltips, keys, palettes. |
 | `test/`, `e2e/` | Unit tests (Vitest, Node, the real WebAssembly engine) and browser tests (Playwright). |
 
 ## Rhythm
@@ -54,8 +54,9 @@ pattern can play any kit.
   probability, per-track density (weak metric positions drop first), fills into gaps, chance,
   humanise, ratchets and flams, swing, polymetric track lengths, and rhythm evolution. Each cycle
   has its own seed, so a pattern varies from cycle to cycle but cycle *k* is always the same.
-- **Cells flags** record what each cycle did (suppressed, added, destroyed, moved, evolved) for
-  the grid's overlay.
+- **Cells flags** record what each cycle did (suppressed, added, destroyed, moved, evolved).
+  The grid (`src/ui/gridModel.ts`) turns the realisation into what it draws: a block where
+  something sounds, an outline where a written hit stays silent, nothing elsewhere.
 
 ## Destruction
 
@@ -130,5 +131,9 @@ interfaces. Nothing from the LXR firmware is in Core, and CLATTER does not chang
 - `test/project.test.ts`: files round-trip and repair, presets, kit files, history.
 - `test/export.test.ts`: deterministic offline renders, stems that sum to the master, WAV,
   drum hits, the MIDI file.
-- `e2e/app.spec.ts` (Playwright, Chromium): start-up and audio, grid hit-testing, generation,
-  kits, HYBRID with a sample, palettes, project save and open, WAV and MIDI export.
+- `test/gridmodel.test.ts`: what the grid shows is what plays (sounding, silent, added, deleted
+  cells; beat and bar structure from the resolution).
+- `e2e/app.spec.ts` (Playwright, Chromium): start-up and audio, grid hit-testing, editing by
+  click, drag and right-click, cell boundaries and the SHOW ORIGINAL overlay, sideways scrolling,
+  type sizes and overflow at 1920 × 1080, 1440 × 900 and 1366 × 768, palette legibility,
+  generation, kits, HYBRID with a sample, project save and open, WAV and MIDI export.

@@ -11,6 +11,7 @@ import { PAR } from '../../sound/lxrParamIds';
 import { PatternGrid } from '../grid';
 import { ctl, h, Panel, range, win } from '../widgets';
 import { subscribe, type View } from './patternView';
+import { cpx } from '../scale';
 
 interface PadOptions {
   sub?: () => string;
@@ -74,7 +75,7 @@ export function performView(app: App, screen: HTMLElement): View {
   root.dataset.view = 'perform';
   const top = h('div', 'perform-top', root);
   const side = h('div', 'col', top);
-  side.style.gap = '16px';
+  side.style.gap = cpx(16);
   const mid = h('div', 'perform-mid', root);
   const q = () => app.project.quantize.toUpperCase();
 
@@ -172,7 +173,7 @@ export function performView(app: App, screen: HTMLElement): View {
   const xp = new Panel();
   const xb = xw.body;
   xb.classList.add('col');
-  xb.style.gap = '10px';
+  xb.style.gap = cpx(10);
   const macro = (label: string, title: string, get: () => number, set: (v: number) => void, min = 0, max = 100, fmt: (v: number) => string = (v) => v + '%') => {
     const c = ctl(xb, label, title);
     range(xp, c.slot, { get, set, min, max, format: fmt, begin: () => app.beginDrag(label), end: () => app.endDrag(), title });

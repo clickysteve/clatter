@@ -12,6 +12,7 @@ import { FX_PARAM_LABELS, FX_PARAMS, formatValue, GROUPS, modTargets, PAR, targe
 import { importSamples } from '../menu';
 import { button, ctl, download, group, h, num, Panel, range, select, vfader, win } from '../widgets';
 import { pctRange, subscribe, type View } from './patternView';
+import { cpx, font } from '../scale';
 
 const MODES: { value: SourceMode; label: string }[] = [
   { value: 'synth', label: 'SYNTH' },
@@ -104,7 +105,7 @@ export function soundView(app: App, screen: HTMLElement): View {
       synth.refresh();
     }, { cls: 'grow', on: () => editVoice() === v, title: 'Edit this voice' });
     const m = h('div', 'meter h', r);
-    Object.assign(m.style, { width: '56px', height: '10px', flex: 'none' });
+    Object.assign(m.style, { width: cpx(56), height: cpx(10), flex: 'none' });
     const lvl = h('div', 'lvl', m);
     voiceMeters.push(lvl);
     button(lp, r, 'L', () => app.lockVoice(v), { cls: 'small', on: () => !!app.project.soundLocks.voices[v], title: 'Lock: GENERATE KIT, MUTATE KIT and EVOLVE leave this voice alone' });
@@ -220,7 +221,7 @@ export function soundView(app: App, screen: HTMLElement): View {
     const s = current();
     g.fillStyle = ink;
     if (!s) {
-      g.font = '18px VT323, monospace';
+      g.font = `${font(18)}px VT323, monospace`;
       g.textBaseline = 'middle';
       g.fillText(t().sound.mode === 'synth' ? 'SYNTH TRACK: NO SAMPLE' : 'NO SAMPLE: CHOOSE ONE BELOW', 10, H / 2);
       return;
@@ -307,7 +308,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   const onTrack = h('div', 'list', sb2);
   h('div', 'hint', sb2, 'LIBRARY · CLICK: ASSIGN · SHIFT-CLICK: ADD · ▶ HEAR');
   const lib = h('div', 'list', sb2);
-  lib.style.maxHeight = '300px';
+  lib.style.maxHeight = cpx(300);
   const libRow = h('div', 'row', sb2);
   button(sp, libRow, 'IMPORT…', () => void importSamples(app, t().id), { cls: 'grow', title: 'Import WAV, AIFF, MP3, OGG, FLAC: assigned to this track' }).dataset.test = 'import';
   const filter = h('div', 'hint', libRow);
@@ -355,7 +356,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   const mp = new Panel();
   const mb = mw.body;
   mb.classList.add('mixer');
-  mb.style.padding = '10px';
+  mb.style.padding = cpx(10);
   const buildMixer = () => {
     mp.clear();
     mb.innerHTML = '';
@@ -371,11 +372,11 @@ export function soundView(app: App, screen: HTMLElement): View {
         nm.textContent = x().name;
       });
       const fr = h('div', 'row', s);
-      fr.style.gap = '6px';
+      fr.style.gap = cpx(6);
       fr.style.alignItems = 'stretch';
       vfader(mp, fr, { get: () => x().mix.volume, set: (v) => app.setTrackMix(tr.id, { volume: v }, 'VOLUME'), begin: () => app.beginDrag('VOLUME'), end: () => app.endDrag(), height: 150, def: 0.8, title: 'Volume (0.8 = 0 dB, double-click)' });
       const met = h('div', 'meter', fr);
-      met.style.width = '10px';
+      met.style.width = cpx(10);
       const lvl = h('div', 'lvl', met);
       trackMeters.push(lvl);
       const db = h('div', 'hint', s);
@@ -387,7 +388,7 @@ export function soundView(app: App, screen: HTMLElement): View {
       range(mp, s, { get: () => Math.round(x().mix.pan * 100), set: (v) => app.setTrackMix(tr.id, { pan: v / 100 }, 'PAN'), min: -100, max: 100, def: 0, bip: true, format: (v) => (v === 0 ? 'C' : v < 0 ? 'L' + -v : 'R' + v), begin: () => app.beginDrag('PAN'), end: () => app.endDrag(), title: 'Pan' });
       range(mp, s, { get: () => Math.round(x().mix.filter * 100), set: (v) => app.setTrackMix(tr.id, { filter: v / 100 }, 'FILTER'), min: -100, max: 100, def: 0, bip: true, format: (v) => (v === 0 ? 'FLT' : v < 0 ? 'LP' : 'HP'), begin: () => app.beginDrag('FILTER'), end: () => app.endDrag(), title: 'One-knob filter: left low-pass, right high-pass' });
       const ms = h('div', 'row', s);
-      ms.style.gap = '3px';
+      ms.style.gap = cpx(3);
       button(mp, ms, 'M', () => app.setTrackMix(tr.id, { mute: !x().mix.mute }), { cls: 'small', on: () => x().mix.mute, title: 'Mute' });
       button(mp, ms, 'S', () => app.setTrackMix(tr.id, { solo: !x().mix.solo }), { cls: 'small', on: () => x().mix.solo, title: 'Solo' });
       button(mp, ms, 'FX', () => app.setTrackMix(tr.id, { route: x().mix.route === 'fx' ? 'main' : 'fx' }, 'ROUTE'), { cls: 'small', on: () => x().mix.route === 'fx', title: 'Route through the LXR FX bus (instead of straight to the master)' });
@@ -396,12 +397,12 @@ export function soundView(app: App, screen: HTMLElement): View {
     s.style.marginLeft = 'auto';
     h('div', 'sname', s, 'MASTER').classList.add('inv');
     const fr = h('div', 'row', s);
-    fr.style.gap = '6px';
+    fr.style.gap = cpx(6);
     fr.style.alignItems = 'stretch';
     vfader(mp, fr, { get: () => app.project.master.volume, set: (v) => app.setMaster({ volume: v }, 'MASTER VOLUME'), begin: () => app.beginDrag('MASTER VOLUME'), end: () => app.endDrag(), height: 150, def: 0.8, title: 'Master volume' });
     const mL = h('div', 'meter', fr);
     const mR = h('div', 'meter', fr);
-    for (const m of [mL, mR]) m.style.width = '10px';
+    for (const m of [mL, mR]) m.style.width = cpx(10);
     masterMeters = [h('div', 'lvl', mL), h('div', 'lvl', mR)];
     button(mp, s, 'CLIP', () => app.setMaster({ clip: !app.project.master.clip }, 'SOFT CLIP'), { cls: 'small', on: () => app.project.master.clip, title: 'Soft clipper on the master' });
     select(mp, s, {
@@ -431,11 +432,11 @@ export function soundView(app: App, screen: HTMLElement): View {
   kp.add(() => (kn.textContent = `${app.project.kit.name} · SEED ${app.project.kit.seed}${app.ui.busy ? ' · CHECKING THE KIT IN THE ENGINE…' : ''} · ${app.project.soundLocks.params.length} PARAMS LOCKED`));
   const fxg = group(kb, 'LXR FX BUS');
   const fxc = h('div', 'synthcols', fxg);
-  fxc.style.columnWidth = '280px';
+  fxc.style.columnWidth = cpx(280);
   const fxType = () => app.project.kit.synth.params[PAR.FX_TYPE] ?? 0;
   for (const p of FX_PARAMS) {
     const wrap = h('div', '', fxc);
-    wrap.style.marginBottom = '6px';
+    wrap.style.marginBottom = cpx(6);
     wrap.style.breakInside = 'avoid';
     const isP = p.id >= PAR.FX_P1 && p.id <= PAR.FX_P4;
     paramCtl(wrap, p, kp, isP ? () => FX_PARAM_LABELS[fxType()]?.[p.id - PAR.FX_P1] ?? p.label : undefined);

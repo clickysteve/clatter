@@ -39,11 +39,12 @@ import { exportMidi } from '../export/midiFile';
 import { Sequence } from './sequence';
 import { anySolo, configureEngine, engineTrackOf, hitOf, kitDiff, masterChain, sendKit, trackIndex, type EngineTarget } from './soundConfig';
 import { History } from './history';
-import { loadPrefs, savePrefs, type Prefs } from './prefs';
+import { loadPrefs, savePrefs, type Prefs, type Workspace } from './prefs';
+import { setScale } from '../ui/scale';
 import { Scheduler, startTicker } from '../transport/scheduler';
 import { PAR } from '../sound/lxrParamIds';
 
-export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'midi' | 'status' | 'snapshots' | 'view' | 'selection' | 'history' | 'master';
+export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master';
 
 export interface Selection {
   /** track indices (inclusive) */
@@ -56,6 +57,8 @@ export interface Selection {
 
 export interface UiState {
   view: Prefs['view'];
+  /** the tab open under the pattern grid */
+  workspace: Workspace;
   editMode: Prefs['editMode'];
   /** the selected track id */
   track: string;
@@ -113,6 +116,7 @@ export class App {
     this.project = defaultProject();
     this.ui = {
       view: this.prefs.view,
+      workspace: this.prefs.workspace,
       editMode: this.prefs.editMode,
       track: this.project.tracks[0]!.id,
       sel: null,
@@ -1322,6 +1326,20 @@ export class App {
     this.prefs.view = v;
     savePrefs(this.prefs);
     this.emit(['view']);
+  }
+
+  /** Open a tab of the workspace under the pattern grid. */
+  setWorkspace(w: Workspace): void {
+    this.ui.workspace = w;
+    this.prefs.workspace = w;
+    savePrefs(this.prefs);
+    this.emit(['workspace']);
+  }
+
+  /** The interface scale (VIEW menu): applied at once and kept in the preferences. */
+  setUiScale(v: number): void {
+    this.prefs.uiScale = setScale(v);
+    savePrefs(this.prefs);
   }
 
   setEditMode(m: Prefs['editMode']): void {

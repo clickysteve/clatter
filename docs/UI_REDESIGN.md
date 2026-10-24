@@ -89,24 +89,25 @@ dashed outline, plus a faint preview of the hit a click would add. Muted rows fa
 
 ## 3. Structure of the PATTERN view
 
-* **Primary** (always on screen, even at 1366 × 768): the transport (play, tempo, swing,
-  pattern buttons, chain, quantise, undo, panic), the view tabs, the pattern grid with its
-  track rows (name, SYN/SMP/HYB chip, M, S, L, hear), and the step editor under it.
-* **Secondary** (a band of windows under the grid that flows into 1 to 4 columns, each folds
-  away from its title bar and remembers it): **GENERATE** (style, density, complexity,
-  variation, GENERATE, VARIATION, MUTATE), **TRANSFORM** (see below), **TRACK** (the selected
-  track), **EDIT** (copy, paste, clear, shift, velocity and chance for the selection).
-* **Tertiary**: GENERATE's *MORE* section (accent, fills, bars, regenerate, evolution), TRACK's
-  *loop length and MIDI* section, each transformation's parameters (shown for the one chosen
-  in the toolbar), the grid key and keys dialogs.
+One window, no page scroll. The menu bar carries the view tabs (PATTERN, SOUND, PERFORM) and the
+status line; the transport sits under it; the rest is the **sequencer** (the pattern grid, its
+tool row and the hover line, always on screen) above a **tabbed workspace**:
 
-**TRANSFORM** is a toolbar of CHOP, ROLLS, DESTROY and WILDCARD. Each of the first three has a
-check box (on/off, as before: C, L, D) and a name that shows its parameters in the panel under
-the toolbar, so all 20 controls remain, one transformation at a time. WILDCARD runs as before.
+| Tab | Holds |
+| --- | --- |
+| **SEQUENCE** | the step being edited (velocity, chance, pitch, ratchet, flam, sample) and the selection tools (velocity, chance, copy, paste, clear, shift) |
+| **GENERATE** | style, GENERATE / VARIATION / MUTATE, bars and regenerate; density, complexity, variation, accent, fills; evolution |
+| **TRANSFORM** | CHOP, ROLLS, DESTROY (each with its on/off box and its parameters) and WILDCARD |
+| **TRACK** | the selected track: source (SYNTH, SAMPLE, HYBRID), mute, solo, lock, hear, fill, performance, loop length and MIDI |
 
-**TRACK** shows SYNTH, SAMPLE and HYBRID as a joined three-way control (the current one
-inverted; it also changes the mode), then mute, solo, lock, hear, fill, then the performance
-sliders in a group.
+The tab is remembered. The keys that act on the pattern open their tab (G, V, M, R: GENERATE;
+C, L, D, W: TRANSFORM). The workspace takes a share of the window's height; the grid takes what is
+left, its rows shrinking to fit down to the smallest row that holds its buttons, and scrolling
+inside its frame below that. A tab that needs more room scrolls inside its own panel.
+SOUND and PERFORM still scroll the work area when their content is taller than the window.
+
+Hierarchy is as before: the sequencer and transport are primary, the workspace tabs secondary,
+and the grid key, keys dialog and each transformation's parameters tertiary.
 
 ## 4. Editing
 
@@ -126,7 +127,8 @@ Everything that worked still works. New or changed:
 
 ## 5. Typography
 
-Real pixels, never scaled.
+Real pixels. Sizes below are at 100 %; the interface scale multiplies them (rounded to whole
+pixels), 90 % by default.
 
 | Use | Face | Size |
 | --- | --- | --- |
@@ -138,16 +140,31 @@ Real pixels, never scaled.
 
 Controls are 32 px high (28 px for the small ones in tracks), sliders 30 px, pads 84 px,
 buttons never narrower than their height. `e2e/app.spec.ts` checks that no visible text is
-smaller than 14 px and that no control clips its text at 1920 × 1080, 1440 × 900 and
-1366 × 768.
+smaller than 13 px, that no control clips its text, and that PATTERN fits one window without
+page scroll at 1920 × 1080, 1440 × 900 and 1366 × 768 (90 % and 100 %) and at 125 %.
 
 ## 6. Layout and scaling
 
-* No fixed screen: the page is `menu bar / transport / view tabs` (fixed) above a work area that
-  scrolls vertically. Windows are CSS grid and flex items.
-* The band under the grid, the SOUND view's columns and the PERFORM view's pads re-flow with the
-  window; at 1366 × 768 the grid, its footer and the step editor fit above the fold; at 1024
-  the grid scrolls sideways inside itself and nothing else overflows.
+The interface scale is one factor, **90 % by default**, chosen in VIEW, Interface size (75 % to
+200 %) and kept in the preferences (`uiScale`). `src/ui/scale.ts` is the only place that decides
+what it means:
+
+* `--s` and `--px` (one scaled CSS pixel) and the named tokens (`--fs`, `--fs-2`, `--fs-prose`,
+  `--fs-lg`, `--u`, `--ctl-h`, `--gap`, `--pad`, ...) are set on the root element. The stylesheet
+  writes `calc(24 * var(--px))` and `var(--fs)`; inline styles use `cpx(24)`.
+* Code that draws or measures (the grid's canvas, its row height and label width, the legend
+  canvases in the grid key) uses `sz()`, `font()` and `hit()`.
+* Layout breakpoints are in *logical* pixels (window width / scale): the root element gets
+  `lt-1100`, `lt-1300` ... classes, and `short` below a logical height of 760. At 125 % the layout
+  re-flows as on a narrower window.
+* Fixed on purpose: hairlines and 1 to 2 px borders, dither patterns, the 24 px minimum hit target
+  (`HIT_MIN`) and whole-pixel canvas details.
+
+Changing the scale applies at once (no reload); the grid redraws.
+
+* No fixed screen: the page is `menu bar / transport` above the work area. Windows are CSS grid
+  and flex items.
+* The SOUND view's columns and the PERFORM view's pads re-flow with the window.
 * The pop-up lists, dialogs and tooltips are positioned in window coordinates.
 * The palette editor (Slop Factory Core, fixed pixel layout) is shown scaled as a unit.
 

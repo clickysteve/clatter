@@ -11,6 +11,7 @@ import type { Hit } from '../model/types';
 import { drawCell } from './grid';
 import type { CellView } from './gridModel';
 import { download, h, num, Panel } from './widgets';
+import { cpx, sz } from './scale';
 
 const SOURCE_URL = 'https://github.com/clickysteve/clatter';
 const LXR_URL = 'https://github.com/erica-synths/lxr-desktop-app';
@@ -34,7 +35,7 @@ export function dialog(title: string, w: number): HTMLDivElement {
     if (e.target === veil) closeDialog();
   });
   const box = h('div', 'dialog', veil);
-  box.style.width = w + 'px';
+  box.style.width = cpx(w);
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-modal', 'true');
   box.setAttribute('aria-label', title);
@@ -175,12 +176,15 @@ export function gridKeyDialog(): void {
   const dpr = window.devicePixelRatio || 1;
   for (const [view, showOriginal, title, text] of items) {
     const c = h('canvas', '', legend);
-    c.width = Math.round(72 * dpr);
-    c.height = Math.round(40 * dpr);
-    c.style.width = '72px';
-    c.style.height = '40px';
+    // drawn on a 72 x 40 sheet, shown at the interface scale
+    const cw = sz(72);
+    const ch = sz(40);
+    c.width = Math.round(cw * dpr);
+    c.height = Math.round(ch * dpr);
+    c.style.width = cw + 'px';
+    c.style.height = ch + 'px';
     const g = c.getContext('2d')!;
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.setTransform((dpr * cw) / 72, 0, 0, (dpr * ch) / 40, 0, 0);
     g.fillStyle = paper;
     g.fillRect(0, 0, 72, 40);
     drawCell(g, 20, 0, 32, 40, view, colors, showOriginal);

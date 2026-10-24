@@ -10,6 +10,7 @@
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
+import { cpx } from './scale';
 
 export function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', parent?: HTMLElement | null, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -202,7 +203,7 @@ const roundTo = (v: number, step: number) => Math.round(v / step) * step;
 /** A horizontal slider with drag, keyboard and typed entry. */
 export function range(panel: Panel, parent: HTMLElement, o: RangeOptions): HTMLDivElement {
   const el = h('div', 'range' + (o.bip ? ' bip' : ''), parent);
-  if (o.width) el.style.minWidth = o.width + 'px';
+  if (o.width) el.style.minWidth = cpx(o.width);
   el.tabIndex = 0;
   if (o.title) el.title = o.title;
   const fill = h('div', 'fill', el);
@@ -350,7 +351,7 @@ export interface NumOptions {
 export function num(panel: Panel, parent: HTMLElement, o: NumOptions): HTMLDivElement {
   const el = h('div', 'num', parent);
   el.tabIndex = 0;
-  if (o.width) el.style.minWidth = o.width + 'px';
+  if (o.width) el.style.minWidth = cpx(o.width);
   if (o.title) el.title = o.title;
   const step = o.step ?? 1;
   let typed = '';
@@ -441,7 +442,7 @@ export function closePopups(): void {
 export function select<T>(panel: Panel, parent: HTMLElement, o: SelectOptions<T>): HTMLDivElement {
   const el = h('div', 'msel', parent);
   el.tabIndex = 0;
-  if (o.width) el.style.minWidth = o.width + 'px';
+  if (o.width) el.style.minWidth = cpx(o.width);
   if (o.title) el.title = o.title;
   const draw = () => {
     const v = o.get();
@@ -501,7 +502,7 @@ export function group(parent: HTMLElement, title: string, cls = ''): HTMLDivElem
 /** A vertical fader (mixer). */
 export function vfader(panel: Panel, parent: HTMLElement, o: { get: () => number; set: (v: number) => void; begin?: () => void; end?: () => void; height: number; def?: number; title?: string }): HTMLDivElement {
   const el = h('div', 'vfader', parent);
-  el.style.height = o.height + 'px';
+  el.style.height = cpx(o.height);
   el.tabIndex = 0;
   if (o.title) el.title = o.title;
   const fill = h('div', 'fill', el);

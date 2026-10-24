@@ -6,6 +6,7 @@
 import type { App } from '../app/app';
 import { PRESETS } from '../model/presets';
 import { aboutDialog, confirmDialog, exportDialog, helpDialog, paletteDialog } from './dialogs';
+import { DEFAULT_SCALE, SCALES, scaleLabel } from './scale';
 import { chooseFiles, closePopups, download, h } from './widgets';
 
 interface Item {
@@ -26,7 +27,7 @@ export function closeMenus(): void {
   openMenu = null;
 }
 
-export function menubar(app: App, screen: HTMLElement): { status: HTMLElement } {
+export function menubar(app: App, screen: HTMLElement): { bar: HTMLElement; status: HTMLElement } {
   const bar = h('div', '', screen);
   bar.id = 'menubar';
   bar.setAttribute('role', 'menubar');
@@ -98,6 +99,7 @@ export function menubar(app: App, screen: HTMLElement): { status: HTMLElement } 
         { label: 'Synth editor: basic', action: () => app.setEditMode('basic'), checked: () => app.ui.editMode === 'basic' },
         { label: 'Synth editor: advanced', action: () => app.setEditMode('advanced'), checked: () => app.ui.editMode === 'advanced' },
         'sep',
+        { label: 'Interface size', sub: () => SCALES.map((v) => ({ label: scaleLabel(v) + (v === DEFAULT_SCALE ? ' (default)' : ''), action: () => app.setUiScale(v), checked: () => app.prefs.uiScale === v })) },
         { label: 'Palette…', action: paletteDialog },
       ],
     ],
@@ -176,7 +178,7 @@ export function menubar(app: App, screen: HTMLElement): { status: HTMLElement } 
     };
   }
   const status = h('div', 'status', bar);
-  return { status };
+  return { bar, status };
 }
 
 function voiceMutate(app: App): void {

@@ -1,13 +1,14 @@
 /**
  * The transport: shared by every view (one transport, one state). A bar of play, tempo, pattern
- * selection and undo, with the view tabs under it. It stays on screen while the work area scrolls.
+ * selection and undo. The view tabs sit in the menu bar above it. Both stay on screen.
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import type { App } from '../../app/app';
 import { button, h, num, Panel, select } from '../widgets';
+import { cpx } from '../scale';
 
-export function transportWindow(app: App, chrome: HTMLElement): { panel: Panel; meters: (l: number, r: number, clip: boolean) => void; rebuildPatterns: () => void } {
+export function transportWindow(app: App, chrome: HTMLElement, menubar: HTMLElement): { panel: Panel; meters: (l: number, r: number, clip: boolean) => void; rebuildPatterns: () => void } {
   const bar = h('div', 'bar', chrome);
   bar.id = 'transport';
   bar.setAttribute('role', 'toolbar');
@@ -27,7 +28,7 @@ export function transportWindow(app: App, chrome: HTMLElement): { panel: Panel; 
   h('div', 'sep', bar);
   const patterns = h('div', 'cluster', bar);
   const pats = h('div', 'row', patterns);
-  pats.style.gap = '4px';
+  pats.style.gap = cpx(4);
   const patPanel = new Panel();
   const rebuildPatterns = () => {
     patPanel.clear();
@@ -54,19 +55,20 @@ export function transportWindow(app: App, chrome: HTMLElement): { panel: Panel; 
   const end = h('div', 'cluster end', bar);
   button(panel, end, 'UNDO', () => app.undo(), { disabled: () => !app.history.canUndo, title: 'Undo (⌘Z)' });
   button(panel, end, 'REDO', () => app.redo(), { disabled: () => !app.history.canRedo, title: 'Redo (⇧⌘Z)' });
-  const mbox = h('div', 'col', end);
-  mbox.style.gap = '3px';
+  const mbox = h('div', 'col meterbox', end);
+  mbox.style.gap = cpx(3);
   const mL = h('div', 'meter h', mbox);
   const mR = h('div', 'meter h', mbox);
-  for (const m of [mL, mR]) Object.assign(m.style, { width: '84px', height: '10px' });
+  for (const m of [mL, mR]) Object.assign(m.style, { width: cpx(84), height: cpx(10) });
   const lL = h('div', 'lvl', mL);
   const lR = h('div', 'lvl', mR);
   const clipLed = h('div', 'led', end);
   clipLed.title = 'Clip: the master went over 0 dBFS (the soft clipper caught it)';
   button(panel, end, 'PANIC', () => app.panic(), { title: 'All sound and MIDI notes off now' });
 
-  // the view tabs
-  const tabs = h('div', '', chrome);
+  // the view tabs, in the menu bar between the menus and the status
+  const tabs = h('div', '', menubar);
+  menubar.insertBefore(tabs, menubar.querySelector('.status'));
   tabs.id = 'viewtabs';
   tabs.setAttribute('role', 'tablist');
   for (const [v, label, key] of [

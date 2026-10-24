@@ -23,6 +23,7 @@
  */
 import type { App } from '../app/app';
 import { boundaryAt, describeCell, gridMetrics, trackCells, type CellView, type GridMetrics } from './gridModel';
+import { font, hit, logicalWidth, onScale, sz } from './scale';
 import { hideTip, showTip } from './tooltip';
 import { button, h, Panel } from './widgets';
 
@@ -31,6 +32,11 @@ export interface GridOptions {
   readonly?: boolean;
   /** names only, smaller cells */
   compact?: boolean;
+  /**
+   * The rows share the height that is left: `room()` is the most the grid frame may take (it
+   * scrolls inside when even the smallest rows do not fit), `watch` changes size with it.
+   */
+  fit?: { watch: HTMLElement; room: () => number };
 }
 
 export interface GridColors {
@@ -45,17 +51,11 @@ export interface Cell {
   step: number;
 }
 
-const MIN_CELL = 30;
-const MAX_CELL = 64;
-const MIN_CELL_COMPACT = 16;
-const MAX_CELL_COMPACT = 40;
-
-/** Row height by window height: roomier on tall windows, tighter where every pixel counts. */
-function rowHeightFor(compact: boolean): number {
-  if (compact) return 28;
-  const vh = window.innerHeight;
-  return vh >= 1000 ? 40 : vh >= 820 ? 36 : 32;
-}
+/** Cell width limits and row height range, in unscaled pixels (see scale.ts). */
+const CELL = { min: 30, max: 64, minCompact: 16, maxCompact: 40 };
+const ROW = { min: 26, max: 52, compact: 28 };
+const HEAD = { full: 32, compact: 26 };
+const LABELS = { compact: 128, wide: 284, narrow: 244 };
 
 /** A 4 × 4 dither (12 % dots), used for the shaded beats. */
 function ditherPattern(g: CanvasRenderingContext2D, ink: string): CanvasPattern | null {
@@ -174,8 +174,8 @@ export class PatternGrid {
   private canvas: HTMLCanvasElement;
   private over: HTMLCanvasElement;
   private panel = new Panel();
-  private rowH = 36;
-  private headH = 30;
+  private rowH = sz(ROW.max);
+  private headH = sz(HEAD.full);
   private cellW = 32;
   private steps = 32;
   private metrics: GridMetrics = { steps: 32, perBeat: 4, perBar: 16, beatsPerBar: 4 };
@@ -211,29 +211,50 @@ export class PatternGrid {
       this.canvas.tabIndex = 0;
       this.bind();
     }
-    this.headH = o.compact ? 26 : 32;
+    this.headH = sz(o.compact ? HEAD.compact : HEAD.full);
     this.el.style.setProperty('--head-h', this.headH + 'px');
     // the user scrolling (or about to) pauses the playhead following
     for (const ev of ['wheel', 'pointerdown'] as const) this.scroll.addEventListener(ev, () => (this.lastUser = performance.now()), { passive: true });
     const ro = new ResizeObserver(() => this.schedule());
     ro.observe(this.scroll);
-    window.addEventListener('resize', () => {
+    if (o.fit) ro.observe(o.fit.watch);
+    const relayout = () => {
+      this.headH = sz(o.compact ? HEAD.compact : HEAD.full);
+      this.el.style.setProperty('--head-h', this.headH + 'px');
       this.applyRowHeight();
       this.schedule();
-    });
+    };
+    window.addEventListener('resize', relayout);
+    onScale(relayout);
     this.build();
   }
 
   private get labelW(): number {
-    if (this.o.compact) return 128;
-    return window.innerWidth < 1300 ? 244 : 284;
+    if (this.o.compact) return sz(LABELS.compact);
+    return sz(logicalWidth() < 1300 ? LABELS.narrow : LABELS.wide);
   }
 
   private applyRowHeight(): void {
-    this.rowH = rowHeightFor(!!this.o.compact);
+    this.rowH = this.rowHeight();
     this.el.style.setProperty('--row-h', this.rowH + 'px');
     this.labels.style.width = this.labelW + 'px';
-    this.rows.querySelectorAll<HTMLElement>('[data-hide-narrow]').forEach((b) => (b.style.display = window.innerWidth < 1300 ? 'none' : ''));
+    this.rows.querySelectorAll<HTMLElement>('[data-hide-narrow]').forEach((b) => (b.style.display = logicalWidth() < 1300 ? 'none' : ''));
+  }
+
+  /**
+   * Row height: with `fit`, the tracks share the height they are given (down to the smallest row
+   * that still holds its buttons: below that the grid scrolls inside its frame); otherwise fixed.
+   */
+  private rowHeight(): number {
+    if (this.o.compact) return sz(ROW.compact);
+    const lo = hit(ROW.min);
+    const hi = sz(ROW.max);
+    const fit = this.o.fit;
+    const n = this.app.project.tracks.length;
+    if (!fit || !n) return hi;
+    const room = fit.room();
+    if (room <= 0) return hi; // not laid out yet
+    return Math.max(lo, Math.min(hi, Math.floor((room - (this.el.offsetHeight - this.el.clientHeight) - this.headH) / n)));
   }
 
   /** The left edge of a step in pixels (cells share the width exactly; edges snap to whole pixels). */
@@ -319,12 +340,13 @@ export class PatternGrid {
     const tracks = app.project.tracks;
     const avail = this.scroll.clientWidth;
     if (avail < 60) return; // hidden: the resize observer calls again when it shows
+    this.applyRowHeight();
     this.steps = p.steps;
     const m = gridMetrics(p);
     this.metrics = m;
     const compact = !!this.o.compact;
-    const lo = compact ? MIN_CELL_COMPACT : MIN_CELL;
-    const hi = compact ? MAX_CELL_COMPACT : MAX_CELL;
+    const lo = hit(compact ? CELL.minCompact : CELL.min);
+    const hi = sz(compact ? CELL.maxCompact : CELL.max);
     // cells share the width exactly (their edges snap to whole pixels); never narrower than the minimum: scroll instead
     this.cellW = Math.max(lo, Math.min(hi, (avail - 1) / p.steps));
     const cw = this.X(p.steps);
@@ -372,14 +394,14 @@ export class PatternGrid {
       const b = boundaryAt(s, m);
       if (s === 0 || b === 3) {
         const label = `BAR ${Math.floor(s / m.perBar) + 1}`;
-        g.font = '16px Tiny5, monospace';
+        g.font = `${font(16)}px Tiny5, monospace`;
         const tw = Math.ceil(g.measureText(label).width) + 12;
         g.fillStyle = c.ink;
         g.fillRect(x + 2, 3, Math.min(tw, this.X(p.steps) - x - 4), H - 8);
         g.fillStyle = c.paper;
         g.fillText(label, x + 8, H / 2 - 1);
       } else if (b === 2) {
-        g.font = '18px VT323, monospace';
+        g.font = `${font(18)}px VT323, monospace`;
         g.fillStyle = c.ink;
         g.fillText(String(Math.floor((s % m.perBar) / m.perBeat) + 1), x + 5, H / 2);
       } else {
@@ -558,7 +580,7 @@ export class PatternGrid {
       g.fillRect(x, H, 3, rowsH);
       g.fillRect(x + w - 3, H, 3, rowsH);
       g.fillStyle = c.paper;
-      g.font = '18px VT323, monospace';
+      g.font = `${font(18)}px VT323, monospace`;
       g.textBaseline = 'middle';
       g.textAlign = 'center';
       g.fillText(String(s + 1), x + w / 2, H / 2 - 1);

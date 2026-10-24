@@ -84,7 +84,7 @@ test('click adds, click removes, right-click opens the step editor, Escape close
   expect(await has(3)).toBe(false);
   await page.mouse.click(...at(3));
   // the step editor under the grid shows the step
-  await expect(page.locator('#pattern .stepstrip')).toContainText('STEP 4');
+  await expect(page.locator('[data-test=pane-sequence]')).toContainText('STEP 4');
   await page.mouse.click(...at(3), { button: 'right' });
   await expect(page.locator('.popover')).toBeVisible();
   await expect(page.locator('.popover')).toContainText('VELOCITY');
@@ -197,7 +197,7 @@ test('a long pattern scrolls inside the grid; the track names stay put', async (
     return { scroll: sc.scrollWidth, client: sc.clientWidth, cell: Number(canvas.dataset.cellw), labelMoved: lab.getBoundingClientRect().left !== x0, pageOverflow: document.documentElement.scrollWidth > window.innerWidth, mainOverflow: (document.getElementById('main') as HTMLElement).scrollWidth > (document.getElementById('main') as HTMLElement).clientWidth };
   });
   expect(m.scroll).toBeGreaterThan(m.client);
-  expect(m.cell).toBeGreaterThanOrEqual(30);
+  expect(m.cell).toBeGreaterThanOrEqual(24); // the smallest cell at any scale (the minimum hit target)
   expect(m.labelMoved).toBe(false);
   expect(m.pageOverflow).toBe(false);
   expect(m.mainOverflow).toBe(false);
@@ -230,7 +230,7 @@ for (const [w, h] of [
           const el = n.parentElement!;
           if (!visible(el)) continue;
           const fs = parseFloat(getComputedStyle(el).fontSize);
-          if (fs < 14) tiny.push(`${el.className || el.tagName}:${fs}:${n.textContent!.trim().slice(0, 20)}`);
+          if (fs < 13) tiny.push(`${el.className || el.tagName}:${fs}:${n.textContent!.trim().slice(0, 20)}`);
         }
         // text must fit its control
         for (const el of document.querySelectorAll<HTMLElement>('.btn, .num, .msel, .pad, .range .val, .xtab, .strip .sname')) {
@@ -246,6 +246,94 @@ for (const [w, h] of [
     }
   });
 }
+
+/** Open the page at a saved interface scale (null: the default). */
+async function bootAt(page: Page, scale: number | null): Promise<void> {
+  await page.goto('./');
+  await page.evaluate((x) => {
+    localStorage.clear();
+    if (x !== null) localStorage.setItem('clatter.prefs', JSON.stringify({ uiScale: x }));
+  }, scale);
+  await page.goto('./');
+  await page.waitForSelector('#transport', { timeout: 30_000 });
+}
+
+test('the interface is 90 % by default; VIEW changes it live and it is remembered', async ({ page }) => {
+  await boot(page);
+  const scale = () => page.evaluate(() => Number(document.documentElement.dataset.scale));
+  expect(await scale()).toBe(90);
+  const rowh = () => page.evaluate(() => Number((document.querySelector('#pattern canvas') as HTMLCanvasElement).dataset.rowh));
+  const before = await rowh();
+  await page.locator('#menubar .menu', { hasText: 'VIEW' }).click();
+  await page.locator('.dropdown .item', { hasText: 'Interface size' }).hover();
+  await page.locator('.dropdown.sub .item', { hasText: '125%' }).dispatchEvent('pointerup');
+  await expect.poll(scale).toBe(125);
+  await expect.poll(rowh).toBeGreaterThan(before);
+  await page.reload();
+  await page.waitForSelector('#transport');
+  expect(await scale()).toBe(125);
+  await page.evaluate(() => (window as unknown as W).clatter.setUiScale(0.9));
+  expect(await scale()).toBe(90);
+});
+
+for (const [w, h, scale] of [
+  [1440, 900, 0.9],
+  [1440, 900, 1],
+  [1366, 768, 0.9],
+  [1920, 1080, 0.9],
+  [1920, 1080, 1.25],
+  [1440, 900, 1.25],
+] as const) {
+  test(`PATTERN fits one window at ${w} × ${h}, ${scale * 100} %: no page scroll, the workspace tabs scroll inside`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await bootAt(page, scale);
+    for (const tab of ['sequence', 'generate', 'transform', 'track'] as const) {
+      await page.click(`[data-test=ws-${tab}]`);
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => {
+        const main = document.getElementById('main')!;
+        const ws = document.querySelector('.workspace') as HTMLElement;
+        const seq = document.querySelector('#pattern') as HTMLElement;
+        const grid = document.querySelector('#pattern .gridwrap') as HTMLElement;
+        const pane = document.querySelector('.wspane.show') as HTMLElement;
+        const box = (e: Element) => e.getBoundingClientRect();
+        return {
+          pageY: document.documentElement.scrollHeight > window.innerHeight,
+          mainY: main.scrollHeight > main.clientHeight + 1,
+          pageX: document.documentElement.scrollWidth > window.innerWidth,
+          seqOverWs: box(seq).bottom > box(ws).top + 1,
+          wsOff: box(ws).bottom > window.innerHeight + 1,
+          gridRows: grid.scrollHeight <= grid.clientHeight + 1,
+          paneX: pane.scrollWidth > pane.clientWidth + 1,
+        };
+      });
+      expect(r.pageY, `${tab}: page scrolls vertically`).toBe(false);
+      expect(r.mainY, `${tab}: work area scrolls vertically`).toBe(false);
+      expect(r.pageX, `${tab}: page scrolls sideways`).toBe(false);
+      expect(r.seqOverWs, `${tab}: the sequencer runs into the workspace`).toBe(false);
+      expect(r.wsOff, `${tab}: the workspace is cut off`).toBe(false);
+      expect(r.paneX, `${tab}: the panel scrolls sideways`).toBe(false);
+      // every track is on show unless the window is short for this scale
+      if (scale <= 1 && h >= 900) expect(r.gridRows, `${tab}: grid rows are cut off`).toBe(true);
+    }
+  });
+}
+
+test('keys open the workspace tab they belong to; the tab is remembered', async ({ page }) => {
+  await boot(page);
+  const tab = () => page.evaluate(() => (window as unknown as W).clatter.ui.workspace);
+  expect(await tab()).toBe('sequence');
+  await page.keyboard.press('c');
+  expect(await tab()).toBe('transform');
+  await page.keyboard.press('g');
+  expect(await tab()).toBe('generate');
+  await page.click('[data-test=ws-track]');
+  expect(await tab()).toBe('track');
+  await page.reload();
+  await page.waitForSelector('#transport');
+  expect(await tab()).toBe('track');
+  await expect(page.locator('.wspane.show')).toHaveCount(1);
+});
 
 test('every palette keeps the grid and tabs legible', async ({ page }) => {
   await boot(page);
@@ -275,6 +363,7 @@ test('generate, variation, wildcard and a new kit change the music; undo restore
   const errors = await boot(page);
   const snap = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.gen));
   const a = await snap();
+  await page.click('[data-test=ws-generate]');
   await page.click('[data-test=generate]');
   const b = await snap();
   expect(b).not.toEqual(a);
@@ -288,6 +377,7 @@ test('generate, variation, wildcard and a new kit change the music; undo restore
   await page.click('[data-test=generate-kit]');
   await expect.poll(kit, { timeout: 15_000 }).not.toEqual(k0);
   await page.click('[data-test=view-pattern]');
+  await page.click('[data-test=ws-transform]');
   await page.click('[data-test=wildcard]');
   await expect(page.locator('[data-test=status]')).toContainText('WILDCARD', { timeout: 15_000 });
   const chop = () => page.evaluate(() => (window as unknown as W).clatter.project.destruction.chop.on);
@@ -326,12 +416,14 @@ test('palettes switch the colours', async ({ page }) => {
 
 test('saves and opens a project; exports a WAV and a MIDI file', async ({ page }) => {
   await boot(page);
+  await page.click('[data-test=ws-generate]');
   await page.click('[data-test=generate]');
   const saved = await page.evaluate(() => {
     const a = (window as unknown as W).clatter;
     const f = a.projectFile();
     return { text: new TextDecoder().decode(f.data), gen: JSON.stringify(a.pattern.gen) };
   });
+  await page.click('[data-test=ws-generate]');
   await page.click('[data-test=generate]');
   const reopened = await page.evaluate(async (text) => {
     const a = (window as unknown as W).clatter;
@@ -366,7 +458,7 @@ test('dialogs are set in readable body type with room between the lines', async 
   });
   expect(about.length).toBeGreaterThan(4);
   for (const p of about) {
-    expect(p.size).toBeGreaterThanOrEqual(15);
+    expect(p.size).toBeGreaterThanOrEqual(14);
     expect(p.line / p.size).toBeGreaterThanOrEqual(1.5);
     expect(p.fits).toBe(true);
   }

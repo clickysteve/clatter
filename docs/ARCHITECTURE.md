@@ -38,7 +38,7 @@ pattern can play any kit.
 | `src/midi/` | Web MIDI, messages, Standard MIDI Files (after DOWNBEAT), the controller (ports, clock in/out, notes in/out, panic). |
 | `src/export/` | The MIDI file of the performance. |
 | `src/app/` | The application: every action on the project, history, the sequence, sound configuration, preferences. |
-| `src/ui/` | The interface (real-pixel layout, see [UI_REDESIGN.md](UI_REDESIGN.md)): widgets, the pattern grid (`grid.ts`, with `gridModel.ts` deciding what each cell shows), views, menus, dialogs, tooltips, keys, palettes. |
+| `src/ui/` | The interface (real-pixel layout, one interface scale in `scale.ts`, see [UI_REDESIGN.md](UI_REDESIGN.md)): widgets, the pattern grid (`grid.ts`, with `gridModel.ts` deciding what each cell shows), views, menus, dialogs, tooltips, keys, palettes. |
 | `test/`, `e2e/` | Unit tests (Vitest, Node, the real WebAssembly engine) and browser tests (Playwright). |
 
 ## Rhythm

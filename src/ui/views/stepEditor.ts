@@ -9,6 +9,7 @@ import type { App } from '../../app/app';
 import type { Hit } from '../../model/types';
 import { gridMetrics, position } from '../gridModel';
 import { button, ctl, h, Panel, range, select } from '../widgets';
+import { cpx } from '../scale';
 
 export function stepEditor(app: App, parent: HTMLElement, panel: Panel): void {
   const cell = (): { track: string; step: number; hit: Hit | null } | null => {
@@ -30,7 +31,7 @@ export function stepEditor(app: App, parent: HTMLElement, panel: Panel): void {
   const body = h('div', 'stepctl', parent);
   const hitCtl = (label: string, title: string, get: (hh: Hit) => number, set: (v: number) => Partial<Hit>, min: number, max: number, fmt?: (v: number) => string, bip = false) => {
     const c = ctl(body, label, title);
-    c.row.style.setProperty('--label-w', '96px');
+    c.row.style.setProperty('--label-w', cpx(96));
     range(panel, c.slot, {
       get: () => {
         const x = cell()?.hit;

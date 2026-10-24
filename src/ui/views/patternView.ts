@@ -1,23 +1,29 @@
 /**
- * PATTERN: RHYTHM and DESTRUCTION, in three levels.
+ * PATTERN: a single-window instrument. The pattern grid (the sequencer) is always on screen;
+ * under it a tabbed workspace holds the controls for what you are doing:
  *
- *   primary    the transport (above), the pattern grid with its tracks, the step editor under it
- *   secondary  GENERATE, TRACK and EDIT, and the transformation toolbar, side by side under the grid
- *   tertiary   MORE (accent, fills, bars, regenerate, evolution) inside GENERATE; each
- *              transformation's parameters, shown for the one selected in the toolbar; the grid
- *              key and keys dialogs
+ *   SEQUENCE   the step being edited, and the selection tools (copy, paste, clear, shift)
+ *   GENERATE   style and the generator, accent and fills, evolution
+ *   TRANSFORM  CHOP, ROLLS, DESTROY and WILDCARD
+ *   TRACK      the selected track: source, mute and solo, performance, loop length and MIDI
+ *
+ * The page does not scroll: the grid takes the height that is left above the workspace (its rows
+ * shrink to fit, then it scrolls inside its frame) and a workspace tab whose controls need more
+ * room scrolls inside its own panel. Keys that act on the pattern (G, V, M, R, C, L, D, W) open
+ * the tab they belong to.
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import type { App, Topic } from '../../app/app';
-import { savePrefs } from '../../app/prefs';
+import { WORKSPACES, type Workspace } from '../../app/prefs';
 import { RESOLUTION_LABEL, RESOLUTIONS, ROLE_LABEL, ROLES, ROLL_SPEEDS, type Resolution, type Role, type SourceMode } from '../../model/types';
 import { STYLES, styleById } from '../../rhythm/styles';
 import { gridKeyDialog } from '../dialogs';
 import { PatternGrid, type Cell } from '../grid';
 import { summaryLine } from '../gridModel';
 import { openPopover } from '../popover';
-import { button, ctl, group, h, more, num, Panel, range, select, win, type WinOptions } from '../widgets';
+import { onScale, sz } from '../scale';
+import { button, ctl, group, h, num, Panel, range, select, win } from '../widgets';
 import { stepEditor } from './stepEditor';
 
 export interface View {
@@ -47,31 +53,28 @@ export function subscribe(app: App, topics: Topic[], fn: () => void): void {
   for (const t of topics) app.on(t, fn);
 }
 
-/** Window options for a panel the user can fold away (remembered per browser). */
-export function fold(app: App, id: string): Pick<WinOptions, 'collapsible' | 'collapsed' | 'onCollapse'> {
-  return {
-    collapsible: true,
-    collapsed: !!app.prefs.collapsed[id],
-    onCollapse: (c) => {
-      app.prefs.collapsed[id] = c;
-      savePrefs(app.prefs);
-    },
-  };
-}
+/** The workspace under the grid: a share of the window's height, within these limits (unscaled pixels). */
+const WORKSPACE = { min: 168, max: 300, share: 0.28 };
+
+const WS_LABEL: Record<Workspace, string> = { sequence: 'SEQUENCE', generate: 'GENERATE', transform: 'TRANSFORM', track: 'TRACK' };
+const WS_TITLE: Record<Workspace, string> = {
+  sequence: 'The step being edited, and the tools for the selection',
+  generate: 'Generate, vary and mutate the pattern',
+  transform: 'CHOP, ROLLS, DESTROY and WILDCARD',
+  track: 'The selected track: source, performance, loop length, MIDI',
+};
 
 export function patternView(app: App, screen: HTMLElement): View {
-  const root = h('div', 'view', screen);
+  const root = h('div', 'view pattern-view', screen);
   root.dataset.view = 'pattern';
 
-  // ================================================================ PATTERN (primary)
-  const pw = win(root, { title: 'PATTERN', area: 'rhythm', id: 'pattern' });
+  // ================================================================ the sequencer (always on screen)
+  const pw = win(root, { title: 'PATTERN', area: 'rhythm', id: 'pattern', cls: 'sequencer' });
   const pp = new Panel();
   const pb = pw.body;
   pb.classList.add('col');
-  pb.style.gap = '10px';
 
-  const tb = h('div', 'row wrap', pb);
-  tb.style.gap = '8px 14px';
+  const tb = h('div', 'row wrap toolbar', pb);
   h('div', 'lbl', tb, 'STEPS');
   num(pp, tb, { get: () => app.pattern.steps, set: (v) => app.setLength(v), min: 1, max: 64, title: 'Pattern length in steps' }).dataset.test = 'length';
   h('div', 'lbl', tb, 'GRID');
@@ -85,7 +88,17 @@ export function patternView(app: App, screen: HTMLElement): View {
   button(pp, tb, 'RESET', () => app.reset(), { title: 'Back to the generated pattern: hand edits cleared, CHOP/ROLLS/DESTROY off' });
   button(pp, tb, '? KEY', () => gridKeyDialog(), { title: 'How to read the grid, and how to edit it' }).dataset.test = 'grid-key';
 
-  const grid = new PatternGrid(app, pb, {});
+  // the grid takes the height that is left above the workspace
+  const gridhost = h('div', 'gridhost', pb);
+  const wsHeight = () => Math.max(sz(WORKSPACE.min), Math.min(sz(WORKSPACE.max), Math.round(window.innerHeight * WORKSPACE.share)));
+  let gridEl: HTMLElement | null = null; // set once the grid exists (it asks for its room while it is built)
+  const room = () => {
+    if (!gridEl || !root.clientHeight) return 0;
+    const gap = parseFloat(getComputedStyle(root).rowGap) || 0;
+    return root.clientHeight - wsHeight() - gap - (pw.el.offsetHeight - gridEl.offsetHeight);
+  };
+  const grid = new PatternGrid(app, gridhost, { fit: { watch: root, room } });
+  gridEl = grid.el;
   const foot = h('div', 'gridfoot', pb);
   const where = h('div', 'tiny where grow', foot);
   where.style.color = 'var(--ink)';
@@ -106,8 +119,60 @@ export function patternView(app: App, screen: HTMLElement): View {
     showWhere();
   };
 
-  // the step editor under the grid (and, on right-click, in a panel at the pointer)
-  const ss = h('div', 'stepstrip', pb);
+  // ================================================================ the workspace (tabs)
+  const ws = h('div', 'workspace', root);
+  const wsbar = h('div', 'wsbar', ws);
+  wsbar.setAttribute('role', 'tablist');
+  const wsinfo = h('div', 'wsinfo', wsbar);
+  const wspanes = h('div', 'wspanes', ws);
+  const sizeWorkspace = () => (ws.style.flexBasis = wsHeight() + 'px');
+  sizeWorkspace();
+  window.addEventListener('resize', sizeWorkspace);
+  onScale(sizeWorkspace);
+  const wp = new Panel();
+  const tabEls = {} as Record<Workspace, HTMLElement>;
+  const panes = {} as Record<Workspace, HTMLElement>;
+  const infos = {} as Record<Workspace, () => string>;
+  for (const [i, id] of WORKSPACES.entries()) {
+    const t = h('div', 'wstab', wsbar, WS_LABEL[id]);
+    t.setAttribute('role', 'tab');
+    t.tabIndex = 0;
+    t.title = WS_TITLE[id];
+    t.dataset.test = 'ws-' + id;
+    t.addEventListener('click', () => app.setWorkspace(id));
+    t.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        app.setWorkspace(id);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const to = WORKSPACES[(i + (e.key === 'ArrowRight' ? 1 : WORKSPACES.length - 1)) % WORKSPACES.length]!;
+        app.setWorkspace(to);
+        tabEls[to].focus();
+      }
+    });
+    tabEls[id] = t;
+    const pane = h('div', 'wspane wspane-' + id, wspanes);
+    pane.setAttribute('role', 'tabpanel');
+    pane.dataset.test = 'pane-' + id;
+    panes[id] = pane;
+  }
+  wsbar.insertBefore(wsinfo, null); // the context line stays at the right of the tabs
+  wp.add(() => {
+    for (const id of WORKSPACES) {
+      const on = app.ui.workspace === id;
+      tabEls[id].classList.toggle('on', on);
+      tabEls[id].setAttribute('aria-selected', String(on));
+      panes[id].classList.toggle('show', on);
+    }
+    wsinfo.textContent = infos[app.ui.workspace]?.() ?? '';
+  });
+  const card = (pane: HTMLElement, cls = ''): HTMLDivElement => h('div', 'wscard col ' + cls, pane);
+  app.on('workspace', () => wp.refresh());
+
+  // ---------------------------------------------------------------- SEQUENCE
+  const sq = panes.sequence;
+  const ss = card(sq, 'stepcard');
   const sp = new Panel();
   stepEditor(app, ss, sp);
   let pop: Panel | null = null;
@@ -118,6 +183,35 @@ export function patternView(app: App, screen: HTMLElement): View {
       stepEditor(app, body, pop);
     });
   };
+  const eb = card(sq, 'editcard');
+  const ep = new Panel();
+  const ehint = h('div', 'hint', eb);
+  ep.add(() => {
+    const s = app.ui.sel;
+    ehint.textContent = s && !(s.t0 === s.t1 && s.s0 === s.s1) ? `ACTS ON THE SELECTED REGION: ${Math.abs(s.t1 - s.t0) + 1} TRACKS × ${Math.abs(s.s1 - s.s0) + 1} STEPS` : s ? 'ACTS ON THE SELECTED STEP' : `NOTHING SELECTED: ACTS ON THE WHOLE ${app.track.name} TRACK (SHIFT-DRAG IN THE GRID TO SELECT A REGION)`;
+  });
+  const e1 = h('div', 'row wrap', eb);
+  button(ep, e1, 'VEL −', () => app.editSelection((x) => ({ ...x, vel: Math.max(1, Math.round(x.vel * 0.85)) }), 'SOFTER'), { cls: 'grow', title: 'Softer' });
+  button(ep, e1, 'VEL +', () => app.editSelection((x) => ({ ...x, vel: Math.min(127, Math.round(x.vel * 1.15 + 1)) }), 'LOUDER'), { cls: 'grow', title: 'Louder' });
+  button(ep, e1, 'CHANCE 50', () => app.editSelection((x) => ({ ...x, prob: 50 }), 'CHANCE'), { cls: 'grow', title: 'Every hit 50% probability' });
+  button(ep, e1, 'CHANCE 100', () => app.editSelection((x) => ({ ...x, prob: 100 }), 'CHANCE'), { cls: 'grow', title: 'Every hit always plays' });
+  const e2 = h('div', 'row wrap', eb);
+  button(ep, e2, 'COPY', () => app.copy(), { cls: 'grow', title: 'Copy the selection (or the whole pattern) ⌘C' });
+  button(ep, e2, 'PASTE', () => app.paste(), { cls: 'grow', disabled: () => !app.clip, title: 'Paste at the selection (or the start) ⌘V' });
+  button(ep, e2, 'CLEAR', () => (app.ui.sel ? app.clearSelection() : app.clearTrack(app.ui.track)), { cls: 'grow', title: 'Clear the selection (or the selected track) DEL' });
+  button(ep, e2, 'NONE', () => app.select(null), { cls: 'grow', title: 'Clear the selection (ESC)' });
+  const e3 = h('div', 'row wrap', eb);
+  button(ep, e3, '◀ SHIFT', () => app.shiftTrack(app.ui.track, -1), { cls: 'grow', title: 'Shift the selected track one step earlier [' });
+  button(ep, e3, 'SHIFT ▶', () => app.shiftTrack(app.ui.track, 1), { cls: 'grow', title: 'Shift the selected track one step later ]' });
+  infos.sequence = () => {
+    const c = app.cursorCell();
+    const t = c ? app.project.tracks.find((x) => x.id === c.track) : null;
+    return t && c ? `${t.name} · STEP ${c.step + 1}` : 'NO STEP SELECTED';
+  };
+  subscribe(app, ['selection', 'pattern', 'tracks'], () => {
+    ep.refresh();
+    wp.refresh();
+  });
 
   pp.add(() => {
     const p = app.pattern;
@@ -146,38 +240,35 @@ export function patternView(app: App, screen: HTMLElement): View {
   });
   window.addEventListener('clatter-palette', () => grid.draw());
 
-  // ================================================================ the band (secondary)
-  const band = h('div', 'band', root);
-
   // ---------------------------------------------------------------- GENERATE
-  const gw = win(band, { title: 'GENERATE', area: 'rhythm', id: 'generate', ...fold(app, 'generate') });
   const gp = new Panel();
-  const gb = gw.body;
-  gb.classList.add('col');
+  const gpane = panes.generate;
+  const gb = card(gpane);
   const sr = ctl(gb, 'STYLE', 'The rhythmic language the generator speaks');
   select(gp, sr.slot, { options: () => STYLES.map((s) => ({ value: s.id, label: s.label })), get: () => app.project.gen.style, set: (v) => app.setGen({ style: v }, 'STYLE'), title: 'Style' }).dataset.test = 'style';
   (sr.slot.firstElementChild as HTMLElement).classList.add('fluid');
   sr.slot.style.display = 'flex';
-  const desc = h('div', 'hint', gb);
-  desc.style.minHeight = '44px';
+  const desc = h('div', 'hint desc', gb);
   gp.add(() => (desc.textContent = styleById(app.project.gen.style).description));
-  pctRange(gp, gb, app, 'DENSITY', () => app.project.gen.density, (v) => app.setGen({ density: v }, 'DENSITY'), 'How many hits');
-  pctRange(gp, gb, app, 'COMPLEXITY', () => app.project.gen.complexity, (v) => app.setGen({ complexity: v }, 'COMPLEXITY'), 'Syncopation, off-grid emphasis, ghost notes');
-  pctRange(gp, gb, app, 'VARIATION', () => app.project.gen.variation, (v) => app.setGen({ variation: v }, 'VARIATION'), 'How much the bars differ from each other');
   const r1 = h('div', 'row', gb);
-  r1.style.marginTop = '4px';
   const gen = button(gp, r1, 'GENERATE', () => app.generatePattern(), { cls: 'med grow', title: 'A new pattern in this style (G). Locked tracks and hand edits stay.' });
   gen.dataset.test = 'generate';
   gen.style.flex = '1.4';
   button(gp, r1, 'VARIATION', () => app.variation(), { cls: 'med grow', title: 'A related pattern (V)' });
   button(gp, r1, 'MUTATE', () => app.mutate(), { cls: 'med grow', title: 'Small controlled changes (M)' });
-  const gm = more(gb, 'MORE: ACCENT · FILLS · BARS · EVOLVE', 'generate-more');
-  pctRange(gp, gm, app, 'ACCENT', () => app.project.gen.accent, (v) => app.setGen({ accent: v }, 'ACCENT'), 'Velocity contrast between strong and weak hits');
-  pctRange(gp, gm, app, 'FILLS', () => app.project.gen.fills, (v) => app.setGen({ fills: v }, 'FILLS'), 'Fills into the end of the phrase');
-  const br = ctl(gm, 'BARS', 'Length of a generated pattern');
-  num(gp, br.slot, { get: () => app.project.gen.bars, set: (v) => app.setGen({ bars: v }, 'BARS'), min: 1, max: 4 });
-  button(gp, gm, 'REGENERATE AFTER BAR 1', () => app.regenerate(), { title: 'New material after bar 1 (R)' });
-  const evo = group(gm, 'EVOLVE');
+  const rb = h('div', 'row', gb);
+  h('div', 'lbl', rb, 'BARS').title = 'Length of a generated pattern';
+  num(gp, rb, { get: () => app.project.gen.bars, set: (v) => app.setGen({ bars: v }, 'BARS'), min: 1, max: 4, title: 'Length of a generated pattern' });
+  button(gp, rb, 'REGENERATE AFTER BAR 1', () => app.regenerate(), { cls: 'grow', title: 'New material after bar 1 (R)' });
+  const ginfo = h('div', 'report', gb);
+  gp.add(() => (ginfo.textContent = `SEED ${app.pattern.seed} · GENERATION ${app.pattern.generation} · ${app.editCount()} HAND EDITS`));
+  const gc = card(gpane);
+  pctRange(gp, gc, app, 'DENSITY', () => app.project.gen.density, (v) => app.setGen({ density: v }, 'DENSITY'), 'How many hits');
+  pctRange(gp, gc, app, 'COMPLEXITY', () => app.project.gen.complexity, (v) => app.setGen({ complexity: v }, 'COMPLEXITY'), 'Syncopation, off-grid emphasis, ghost notes');
+  pctRange(gp, gc, app, 'VARIATION', () => app.project.gen.variation, (v) => app.setGen({ variation: v }, 'VARIATION'), 'How much the bars differ from each other');
+  pctRange(gp, gc, app, 'ACCENT', () => app.project.gen.accent, (v) => app.setGen({ accent: v }, 'ACCENT'), 'Velocity contrast between strong and weak hits');
+  pctRange(gp, gc, app, 'FILLS', () => app.project.gen.fills, (v) => app.setGen({ fills: v }, 'FILLS'), 'Fills into the end of the phrase');
+  const evo = group(card(gpane), 'EVOLVE');
   evo.classList.add('col');
   const et = ctl(evo, 'TARGET', 'What changes on its own while playing: the rhythm mutates, the kit drifts, or both');
   select(gp, et.slot, {
@@ -193,34 +284,35 @@ export function patternView(app: App, screen: HTMLElement): View {
   const erow = h('div', 'row', er.slot);
   num(gp, erow, { get: () => app.project.evolve.returnEvery, set: (v) => app.setEvolve({ returnEvery: v }), min: 0, max: 32, format: (v) => (v ? String(v) : 'OFF'), title: 'Rhythm: back to the written pattern after this many generations (0 never)' });
   button(gp, erow, 'KIT HOME', () => app.evolveReturn(), { title: 'Sound: back to the kit the evolution started from' });
-  const ginfo = h('div', 'report', gb);
-  gp.add(() => (ginfo.textContent = `SEED ${app.pattern.seed} · GENERATION ${app.pattern.generation} · ${app.editCount()} HAND EDITS`));
-  subscribe(app, ['gen', 'pattern', 'transport'], () => gp.refresh());
+  infos.generate = () => `${styleById(app.project.gen.style).label} · ${Math.round(app.project.gen.density * 100)}% DENSITY`;
+  subscribe(app, ['gen', 'pattern', 'transport'], () => {
+    gp.refresh();
+    wp.refresh();
+  });
 
   // ---------------------------------------------------------------- TRANSFORM
-  const dw = win(band, { title: 'TRANSFORM', area: 'destruction', id: 'destruction', ...fold(app, 'destruction') });
   const dp = new Panel();
-  const db = dw.body;
-  db.classList.add('col');
+  const xpane = panes.transform;
   const d = () => app.project.destruction;
   const dset = (label: string, f: (x: ReturnType<typeof d>) => void) => app.setDestruction(f, label);
   const dpct = (parent: HTMLElement, label: string, get: () => number, set: (v: number) => void, title: string) => pctRange(dp, parent, app, label, get, set, title);
   type XKey = 'chop' | 'rolls' | 'destroy';
   let active: XKey = 'chop';
-  const tabs = h('div', 'xtabs', db);
+  const tabs = h('div', 'xtabs', xpane);
+  const xbody = h('div', 'xbody', xpane);
   const panels = {} as Record<XKey, HTMLDivElement>;
-  const tabEls = {} as Record<XKey, HTMLDivElement>;
+  const xtabEls = {} as Record<XKey, HTMLDivElement>;
   const sub = {} as Record<XKey, HTMLDivElement>;
   const select_ = (k: XKey) => {
     active = k;
     for (const key of Object.keys(panels) as XKey[]) {
       panels[key].classList.toggle('show', key === k);
-      tabEls[key].classList.toggle('active', key === k);
+      xtabEls[key].classList.toggle('active', key === k);
     }
   };
   const tab = (k: XKey, label: string, key: string, toggle: () => void) => {
     const t = h('div', 'xtab', tabs);
-    tabEls[k] = t;
+    xtabEls[k] = t;
     const on = h('div', 'xon', t);
     on.title = `${label} on/off (${key})`;
     on.setAttribute('role', 'checkbox');
@@ -249,11 +341,8 @@ export function patternView(app: App, screen: HTMLElement): View {
   tab('destroy', 'DESTROY', 'D', () => app.toggleDestroy());
   const wb = button(dp, tabs, 'WILDCARD', () => void app.wildcard(), { cls: 'med', title: 'One bounded, seeded re-imagining of style, density, transformations, swing and (sometimes) the kit. One undo step (W). Undo takes it back.' });
   wb.dataset.test = 'wildcard';
-  wb.style.height = '44px';
-  wb.style.flex = '1';
-  wb.style.minWidth = '128px';
   const panelFor = (k: XKey, title: string, key: string, toggle: () => void, again: () => void, againLabel: string) => {
-    const p = h('div', 'xpanel', db);
+    const p = h('div', 'xpanel', xbody);
     panels[k] = p;
     const head = h('div', 'row wrap', p);
     button(dp, head, title, toggle, { on: () => d()[k].on, label: () => `${title} ${d()[k].on ? 'ON' : 'OFF'}`, title: `${title} on/off (${key})` });
@@ -313,14 +402,17 @@ export function patternView(app: App, screen: HTMLElement): View {
     sub.destroy.textContent = d().destroy.on ? 'ON · ' + Math.round(d().destroy.amount * 100) + '%' : 'OFF';
   };
   dp.add(reports);
-  subscribe(app, ['destruction', 'pattern', 'transport'], () => dp.refresh());
+  infos.transform = () => (['chop', 'rolls', 'destroy'] as const).map((k) => `${k.toUpperCase()} ${d()[k].on ? 'ON' : 'OFF'}`).join(' · ');
+  subscribe(app, ['destruction', 'pattern', 'transport'], () => {
+    dp.refresh();
+    wp.refresh();
+  });
 
   // ---------------------------------------------------------------- TRACK
-  const tw = win(band, { title: 'TRACK', area: 'rhythm', id: 'track', ...fold(app, 'track') });
   const tp = new Panel();
-  const tbd = tw.body;
-  tbd.classList.add('col');
+  const tpane = panes.track;
   const t = () => app.track;
+  const tbd = card(tpane);
   const tr = h('div', 'row', tbd);
   select(tp, tr, { options: () => app.project.tracks.map((x) => ({ value: x.id, label: x.name })), get: () => app.ui.track, set: (v) => app.selectTrack(v), title: 'The selected track (↑ ↓)' }).classList.add('fluid');
   const role = h('div', 'hint', tr);
@@ -339,7 +431,8 @@ export function patternView(app: App, screen: HTMLElement): View {
   button(tp, tbtn, 'LOCK', () => app.lockTrack(t().id), { on: () => t().lock, title: 'Generation and mutation leave this track alone' });
   button(tp, tbtn, '▶ HEAR', () => void app.audition(t().id), { title: 'Hear it' });
   button(tp, tbtn, 'FILL', null, { hold: (dn) => app.fill(dn, [t().id]), on: () => app.ui.fills.has(t().id), title: 'Hold: fill this track' });
-  const pg = group(tbd, 'PERFORMANCE');
+  const tpc = card(tpane);
+  const pg = group(tpc, 'PERFORMANCE');
   pg.classList.add('col');
   const play = (label: string, k: 'density' | 'fill' | 'humanize' | 'chance', title: string) => {
     const c = ctl(pg, label, title);
@@ -349,42 +442,21 @@ export function patternView(app: App, screen: HTMLElement): View {
   play('FILL', 'fill', 'Generated hits in the gaps (seeded, different every cycle)');
   play('HUMANIZE', 'humanize', 'Timing and velocity looseness');
   play('CHANCE', 'chance', "Scales every hit's probability");
-  const tm = more(tbd, 'LOOP LENGTH AND MIDI', 'track-more');
+  const tm = group(card(tpane), 'LOOP LENGTH AND MIDI');
+  tm.classList.add('col');
   const lr = ctl(tm, 'LENGTH', 'Loop length of this track in steps (OFF = the pattern length): polymeter');
   num(tp, lr.slot, { get: () => t().play.length, set: (v) => app.setTrackPlay(t().id, { length: v }, 'TRACK LENGTH'), min: 0, max: 64, format: (v) => (v ? String(v) : 'OFF'), title: 'Loop length in steps (OFF = the pattern length): polymeter' });
   const mc = ctl(tm, 'MIDI CHANNEL');
   num(tp, mc.slot, { get: () => t().midi.channel, set: (v) => app.setTrackMidi(t().id, { channel: v }), min: 1, max: 16 });
   const mn = ctl(tm, 'MIDI NOTE');
   num(tp, mn.slot, { get: () => t().midi.note, set: (v) => app.setTrackMidi(t().id, { note: v }), min: 0, max: 127 });
-  tp.add(() => (tw.info.textContent = `${t().name} · ${t().sound.mode.toUpperCase()} · ${t().lock ? 'LOCKED' : 'UNLOCKED'}`));
-  subscribe(app, ['tracks', 'selection', 'mix', 'midi', 'project', 'kit', 'library'], () => tp.refresh());
-
-  // ---------------------------------------------------------------- EDIT
-  const ew = win(band, { title: 'EDIT', area: 'rhythm', id: 'edit', ...fold(app, 'edit') });
-  const ep = new Panel();
-  const eb = ew.body;
-  eb.classList.add('col');
-  const ehint = h('div', 'hint', eb);
-  ep.add(() => {
-    const s = app.ui.sel;
-    ehint.textContent = s && !(s.t0 === s.t1 && s.s0 === s.s1) ? `ACTS ON THE SELECTED REGION: ${Math.abs(s.t1 - s.t0) + 1} TRACKS × ${Math.abs(s.s1 - s.s0) + 1} STEPS` : s ? 'ACTS ON THE SELECTED STEP' : `NOTHING SELECTED: ACTS ON THE WHOLE ${app.track.name} TRACK (SHIFT-DRAG IN THE GRID TO SELECT A REGION)`;
+  infos.track = () => `${t().name} · ${t().sound.mode.toUpperCase()} · ${t().lock ? 'LOCKED' : 'UNLOCKED'}`;
+  subscribe(app, ['tracks', 'selection', 'mix', 'midi', 'project', 'kit', 'library'], () => {
+    tp.refresh();
+    wp.refresh();
   });
-  const e1 = h('div', 'row wrap', eb);
-  button(ep, e1, 'VEL −', () => app.editSelection((x) => ({ ...x, vel: Math.max(1, Math.round(x.vel * 0.85)) }), 'SOFTER'), { cls: 'grow', title: 'Softer' });
-  button(ep, e1, 'VEL +', () => app.editSelection((x) => ({ ...x, vel: Math.min(127, Math.round(x.vel * 1.15 + 1)) }), 'LOUDER'), { cls: 'grow', title: 'Louder' });
-  button(ep, e1, 'CHANCE 50', () => app.editSelection((x) => ({ ...x, prob: 50 }), 'CHANCE'), { cls: 'grow', title: 'Every hit 50% probability' });
-  button(ep, e1, 'CHANCE 100', () => app.editSelection((x) => ({ ...x, prob: 100 }), 'CHANCE'), { cls: 'grow', title: 'Every hit always plays' });
-  const e2 = h('div', 'row wrap', eb);
-  button(ep, e2, 'COPY', () => app.copy(), { cls: 'grow', title: 'Copy the selection (or the whole pattern) ⌘C' });
-  button(ep, e2, 'PASTE', () => app.paste(), { cls: 'grow', disabled: () => !app.clip, title: 'Paste at the selection (or the start) ⌘V' });
-  button(ep, e2, 'CLEAR', () => (app.ui.sel ? app.clearSelection() : app.clearTrack(app.ui.track)), { cls: 'grow', title: 'Clear the selection (or the selected track) DEL' });
-  button(ep, e2, 'NONE', () => app.select(null), { cls: 'grow', title: 'Clear the selection (ESC)' });
-  const e3 = h('div', 'row wrap', eb);
-  button(ep, e3, '◀ SHIFT', () => app.shiftTrack(app.ui.track, -1), { cls: 'grow', title: 'Shift the selected track one step earlier [' });
-  button(ep, e3, 'SHIFT ▶', () => app.shiftTrack(app.ui.track, 1), { cls: 'grow', title: 'Shift the selected track one step later ]' });
-  subscribe(app, ['selection', 'pattern', 'tracks'], () => ep.refresh());
 
-  const all = [gp, pp, sp, dp, tp, ep];
+  const all = [gp, pp, sp, dp, tp, ep, wp];
   let lastCycle = -1;
   return {
     root,

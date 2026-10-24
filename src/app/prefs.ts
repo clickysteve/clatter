@@ -5,9 +5,18 @@
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import { defaultMidiPrefs, type MidiPrefs } from '../midi/controller';
+import { DEFAULT_SCALE, snapScale } from '../ui/scale';
+
+/** The tabs of the PATTERN view's workspace under the grid. */
+export const WORKSPACES = ['sequence', 'generate', 'transform', 'track'] as const;
+export type Workspace = (typeof WORKSPACES)[number];
 
 export interface Prefs {
   view: 'pattern' | 'sound' | 'perform';
+  /** the tab open under the pattern grid */
+  workspace: Workspace;
+  /** interface scale (1 = 100 %); see src/ui/scale.ts */
+  uiScale: number;
   editMode: 'basic' | 'advanced';
   midi: MidiPrefs;
   exportBars: number;
@@ -20,7 +29,7 @@ export interface Prefs {
 
 const KEY = 'clatter.prefs';
 
-export const defaultPrefs = (): Prefs => ({ view: 'pattern', editMode: 'basic', midi: defaultMidiPrefs(), exportBars: 8, exportTail: 2, seenHelp: false, collapsed: {} });
+export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: 8, exportTail: 2, seenHelp: false, collapsed: {} });
 
 export function loadPrefs(): Prefs {
   try {
@@ -30,6 +39,8 @@ export function loadPrefs(): Prefs {
     const d = defaultPrefs();
     return {
       view: v.view === 'sound' || v.view === 'perform' ? v.view : 'pattern',
+      workspace: WORKSPACES.find((w) => w === v.workspace) ?? 'sequence',
+      uiScale: snapScale(v.uiScale),
       editMode: v.editMode === 'advanced' ? 'advanced' : 'basic',
       midi: { ...d.midi, ...(v.midi ?? {}) },
       exportBars: typeof v.exportBars === 'number' ? Math.max(1, Math.min(256, v.exportBars)) : d.exportBars,

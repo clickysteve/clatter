@@ -7,6 +7,7 @@
  */
 import './ui/style.css';
 import { App } from './app/app';
+import { loadPrefs } from './app/prefs';
 import { closeMenus, menubar } from './ui/menu';
 import { applySelectedPalette } from './ui/palette';
 import { transportWindow } from './ui/views/transport';
@@ -17,6 +18,7 @@ import { bindKeys } from './ui/keys';
 import { closePopups, h, win } from './ui/widgets';
 import { installTooltips } from './ui/tooltip';
 import { aboutDialog } from './ui/dialogs';
+import { cpx, initScale } from './ui/scale';
 
 /** The page: fixed chrome (menu bar, transport, view tabs) above a work area that scrolls. */
 function shell(): { chrome: HTMLElement; main: HTMLElement } {
@@ -31,12 +33,13 @@ function shell(): { chrome: HTMLElement; main: HTMLElement } {
 }
 
 async function main(): Promise<void> {
+  initScale(loadPrefs().uiScale);
   applySelectedPalette();
   installTooltips();
   const { chrome, main: screen } = shell();
   const loading = win(screen, { title: 'CLATTER', id: 'loading', cls: 'loading' });
   const msg = h('div', 'lbl', loading.body, 'LOADING THE LXR ENGINE AND THE SAMPLES…');
-  msg.style.marginBottom = '10px';
+  msg.style.marginBottom = cpx(10);
   h('div', 'hint', loading.body, 'Generative drum synthesis · LXR-02 firmware DSP in WebAssembly');
   const app = new App();
   (window as unknown as { clatter: App }).clatter = app;
@@ -50,7 +53,7 @@ async function main(): Promise<void> {
   }
   loading.el.remove();
 
-  const { status } = menubar(app, chrome);
+  const { bar, status } = menubar(app, chrome);
   const st = h('div', '', status);
   st.dataset.test = 'status';
   const midiSt = h('div', '', status);
@@ -63,7 +66,7 @@ async function main(): Promise<void> {
   app.on('midi', showStatus);
   showStatus();
 
-  const transport = transportWindow(app, chrome);
+  const transport = transportWindow(app, chrome, bar);
   for (const t of ['transport', 'pattern', 'history', 'project', 'view'] as const) app.on(t, () => transport.panel.refresh());
   app.on('pattern', () => transport.rebuildPatterns());
   app.on('project', () => transport.rebuildPatterns());

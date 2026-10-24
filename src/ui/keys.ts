@@ -51,6 +51,9 @@ export function bindKeys(app: App): void {
       e.preventDefault();
       return;
     }
+    // the keys that act on the pattern open the workspace tab they belong to
+    const tab = ({ g: 'generate', v: 'generate', m: 'generate', r: 'generate', c: 'transform', l: 'transform', d: 'transform', w: 'transform' } as const)[k as 'g'];
+    if (tab && app.ui.view === 'pattern' && !e.shiftKey && app.ui.workspace !== tab) app.setWorkspace(tab);
     switch (e.key === ' ' ? 'space' : k) {
       case 'space':
         if (e.repeat) break;

@@ -115,6 +115,22 @@ describe('what the grid shows is what plays', () => {
     expect(moved.length).toBeGreaterThan(0);
   });
 
+  it('rhythm evolution: what it removes is an outline, what it adds is a block, both say EVOLVE', () => {
+    const { proj, p, input } = setup();
+    input.evolve = { target: 'rhythm', every: 1, amount: 1, returnEvery: 0 };
+    const real = realize(input, 3);
+    let seen = 0;
+    for (const t of proj.tracks) {
+      for (const c of trackCells(p, t, real)) {
+        if (!c.evolved) continue;
+        seen++;
+        if (c.state === 'silent') expect(c.why).toBe('evolved');
+        if (c.state === 'hit' && !c.hit) expect(sourceLabel(c)).toMatch(/EVOLVE/);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
   it('a deleted generated hit is an empty cell, remembered only for SHOW ORIGINAL', () => {
     const { proj, p, input } = setup();
     const kick = proj.tracks[0]!;

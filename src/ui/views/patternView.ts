@@ -77,7 +77,7 @@ export function patternView(app: App, screen: HTMLElement): View {
   h('div', 'lbl', tb, 'GRID');
   select(pp, tb, { options: () => RESOLUTIONS.map((r) => ({ value: r, label: RESOLUTION_LABEL[r] })), get: () => app.pattern.res, set: (r: Resolution) => app.setResolution(r), title: 'Step resolution: the note length of one step' });
   h('div', 'lbl', tb, 'NEW HIT VELOCITY');
-  num(pp, tb, { get: () => app.ui.paintVel, set: (v) => ((app.ui.paintVel = v), pp.refresh(), grid.drawOverlay(-1)), min: 1, max: 127, title: 'Velocity of the hits you add by clicking' });
+  num(pp, tb, { get: () => app.ui.paintVel, set: (v) => ((app.ui.paintVel = v), pp.refresh(), grid.redrawOverlay()), min: 1, max: 127, title: 'Velocity of the hits you add by clicking' });
   h('div', 'grow', tb);
   button(pp, tb, 'SOURCE', null, { on: () => app.ui.sourceOnly, hold: (d) => app.setSourceOnly(d), title: 'Hold: hear and see only the written pattern (no density, fills, CHOP, ROLLS, DESTROY)' });
   button(pp, tb, 'SHOW ORIGINAL', () => app.setShowOriginal(!app.ui.showOriginal), { on: () => app.ui.showOriginal, title: 'Also show the edit history: hand-edited hits (corner flag) and generated hits you deleted (crossed outline). Off: the grid shows only what plays.' }).dataset.test = 'show-original';
@@ -139,7 +139,7 @@ export function patternView(app: App, screen: HTMLElement): View {
   });
   app.on('selection', () => {
     grid.refreshRows();
-    grid.drawOverlay(-1);
+    grid.redrawOverlay();
     sp.refresh();
     pop?.refresh();
     showWhere();

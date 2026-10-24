@@ -353,6 +353,32 @@ test('saves and opens a project; exports a WAV and a MIDI file', async ({ page }
   expect(mid).toBe('MThd');
 });
 
+test('dialogs are set in readable body type with room between the lines', async ({ page }) => {
+  await boot(page);
+  await page.locator('#menubar .menu', { hasText: 'CLATTER' }).click();
+  await page.locator('.dropdown .item', { hasText: 'About CLATTER' }).click();
+  const about = await page.evaluate(() => {
+    const ps = [...document.querySelectorAll<HTMLElement>('.dialog .scroll p')];
+    return ps.map((p) => {
+      const cs = getComputedStyle(p);
+      return { size: parseFloat(cs.fontSize), line: parseFloat(cs.lineHeight), fits: p.scrollWidth <= p.clientWidth + 1 };
+    });
+  });
+  expect(about.length).toBeGreaterThan(4);
+  for (const p of about) {
+    expect(p.size).toBeGreaterThanOrEqual(15);
+    expect(p.line / p.size).toBeGreaterThanOrEqual(1.5);
+    expect(p.fits).toBe(true);
+  }
+  // the legal notices are all still there
+  const text = await page.locator('.dialog').innerText();
+  for (const s of ['Erica Synths', 'GNU General Public License', 'no warranty', 'trademarks', 'modified version', 'LXR firmware', 'DOWNBEAT', 'The Breakery', 'emmm', 'Slop Factory Core', 'corresponding source']) expect(text).toContain(s);
+  // the dialog fits the window and scrolls inside itself
+  const box = await page.locator('.dialog').boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+});
+
 test('menu items work with ordinary clicks (About, Keys)', async ({ page }) => {
   await boot(page);
   await page.locator('#menubar .menu', { hasText: 'CLATTER' }).click();

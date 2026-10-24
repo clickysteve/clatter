@@ -50,7 +50,7 @@ export function position(step: number, m: GridMetrics): { bar: number; beat: num
 }
 
 export type CellState = 'empty' | 'hit' | 'silent';
-export type SilentWhy = 'chance' | 'density' | 'moved';
+export type SilentWhy = 'chance' | 'density' | 'moved' | 'evolved';
 
 export interface CellView {
   state: CellState;
@@ -136,7 +136,7 @@ export function trackCells(p: Pattern, t: Track, real: Realization | null): Cell
     if (sounds) {
       out.push({ state: 'hit', hit, origin, vel, strokes, base, prob, flam: flam || (!!hit?.flam && poly), added: !hit, why: null, kinds, destroyed, evolved, outside: false });
     } else if (hit) {
-      const why: SilentWhy = f & CELL_SUPPRESSED ? (prob < 100 || t.play.chance < 100 ? 'chance' : 'density') : 'moved';
+      const why: SilentWhy = f & CELL_SUPPRESSED ? (prob < 100 || t.play.chance < 100 ? 'chance' : 'density') : evolved ? 'evolved' : 'moved';
       out.push({ state: 'silent', hit, origin, vel, strokes: 0, base, prob, flam: false, added: false, why, kinds: [], destroyed: false, evolved, outside: false });
     } else {
       out.push({ ...EMPTY, origin, evolved, base });
@@ -177,7 +177,7 @@ export function describeCell(name: string, step: number, v: CellView, m: GridMet
       lines.push(`Chance ${v.prob}%${v.hit.note ? ` · pitch ${v.hit.note > 0 ? '+' : ''}${v.hit.note}` : ''}${v.hit.ratchet && v.hit.ratchet > 1 ? ` · ratchet ×${v.hit.ratchet}` : ''}${v.hit.flam ? ' · flam' : ''}`);
     }
   } else if (v.state === 'silent') {
-    const why = v.why === 'chance' ? `its chance is ${v.prob < 100 ? v.prob + '%' : 'scaled by the track'} and it stayed silent this pass` : v.why === 'density' ? 'the track’s DENSITY dropped it this pass' : 'CHOP moved it away or DESTROY skipped it this pass';
+    const why = v.why === 'chance' ? `its chance is ${v.prob < 100 ? v.prob + '%' : 'scaled by the track'} and it stayed silent this pass` : v.why === 'density' ? 'the track’s DENSITY dropped it this pass' : v.why === 'evolved' ? 'EVOLVE removed it in this generation' : 'CHOP moved it away or DESTROY skipped it this pass';
     lines.push(`**Written but silent this pass: ${why}.`);
     lines.push(`Velocity ${v.vel} · chance ${v.prob}%`);
   } else {
@@ -198,7 +198,7 @@ const KIND_SHORT: Partial<Record<EventKind, string>> = { fill: 'FILL', chop: 'CH
 
 /** Where a cell's content came from, in a few words (for the grid's footer). */
 export function sourceLabel(v: CellView): string {
-  if (v.state === 'hit' && v.added) return 'ADDED BY ' + ([...new Set(v.kinds.map((k) => KIND_SHORT[k]).filter(Boolean))].join(' + ') || 'A TRANSFORMATION');
+  if (v.state === 'hit' && v.added) return 'ADDED BY ' + ([...new Set([...(v.evolved ? ['EVOLVE'] : []), ...v.kinds.map((k) => KIND_SHORT[k]).filter(Boolean)])].join(' + ') || 'A TRANSFORMATION');
   if (v.origin === 'edit') return 'HAND EDIT';
   if (v.origin === 'deleted') return 'GENERATED HIT DELETED BY HAND';
   if (v.origin === 'gen') return 'GENERATED';
@@ -211,6 +211,6 @@ export function summaryLine(name: string, step: number, v: CellView, m: GridMetr
   const where = `${name} · STEP ${step + 1} (BAR ${pos.bar} BEAT ${pos.beat})`;
   if (v.outside) return `${where} · OUTSIDE THIS TRACK'S LOOP`;
   if (v.state === 'hit') return `${where} · SOUNDS · VELOCITY ${v.vel}${v.hit ? ` · CHANCE ${v.prob}%` : ''}${v.strokes > 1 ? ` · ${v.strokes} STROKES` : ''} · ${sourceLabel(v)}`;
-  if (v.state === 'silent') return `${where} · WRITTEN, SILENT THIS PASS (${v.why === 'chance' ? 'CHANCE' : v.why === 'density' ? 'DENSITY' : 'MOVED OR SKIPPED'}) · VELOCITY ${v.vel} · ${sourceLabel(v)}`;
+  if (v.state === 'silent') return `${where} · WRITTEN, SILENT THIS PASS (${v.why === 'chance' ? 'CHANCE' : v.why === 'density' ? 'DENSITY' : v.why === 'evolved' ? 'EVOLVE' : 'MOVED OR SKIPPED'}) · VELOCITY ${v.vel} · ${sourceLabel(v)}`;
   return `${where} · EMPTY${v.origin === 'deleted' ? ' (A GENERATED HIT WAS DELETED)' : ''}`;
 }

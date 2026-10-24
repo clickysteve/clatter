@@ -451,6 +451,12 @@ export class PatternGrid {
 
   private lastHead = -1;
 
+  /** Redraw the overlay now (the selection or the pointer changed), keeping the playhead where it is. */
+  redrawOverlay(): void {
+    this.lastKey = '';
+    this.drawOverlay(this.lastHead);
+  }
+
   /** The playhead, the selected track, the hover and the cursor (cheap: every animation frame). */
   drawOverlay(step: number): void {
     const app = this.app;

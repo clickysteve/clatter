@@ -14,6 +14,8 @@ export class History<T> {
   private undoStack: HistoryEntry<T>[] = [];
   private redoStack: HistoryEntry<T>[] = [];
   private open: HistoryEntry<T> | null = null;
+  /** nested gestures (a drag around a setter that is itself one step) close at the outermost */
+  private depth = 0;
 
   constructor(
     private capture: () => T,
@@ -31,12 +33,14 @@ export class History<T> {
 
   /** A gesture that may change things many times: one undo step. */
   begin(label: string): void {
+    this.depth++;
     if (this.open) return;
     this.open = { label, state: this.capture() };
   }
 
   commit(changed = true): void {
-    if (!this.open) return;
+    if (this.depth > 0) this.depth--;
+    if (!this.open || this.depth > 0) return;
     if (changed) {
       this.undoStack.push(this.open);
       if (this.undoStack.length > this.limit) this.undoStack.shift();
@@ -81,5 +85,6 @@ export class History<T> {
     this.undoStack = [];
     this.redoStack = [];
     this.open = null;
+    this.depth = 0;
   }
 }

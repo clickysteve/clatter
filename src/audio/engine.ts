@@ -25,6 +25,12 @@ import { PAR } from '../sound/lxrParamIds';
 export const ENGINE_RATE = 44100;
 export const BLOCK = 64;
 export const MAX_SAMPLE_VOICES = 48;
+/**
+ * Sample layer headroom (-6 dB). Imported samples are usually normalised to full scale while
+ * the LXR voices peak around -6 to -9 dBFS; this keeps a sample track at a level comparable to
+ * a synthesised one at the same fader position (sample GAIN goes to 200 % for quiet files).
+ */
+export const SAMPLE_HEADROOM = 0.5;
 /** anti-click fade for chokes, gates and stolen voices */
 const FADE_FRAMES = Math.round(ENGINE_RATE * 0.004);
 /** fade-in when a sample starts mid-way (region start, reverse) */
@@ -389,7 +395,7 @@ export class ClatterEngine {
     const rate = (s.rate / ENGINE_RATE) * Math.pow(2, semis / 12);
     const reverse = t.reverse !== !!h.reverse;
     const vel = Math.max(1, Math.min(127, h.vel)) / 127;
-    const g = Math.pow(vel, 1.3) * t.gain * (t.mode === 'hybrid' ? t.sampleLevel : 1);
+    const g = Math.pow(vel, 1.3) * t.gain * SAMPLE_HEADROOM * (t.mode === 'hybrid' ? t.sampleLevel : 1);
     const [pl, pr] = panGains(t.pan);
     if (this.voices.length >= MAX_SAMPLE_VOICES) {
       // steal the oldest

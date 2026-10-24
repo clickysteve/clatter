@@ -1,6 +1,6 @@
 /**
  * The widget toolkit: windows with slanted title tabs, buttons, sliders, number boxes and
- * pop-up selectors in the Slop Factory's 1-bit style (after emmm's widgets). Every widget
+ * pop-up selectors in the Slop Factory's 1-bit style (after emmm's widgets), in real pixels. Every widget
  * returns its element and registers an update function with the Panel it belongs to, so a
  * panel redraws its values without rebuilding.
  *
@@ -37,14 +37,18 @@ export class Panel {
 const SLANT = `<svg viewBox="0 0 16 17" preserveAspectRatio="none" width="16" height="17"><path d="M0 0 L16 17 L0 17 Z" style="fill:var(--paper)"/><path d="M0 0 L16 17" stroke="currentColor" style="stroke:var(--ink)" stroke-width="1" fill="none"/></svg>`;
 
 export interface WinOptions {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
   title: string;
   /** palette area (its own ink colour) */
   area?: string;
   id?: string;
+  /** extra classes */
+  cls?: string;
+  /** the title bar folds the window away (tertiary panels) */
+  collapsible?: boolean;
+  /** the window starts folded */
+  collapsed?: boolean;
+  /** called when the user folds or unfolds it */
+  onCollapse?: (collapsed: boolean) => void;
 }
 
 export interface Win {
@@ -53,11 +57,12 @@ export interface Win {
   tools: HTMLDivElement;
   info: HTMLDivElement;
   setTitle(t: string): void;
+  collapse(on: boolean): void;
 }
 
+/** A window: a slanted title tab, optional tools and info in the title bar, and a body that flows. */
 export function win(parent: HTMLElement, o: WinOptions): Win {
-  const el = h('div', 'win', parent);
-  Object.assign(el.style, { left: o.x + 'px', top: o.y + 'px', width: o.w + 'px', height: o.h + 'px' });
+  const el = h('div', 'win' + (o.cls ? ' ' + o.cls : '') + (o.collapsible ? ' collapsible' : ''), parent);
   if (o.area) el.dataset.area = o.area;
   if (o.id) el.id = o.id;
   const tb = h('div', 'titlebar', el);
@@ -69,7 +74,59 @@ export function win(parent: HTMLElement, o: WinOptions): Win {
   const body = h('div', 'body', el);
   el.setAttribute('role', 'region');
   el.setAttribute('aria-label', o.title);
-  return { el, body, tools, info, setTitle: (t) => (title.textContent = t) };
+  const collapse = (on: boolean) => {
+    el.classList.toggle('collapsed', on);
+    title.setAttribute('aria-expanded', String(!on));
+  };
+  if (o.collapsible) {
+    title.tabIndex = 0;
+    title.setAttribute('role', 'button');
+    collapse(!!o.collapsed);
+    const toggle = () => {
+      const on = !el.classList.contains('collapsed');
+      collapse(on);
+      o.onCollapse?.(on);
+    };
+    tb.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('.tools')) return;
+      toggle();
+    });
+    title.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        toggle();
+      }
+    });
+  }
+  return { el, body, tools, info, setTitle: (t) => (title.textContent = t), collapse };
+}
+
+const openMore = new Set<string>();
+
+/** A section that is closed until asked for: the home of tertiary controls. Returns its body. */
+export function more(parent: HTMLElement, title: string, id: string): HTMLDivElement {
+  const m = h('div', 'more' + (openMore.has(id) ? ' open' : ''), parent);
+  const head = h('div', 'more-head', m, title);
+  head.tabIndex = 0;
+  head.setAttribute('role', 'button');
+  const body = h('div', 'more-body', m);
+  const toggle = () => {
+    const on = m.classList.toggle('open');
+    if (on) openMore.add(id);
+    else openMore.delete(id);
+    head.setAttribute('aria-expanded', String(on));
+  };
+  head.setAttribute('aria-expanded', String(m.classList.contains('open')));
+  head.addEventListener('click', toggle);
+  head.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      toggle();
+    }
+  });
+  return body;
 }
 
 export interface ButtonOptions {
@@ -145,7 +202,7 @@ const roundTo = (v: number, step: number) => Math.round(v / step) * step;
 /** A horizontal slider with drag, keyboard and typed entry. */
 export function range(panel: Panel, parent: HTMLElement, o: RangeOptions): HTMLDivElement {
   const el = h('div', 'range' + (o.bip ? ' bip' : ''), parent);
-  if (o.width) el.style.width = o.width + 'px';
+  if (o.width) el.style.minWidth = o.width + 'px';
   el.tabIndex = 0;
   if (o.title) el.title = o.title;
   const fill = h('div', 'fill', el);
@@ -293,7 +350,7 @@ export interface NumOptions {
 export function num(panel: Panel, parent: HTMLElement, o: NumOptions): HTMLDivElement {
   const el = h('div', 'num', parent);
   el.tabIndex = 0;
-  if (o.width) el.style.width = o.width + 'px';
+  if (o.width) el.style.minWidth = o.width + 'px';
   if (o.title) el.title = o.title;
   const step = o.step ?? 1;
   let typed = '';
@@ -384,7 +441,7 @@ export function closePopups(): void {
 export function select<T>(panel: Panel, parent: HTMLElement, o: SelectOptions<T>): HTMLDivElement {
   const el = h('div', 'msel', parent);
   el.tabIndex = 0;
-  if (o.width) el.style.width = o.width + 'px';
+  if (o.width) el.style.minWidth = o.width + 'px';
   if (o.title) el.title = o.title;
   const draw = () => {
     const v = o.get();
@@ -392,14 +449,11 @@ export function select<T>(panel: Panel, parent: HTMLElement, o: SelectOptions<T>
   };
   const open = () => {
     closePopups();
-    const screen = document.getElementById('screen')!;
-    const list = h('div', 'msel-list', screen);
-    const sr = screen.getBoundingClientRect();
+    const list = h('div', 'msel-list', document.body);
     const r = el.getBoundingClientRect();
-    const scale = sr.width / 1280 || 1;
-    list.style.left = (r.left - sr.left) / scale + 'px';
-    list.style.top = (r.bottom - sr.top) / scale + 'px';
-    list.style.minWidth = r.width / scale + 'px';
+    list.style.left = r.left + 'px';
+    list.style.top = r.bottom + 2 + 'px';
+    list.style.minWidth = r.width + 'px';
     const cur = o.get();
     for (const opt of o.options()) {
       const it = h('div', 'msel-item' + (opt.value === cur ? ' checked' : ''), list, opt.label);
@@ -410,9 +464,10 @@ export function select<T>(panel: Panel, parent: HTMLElement, o: SelectOptions<T>
         draw();
       });
     }
-    // keep inside the screen
+    // keep inside the window: open upwards when there is no room below, shift left at the edge
     const lr = list.getBoundingClientRect();
-    if (lr.bottom > sr.bottom) list.style.top = Math.max(18, (r.top - sr.top) / scale - lr.height / scale) + 'px';
+    if (lr.bottom > window.innerHeight - 4) list.style.top = Math.max(4, r.top - lr.height - 2) + 'px';
+    if (lr.right > window.innerWidth - 4) list.style.left = Math.max(4, window.innerWidth - 4 - lr.width) + 'px';
     el.classList.add('open');
     openList = list;
   };
@@ -436,7 +491,7 @@ export function select<T>(panel: Panel, parent: HTMLElement, o: SelectOptions<T>
   return el;
 }
 
-/** A group frame with a small inverted title. */
+/** A group frame with an inverted title tab. */
 export function group(parent: HTMLElement, title: string, cls = ''): HTMLDivElement {
   const g = h('div', 'group ' + cls, parent);
   h('div', 'gtitle', g, title);

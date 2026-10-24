@@ -33,7 +33,8 @@ Open the site (or run it locally, below) in a current Chrome, Edge, Firefox or S
 **SPACE** to play. **G** generates a pattern, **K** a kit, **W** plays the wildcard; **?** lists
 every key. Projects autosave in the browser; FILE saves them as files.
 
-Views: **PATTERN** (generator, grid, step inspector, destruction, track), **SOUND** (tracks and
+Views: **PATTERN** (the grid and its step editor; generator, transformation toolbar, track and
+edit panels under it; **? KEY** explains the grid), **SOUND** (tracks and
 sources, LXR synth editor, samples, mixer, kit and FX bus), **PERFORM** (pads, patterns,
 snapshots, mutes, macros). Factory presets: MACHINE ROOM, BROKEN CLOCK, METALLIC WEATHER, DUSTY
 BREAKS, DIGITAL DETRITUS, INDUSTRIAL ESTATE, WRONG ANSWERS, AFTER HOURS.

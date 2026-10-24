@@ -62,9 +62,9 @@ function pad(panel: Panel, parent: HTMLElement, label: string, fn: ((e: MouseEve
   return p;
 }
 
-function padGrid(parent: HTMLElement, cols: number, gap = 6, rows = 0): HTMLDivElement {
+function padGrid(parent: HTMLElement, cols: number, gap = 12, rows = 0): HTMLDivElement {
   const g = h('div', '', parent);
-  Object.assign(g.style, { display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gridAutoRows: '1fr', gap: gap + 'px', height: '100%' });
+  Object.assign(g.style, { display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: '1fr', gap: gap + 'px' });
   if (rows) g.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
   return g;
 }
@@ -72,10 +72,15 @@ function padGrid(parent: HTMLElement, cols: number, gap = 6, rows = 0): HTMLDivE
 export function performView(app: App, screen: HTMLElement): View {
   const root = h('div', 'view', screen);
   root.dataset.view = 'perform';
+  const top = h('div', 'perform-top', root);
+  const side = h('div', 'col', top);
+  side.style.gap = '16px';
+  const mid = h('div', 'perform-mid', root);
   const q = () => app.project.quantize.toUpperCase();
 
   // ---------------------------------------------------------------- PADS
-  const aw = win(root, { x: 8, y: 84, w: 620, h: 420, title: 'PERFORM', area: 'perform', id: 'perform' });
+  const aw = win(top, { title: 'PERFORM', area: 'perform', id: 'perform' });
+  top.insertBefore(aw.el, side);
   const ap = new Panel();
   const ag = padGrid(aw.body, 4);
   pad(ap, ag, 'GENERATE', () => app.generatePattern(true), { sub: () => 'NEXT ' + q(), title: 'A new pattern (G)' }).dataset.test = 'p-generate';
@@ -102,9 +107,9 @@ export function performView(app: App, screen: HTMLElement): View {
   subscribe(app, ['destruction', 'transport', 'kit', 'status', 'pattern'], () => ap.refresh());
 
   // ---------------------------------------------------------------- PATTERNS
-  const pw = win(root, { x: 636, y: 84, w: 300, h: 200, title: 'PATTERNS', area: 'perform', id: 'p-patterns' });
+  const pw = win(side, { title: 'PATTERNS', area: 'perform', id: 'p-patterns' });
   const pp = new Panel();
-  const pg = padGrid(pw.body, 4, 4, 4);
+  const pg = padGrid(pw.body, 4, 8);
   const buildPatterns = () => {
     pp.clear();
     pg.innerHTML = '';
@@ -119,7 +124,7 @@ export function performView(app: App, screen: HTMLElement): View {
   });
 
   // ---------------------------------------------------------------- SNAPSHOTS
-  const nw = win(root, { x: 944, y: 84, w: 328, h: 200, title: 'SNAPSHOTS', area: 'perform', id: 'snapshots' });
+  const nw = win(side, { title: 'SNAPSHOTS', area: 'perform', id: 'snapshots' });
   const np = new Panel();
   let storing = false;
   const store = h('button', 'btn small', nw.tools, 'STORE');
@@ -129,7 +134,7 @@ export function performView(app: App, screen: HTMLElement): View {
     np.refresh();
   });
   np.add(() => store.classList.toggle('armed', storing));
-  const ng = padGrid(nw.body, 4, 4);
+  const ng = padGrid(nw.body, 4, 8);
   for (let i = 0; i < SNAPSHOTS; i++) {
     pad(np, ng, String(i + 1), (e) => {
       if (storing || e.shiftKey) {
@@ -142,9 +147,9 @@ export function performView(app: App, screen: HTMLElement): View {
   subscribe(app, ['snapshots', 'project'], () => np.refresh());
 
   // ---------------------------------------------------------------- MUTES
-  const mw = win(root, { x: 636, y: 292, w: 636, h: 212, title: 'TRACKS', area: 'perform', id: 'mutes' });
+  const mw = win(mid, { title: 'TRACKS', area: 'perform', id: 'mutes' });
   const mp = new Panel();
-  const mg = padGrid(mw.body, 5, 4);
+  const mg = padGrid(mw.body, 5, 8);
   const buildMutes = () => {
     mp.clear();
     mg.innerHTML = '';
@@ -162,16 +167,15 @@ export function performView(app: App, screen: HTMLElement): View {
   app.on('project', buildMutes);
 
   // ---------------------------------------------------------------- MACROS
-  const xw = win(root, { x: 8, y: 512, w: 400, h: 280, title: 'MACROS', area: 'perform', id: 'macros' });
+  const xw = win(mid, { title: 'MACROS', area: 'perform', id: 'macros' });
+  mid.insertBefore(xw.el, mw.el);
   const xp = new Panel();
   const xb = xw.body;
   xb.classList.add('col');
-  xb.style.gap = '7px';
+  xb.style.gap = '10px';
   const macro = (label: string, title: string, get: () => number, set: (v: number) => void, min = 0, max = 100, fmt: (v: number) => string = (v) => v + '%') => {
     const c = ctl(xb, label, title);
-    c.row.style.gridTemplateColumns = '86px 1fr';
-    const r = range(xp, c.slot, { get, set, min, max, format: fmt, begin: () => app.beginDrag(label), end: () => app.endDrag(), title });
-    r.style.height = '18px';
+    range(xp, c.slot, { get, set, min, max, format: fmt, begin: () => app.beginDrag(label), end: () => app.endDrag(), title });
   };
   const avg = (f: (t: (typeof app.project.tracks)[number]) => number) => Math.round(app.project.tracks.reduce((a, t) => a + f(t), 0) / app.project.tracks.length);
   macro('DENSITY', 'Every track’s density at once: weak hits go first', () => avg((t) => t.play.density), (v) => app.project.tracks.forEach((t) => app.setTrackPlay(t.id, { density: v }, 'DENSITY')));
@@ -186,8 +190,8 @@ export function performView(app: App, screen: HTMLElement): View {
   subscribe(app, ['tracks', 'destruction', 'kit', 'transport', 'master', 'project'], () => xp.refresh());
 
   // ---------------------------------------------------------------- mini grid
-  const gw = win(root, { x: 416, y: 512, w: 856, h: 280, title: 'NOW PLAYING', area: 'perform', id: 'nowplaying' });
-  const grid = new PatternGrid(app, gw.body, { width: 842, height: 250, readonly: true, compact: true });
+  const gw = win(root, { title: 'NOW PLAYING', area: 'perform', id: 'nowplaying' });
+  const grid = new PatternGrid(app, gw.body, { readonly: true, compact: true });
   const gp = new Panel();
   gp.add(() => (gw.info.textContent = `${app.pattern.name} · ${app.ui.status}`));
   subscribe(app, ['pattern', 'destruction', 'mix'], () => grid.draw());

@@ -7,6 +7,7 @@
 import type { App } from '../app/app';
 import { closeDialog, dialogOpen, helpDialog } from './dialogs';
 import { closeMenus, openFile } from './menu';
+import { closePopover, popoverOpen } from './popover';
 import { closePopups, download } from './widgets';
 
 export function bindKeys(app: App): void {
@@ -19,6 +20,7 @@ export function bindKeys(app: App): void {
     const q = app.ui.view === 'perform';
     if (e.key === 'Escape') {
       if (dialogOpen()) closeDialog();
+      else if (popoverOpen()) closePopover();
       else if (document.querySelector('.dropdown, .msel-list')) {
         closeMenus();
         closePopups();

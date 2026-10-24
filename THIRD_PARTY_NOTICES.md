@@ -50,15 +50,19 @@ headers of the files concerned.
 
 - <https://github.com/clickysteve/emmm>
 - Used as a visual reference only: the 1-bit desktop look (windows with slanted title tabs,
-  dithered fills, Tiny5 and Silkscreen type, a fixed logical screen scaled to fit). No emmm code
-  or assets are included; CLATTER's interface code and styles are its own.
+  dithered fills, Tiny5 and Silkscreen type). No emmm code or assets are included; CLATTER's
+  interface code and styles are its own, and lay out in real pixels (see docs/UI_REDESIGN.md).
 
 ## Fonts
 
 - **Tiny5**, Copyright 2022-2024 The Tiny5 Project Authors (<https://github.com/Gissio/font_tiny5>)
 - **Silkscreen**, Copyright 2001 The Silkscreen Project Authors (<https://github.com/googlefonts/silkscreen>)
-- Both licensed under the SIL Open Font License 1.1 (below), bundled from the `@fontsource`
-  packages.
+- **VT323**, Copyright 2011 The VT323 Project Authors (<https://fontsource.org/fonts/vt323>)
+- **IBM Plex Sans**, Copyright 2019 IBM Corp. (<https://github.com/IBM/plex>)
+- All four are licensed under the SIL Open Font License 1.1 (below), bundled unmodified from the
+  `@fontsource` packages. Tiny5 and Silkscreen are the pixel faces (labels, buttons, headings);
+  VT323 is the secondary face (hints and reports); IBM Plex Sans sets the long texts (About,
+  help, tooltips).
 
 ## Demonstration samples
 
@@ -89,7 +93,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## SIL Open Font License 1.1 (Tiny5, Silkscreen)
+## SIL Open Font License 1.1 (Tiny5, Silkscreen, VT323, IBM Plex Sans)
 
 The copyright lines are given above.
 

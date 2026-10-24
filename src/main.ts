@@ -1,7 +1,7 @@
 /**
- * CLATTER: start-up. Builds the 1280 × 800 logical screen (scaled to fit the window), the
- * menu bar, the transport and the three views, then boots the application (the LXR engine,
- * the bundled samples, the last session).
+ * CLATTER: start-up. Builds the page (menu bar, transport and view tabs above a scrolling work
+ * area, laid out in real pixels) and the three views, then boots the application (the LXR
+ * engine, the bundled samples, the last session).
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
@@ -15,35 +15,29 @@ import { soundView } from './ui/views/soundView';
 import { performView } from './ui/views/performView';
 import { bindKeys } from './ui/keys';
 import { closePopups, h, win } from './ui/widgets';
+import { installTooltips } from './ui/tooltip';
 import { aboutDialog } from './ui/dialogs';
 
-const W = 1280;
-const H = 800;
-
-function stage(): HTMLElement {
-  const st = h('div', '', document.body);
-  st.id = 'stage';
-  const screen = h('div', '', st);
-  screen.id = 'screen';
-  const fit = () => {
-    const s = Math.min(window.innerWidth / W, window.innerHeight / H);
-    // whole pixels when there is room for them (crisp 1-bit lines)
-    const scale = s >= 1 ? Math.floor(s * 4) / 4 : s;
-    screen.style.transform = `scale(${scale})`;
-    screen.style.left = Math.max(0, (window.innerWidth - W * scale) / 2) + 'px';
-    screen.style.top = Math.max(0, (window.innerHeight - H * scale) / 2) + 'px';
-  };
-  window.addEventListener('resize', fit);
-  fit();
-  return screen;
+/** The page: fixed chrome (menu bar, transport, view tabs) above a work area that scrolls. */
+function shell(): { chrome: HTMLElement; main: HTMLElement } {
+  const root = h('div', '', document.body);
+  root.id = 'app';
+  const chrome = h('div', '', root);
+  chrome.id = 'chrome';
+  const main = h('div', '', root);
+  main.id = 'main';
+  main.addEventListener('scroll', () => closePopups(), { passive: true });
+  return { chrome, main };
 }
 
 async function main(): Promise<void> {
   applySelectedPalette();
-  const screen = stage();
-  const loading = win(screen, { x: 440, y: 330, w: 400, h: 110, title: 'CLATTER', id: 'loading' });
+  installTooltips();
+  const { chrome, main: screen } = shell();
+  const loading = win(screen, { title: 'CLATTER', id: 'loading', cls: 'loading' });
   const msg = h('div', 'lbl', loading.body, 'LOADING THE LXR ENGINE AND THE SAMPLES…');
-  h('div', 'tiny', loading.body, 'GENERATIVE DRUM SYNTHESIS · LXR-02 FIRMWARE DSP IN WEBASSEMBLY').style.marginTop = '10px';
+  msg.style.marginBottom = '10px';
+  h('div', 'hint', loading.body, 'Generative drum synthesis · LXR-02 firmware DSP in WebAssembly');
   const app = new App();
   (window as unknown as { clatter: App }).clatter = app;
   try {
@@ -56,10 +50,10 @@ async function main(): Promise<void> {
   }
   loading.el.remove();
 
-  const { status } = menubar(app, screen);
+  const { status } = menubar(app, chrome);
   const st = h('div', '', status);
   st.dataset.test = 'status';
-  const midiSt = h('div', 'tiny', status);
+  const midiSt = h('div', '', status);
   const showStatus = () => {
     st.textContent = (app.ui.busy ? '… ' : '') + app.ui.status;
     const m = app.midi;
@@ -69,7 +63,7 @@ async function main(): Promise<void> {
   app.on('midi', showStatus);
   showStatus();
 
-  const transport = transportWindow(app, screen);
+  const transport = transportWindow(app, chrome);
   for (const t of ['transport', 'pattern', 'history', 'project', 'view'] as const) app.on(t, () => transport.panel.refresh());
   app.on('pattern', () => transport.rebuildPatterns());
   app.on('project', () => transport.rebuildPatterns());
@@ -95,7 +89,7 @@ async function main(): Promise<void> {
   });
 
   bindKeys(app);
-  screen.addEventListener('pointerdown', (e) => {
+  document.addEventListener('pointerdown', (e) => {
     const t = e.target as HTMLElement;
     if (!t.closest('.dropdown, #menubar .menu')) closeMenus();
     if (!t.closest('.msel-list, .msel')) closePopups();

@@ -24,11 +24,12 @@ test('starts with a preset, plays audio and moves the playhead', async ({ page }
   await page.waitForTimeout(2000);
   const s = await page.evaluate(() => {
     const a = (window as unknown as W).clatter;
-    return { playing: a.ui.playing, ctx: a.host.state, l: a.meters?.masterL ?? 0, head: a.playhead() };
+    return { playing: a.ui.playing, ctx: a.host.state, head: a.playhead() };
   });
   expect(s.playing).toBe(true);
   expect(s.ctx).toBe('running');
-  expect(s.l).toBeGreaterThan(0.01);
+  // the meter is a momentary peak: wait for a hit rather than sampling one instant
+  await expect.poll(() => page.evaluate(() => (window as unknown as W).clatter.meters?.masterL ?? 0), { intervals: [50], timeout: 4000 }).toBeGreaterThan(0.01);
   expect(s.head).not.toBeNull();
   await page.keyboard.press('Space');
   await expect.poll(() => page.evaluate(() => (window as unknown as W).clatter.ui.playing)).toBe(false);
@@ -105,8 +106,9 @@ test('palettes switch the colours', async ({ page }) => {
   await boot(page);
   const bg = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--paper').trim());
   const before = await bg();
-  await page.locator('#menubar .menu', { hasText: 'VIEW' }).dispatchEvent('pointerdown');
-  await page.locator('.dropdown .item', { hasText: 'Palette' }).dispatchEvent('pointerup');
+  // real clicks: a press on an item must not close the menu before the release
+  await page.locator('#menubar .menu', { hasText: 'VIEW' }).click();
+  await page.locator('.dropdown .item', { hasText: 'Palette' }).click();
   await expect(page.locator('.dialog')).toBeVisible();
   await page.locator('.dialog').getByText('Dark', { exact: true }).first().click();
   await expect.poll(bg).not.toEqual(before);
@@ -139,4 +141,16 @@ test('saves and opens a project; exports a WAV and a MIDI file', async ({ page }
     return String.fromCharCode(d[0]!, d[1]!, d[2]!, d[3]!);
   });
   expect(mid).toBe('MThd');
+});
+
+test('menu items work with ordinary clicks (About, Keys)', async ({ page }) => {
+  await boot(page);
+  await page.locator('#menubar .menu', { hasText: 'CLATTER' }).click();
+  await page.locator('.dropdown .item', { hasText: 'About CLATTER' }).click();
+  await expect(page.locator('.dialog')).toContainText('GNU General Public License');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.dialog')).toHaveCount(0);
+  await page.locator('#menubar .menu', { hasText: 'HELP' }).click();
+  await page.locator('.dropdown .item', { hasText: 'Keys and gestures' }).click();
+  await expect(page.locator('.dialog')).toContainText('SPACE');
 });

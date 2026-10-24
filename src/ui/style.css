@@ -60,7 +60,7 @@ body {
   transform-origin: 0 0;
   background: var(--desktop);
   overflow: hidden;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
 }
 
@@ -97,7 +97,7 @@ svg {
   display: flex;
   align-items: stretch;
   font-weight: 600;
-  font-size: 10px;
+  font-size: 11px;
   z-index: 10000;
 }
 #menubar .menu {
@@ -121,7 +121,7 @@ svg {
   align-items: center;
   gap: 10px;
   font-weight: 400;
-  font-size: 9px;
+  font-size: 10px;
   white-space: nowrap;
 }
 .dropdown {
@@ -189,7 +189,7 @@ svg {
   align-items: center;
   padding: 0 4px 0 7px;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.4px;
   white-space: nowrap;
   background: var(--paper);
@@ -215,7 +215,7 @@ svg {
   align-items: center;
   padding: 0 6px;
   font-family: var(--font-tiny);
-  font-size: 7px;
+  font-size: 8px;
   color: var(--dim);
   white-space: nowrap;
   overflow: hidden;
@@ -255,16 +255,16 @@ svg {
   margin: 4px 0;
 }
 .lbl {
-  font-size: 9px;
+  font-size: 10px;
   white-space: nowrap;
 }
 .lbl.small {
-  font-size: 8px;
+  font-size: 9px;
 }
 .tiny {
   font-family: var(--font-tiny);
-  font-size: 7px;
-  line-height: 8px;
+  font-size: 8px;
+  line-height: 9px;
   color: var(--dim);
   white-space: nowrap;
 }
@@ -281,13 +281,13 @@ svg {
   background: var(--ink);
   color: var(--paper);
   font-family: var(--font-tiny);
-  font-size: 7px;
+  font-size: 8px;
   letter-spacing: 0.5px;
 }
 .report {
   font-family: var(--font-tiny);
-  font-size: 7px;
-  line-height: 9px;
+  font-size: 8px;
+  line-height: 10px;
   color: var(--dim);
   min-height: 9px;
   overflow: hidden;
@@ -302,7 +302,7 @@ svg {
   color: var(--ink);
   font: inherit;
   font-weight: 600;
-  font-size: 10px;
+  font-size: 11px;
   height: 16px;
   padding: 0 6px;
   display: inline-flex;
@@ -315,12 +315,12 @@ svg {
 }
 .btn.small {
   height: 13px;
-  font-size: 9px;
+  font-size: 10px;
   padding: 0 3px;
 }
 .btn.big {
   height: 34px;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 1px;
 }
 .btn.on,
@@ -377,7 +377,7 @@ svg {
   position: absolute;
   right: 3px;
   top: 1px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   background: var(--paper);
   padding: 0 1px;
@@ -406,13 +406,13 @@ svg {
   gap: 4px;
 }
 .ctl > .name {
-  font-size: 9px;
+  font-size: 10px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .ctl > .name .lock {
-  font-size: 8px;
+  font-size: 9px;
   margin-left: 2px;
 }
 
@@ -420,7 +420,7 @@ svg {
   border: 1px solid var(--ink);
   background: var(--paper);
   font-weight: 600;
-  font-size: 10px;
+  font-size: 11px;
   height: 16px;
   min-width: 34px;
   display: inline-flex;
@@ -448,7 +448,7 @@ svg {
   box-shadow: 1px 1px 0 var(--ink);
   background: var(--paper);
   color: var(--ink);
-  font-size: 9px;
+  font-size: 10px;
   height: 15px;
   padding: 0 12px 0 4px;
   white-space: nowrap;
@@ -485,7 +485,7 @@ svg {
   border: 1px solid var(--ink);
   box-shadow: 1px 1px 0 var(--ink);
   padding: 1px 0;
-  font-size: 10px;
+  font-size: 11px;
   max-height: 320px;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -509,7 +509,7 @@ svg {
 
 input.mtext {
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
   border: 1px solid var(--ink);
   border-radius: 0;
   background: var(--paper);
@@ -582,7 +582,7 @@ input.mtext {
   border-color: var(--paper);
 }
 .trackrow .tname {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   width: 54px;
   overflow: hidden;
@@ -591,7 +591,7 @@ input.mtext {
 }
 .trackrow .mode {
   font-family: var(--font-tiny);
-  font-size: 7px;
+  font-size: 8px;
   width: 22px;
 }
 
@@ -619,7 +619,7 @@ input.mtext {
   align-items: center;
   gap: 4px;
   padding: 2px 4px;
-  font-size: 9px;
+  font-size: 10px;
   white-space: nowrap;
   border-bottom: 1px dotted var(--ink);
 }
@@ -644,7 +644,7 @@ input.mtext {
   flex: none;
 }
 .strip .sname {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   width: 100%;
   text-align: center;
@@ -691,11 +691,11 @@ input.mtext {
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 1px;
   cursor: default;
   text-align: center;
-  line-height: 12px;
+  line-height: 13px;
   box-shadow: 2px 2px 0 var(--ink);
 }
 .pad.on,
@@ -715,7 +715,7 @@ input.mtext {
 .pad .sub {
   display: block;
   font-family: var(--font-tiny);
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 400;
   letter-spacing: 0;
 }
@@ -737,12 +737,12 @@ input.mtext {
   box-shadow: 0 0 0 3px var(--ink);
   padding: 10px 12px;
   z-index: 30000;
-  font-size: 10px;
-  line-height: 13px;
+  font-size: 11px;
+  line-height: 14px;
 }
 .dialog h2 {
   margin: 0 0 8px;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 1px;
 }
 .dialog p {
@@ -772,7 +772,7 @@ input.mtext {
 .mbutton {
   font: inherit;
   font-weight: 600;
-  font-size: 10px;
+  font-size: 11px;
   border: 1px solid var(--ink);
   border-radius: 6px;
   background: var(--paper);
@@ -788,15 +788,15 @@ input.mtext {
 }
 .label {
   position: absolute;
-  font-size: 9px;
+  font-size: 10px;
   white-space: nowrap;
 }
 .label.small {
-  font-size: 8px;
+  font-size: 9px;
 }
 .label.tiny {
   font-family: var(--font-tiny);
-  font-size: 7px;
+  font-size: 8px;
   color: var(--dim);
 }
 .box {
@@ -817,8 +817,8 @@ input.mtext {
   color: var(--ink);
   border: 1px solid var(--ink);
   box-shadow: 1px 1px 0 var(--ink);
-  font-size: 9px;
-  line-height: 11px;
+  font-size: 10px;
+  line-height: 12px;
   pointer-events: none;
 }
 

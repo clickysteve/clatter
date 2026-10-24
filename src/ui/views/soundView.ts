@@ -298,7 +298,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   }, { cls: 'small', title: 'Export this track’s sound as a one-shot WAV' });
   const onTrack = h('div', 'list', sb);
   onTrack.style.height = '42px';
-  h('div', 'tiny', sb, 'LIBRARY · CLICK: ASSIGN · SHIFT-CLICK: ADD (PER-HIT CHOICE) · ▶ PREVIEW');
+  h('div', 'tiny', sb, 'LIBRARY · CLICK: ASSIGN · SHIFT: ADD · ▶ HEAR');
   const lib = h('div', 'list', sb);
   lib.style.flex = '1';
   lib.style.minHeight = '0';

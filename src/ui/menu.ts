@@ -154,15 +154,26 @@ export function menubar(app: App, screen: HTMLElement): { status: HTMLElement } 
     el.setAttribute('role', 'menuitem');
     el.addEventListener('pointerdown', (ev) => {
       ev.stopPropagation();
+      // a press inside this menu's own drop-down is a menu item, not the title
+      if ((ev.target as HTMLElement).closest('.dropdown')) return;
       closePopups();
       const was = openMenu?.el === el;
       closeMenus();
-      if (was) return;
+      if (!was) open();
+    });
+    // with a menu open, moving across the bar opens the others (as on the Macintosh)
+    el.addEventListener('pointerenter', () => {
+      if (openMenu && openMenu.el !== el) {
+        closeMenus();
+        open();
+      }
+    });
+    const open = () => {
       const drop = h('div', 'dropdown', el);
       buildList(drop, entries());
       el.classList.add('open');
       openMenu = { el, drop };
-    });
+    };
   }
   const status = h('div', 'status', bar);
   return { status };

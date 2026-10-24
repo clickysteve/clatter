@@ -182,7 +182,7 @@ export const FX_PARAMS: ParamDef[] = [
   r(PAR.FX_P2, 'P2', 'FX', 'DRIVE: colour · COMP: release · DELAY: range.'),
   r(PAR.FX_P3, 'P3', 'FX', 'DRIVE: tone · COMP: threshold · DELAY: tone.'),
   r(PAR.FX_P4, 'P4', 'FX', 'DRIVE: volume · COMP: gain · DELAY: feedback.'),
-  r(PAR.VOICE_DECIMATION_ALL, 'GLOBAL RATE', 'FX', 'Sample-rate reduction of every voice (127 = full rate).'),
+  r(PAR.VOICE_DECIMATION_ALL, 'ALL RATE', 'FX', 'Sample-rate reduction of every voice (127 = full rate).'),
 ];
 
 /** P1-P4's meaning for each FX type (the firmware's FX menu pages). */

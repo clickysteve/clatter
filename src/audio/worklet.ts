@@ -70,7 +70,8 @@ class ClatterProcessor extends AudioWorkletProcessor {
         e.setTrack(m.index, m.track);
         break;
       case 'params':
-        for (const [p, v] of m.values) e.setParam(p, v);
+        if (m.time === undefined) for (const [p, v] of m.values) e.setParam(p, v);
+        else e.scheduleAction(this.frameOf(m.time), () => m.values.forEach(([p, v]) => e.setParam(p, v)));
         break;
       case 'modTarget':
         e.setModTarget(m.kind, m.voice, m.param);

@@ -1,0 +1,77 @@
+[
+  {
+    "file": "clap-dusty.wav",
+    "name": "CLAP-DUSTY",
+    "role": "clap"
+  },
+  {
+    "file": "clap-tight.wav",
+    "name": "CLAP-TIGHT",
+    "role": "clap"
+  },
+  {
+    "file": "rim.wav",
+    "name": "RIM",
+    "role": "perc"
+  },
+  {
+    "file": "shaker.wav",
+    "name": "SHAKER",
+    "role": "perc"
+  },
+  {
+    "file": "cowbell.wav",
+    "name": "COWBELL",
+    "role": "perc"
+  },
+  {
+    "file": "conga.wav",
+    "name": "CONGA",
+    "role": "perc"
+  },
+  {
+    "file": "tambourine.wav",
+    "name": "TAMBOURINE",
+    "role": "perc"
+  },
+  {
+    "file": "kick-dusty.wav",
+    "name": "KICK-DUSTY",
+    "role": "kick"
+  },
+  {
+    "file": "snare-crack.wav",
+    "name": "SNARE-CRACK",
+    "role": "snare"
+  },
+  {
+    "file": "metal-clank.wav",
+    "name": "METAL-CLANK",
+    "role": "fx"
+  },
+  {
+    "file": "zap.wav",
+    "name": "ZAP",
+    "role": "fx"
+  },
+  {
+    "file": "noise-hit.wav",
+    "name": "NOISE-HIT",
+    "role": "fx"
+  },
+  {
+    "file": "glass-tick.wav",
+    "name": "GLASS-TICK",
+    "role": "chat"
+  },
+  {
+    "file": "hat-dusty.wav",
+    "name": "HAT-DUSTY",
+    "role": "chat"
+  },
+  {
+    "file": "tom-skin.wav",
+    "name": "TOM-SKIN",
+    "role": "ltom"
+  }
+]

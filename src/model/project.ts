@@ -1,0 +1,286 @@
+/**
+ * Project files: JSON text, validated and repaired on load (missing fields filled from the
+ * defaults, values clamped, unknown fields dropped), so an old, hand-edited or damaged file
+ * opens rather than breaking the instrument. Samples are referenced by their content id
+ * (SHA-256); a bundle (.clatter.zip, Slop Factory Core's bundle format) carries the audio.
+ *
+ * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
+ */
+import { defaultMix, defaultPlay, defaultProject, defaultSound, defaultTracks, emptySynthKit } from './defaults';
+import { clamp, MAX_PATTERNS, MAX_STEPS, MAX_TRACKS, RESOLUTIONS, ROLES, ROLL_SPEEDS, SNAPSHOTS, type Grid, type Hit, type Pattern, type Project, type Resolution, type Role, type SynthKit, type Track } from './types';
+import { defaultGen } from '../rhythm/generate';
+import { STYLES } from '../rhythm/styles';
+import { defaultChop } from '../destruction/chop';
+import { defaultRolls } from '../destruction/rolls';
+import { defaultDestroy } from '../destruction/destroy';
+import { SOUND_PARAM_COUNT } from '../sound/lxrParamIds';
+
+export const PROJECT_FORMAT = 'clatter-project';
+export const PROJECT_EXT = '.clatter.json';
+export const BUNDLE_EXT = '.clatter.zip';
+
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
+const num = (v: unknown, d: number, lo = -Infinity, hi = Infinity): number => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, lo, hi) : d);
+const int = (v: unknown, d: number, lo: number, hi: number): number => Math.round(num(v, d, lo, hi));
+const bool = (v: unknown, d: boolean): boolean => (typeof v === 'boolean' ? v : d);
+const str = (v: unknown, d: string, max = 64): string => (typeof v === 'string' ? v.slice(0, max) : d);
+const oneOf = <T extends string | number>(v: unknown, list: readonly T[], d: T): T => (list.includes(v as T) ? (v as T) : d);
+
+export class ProjectError extends Error {}
+
+export function serialize(p: Project): string {
+  return JSON.stringify(p);
+}
+
+function repairHit(v: unknown): Hit | null {
+  if (!isObj(v)) return null;
+  const h: Hit = { vel: int(v.vel, 100, 1, 127) };
+  if (v.prob !== undefined) h.prob = int(v.prob, 100, 0, 100);
+  if (h.prob === 100) delete h.prob;
+  if (v.note !== undefined && v.note !== 0) h.note = int(v.note, 0, -24, 24);
+  if (v.flam === true) h.flam = true;
+  if (v.ratchet !== undefined && v.ratchet !== 1) h.ratchet = int(v.ratchet, 1, 1, 4);
+  if (typeof v.sample === 'string') h.sample = v.sample.slice(0, 80);
+  return h;
+}
+
+function repairGrid(v: unknown, steps: number): Grid {
+  const a = Array.isArray(v) ? v : [];
+  const g: Grid = new Array(steps).fill(null);
+  for (let i = 0; i < steps; i++) g[i] = repairHit(a[i]);
+  return g;
+}
+
+function repairPattern(v: unknown, trackIds: string[], i: number): Pattern {
+  const o = isObj(v) ? v : {};
+  const res = oneOf(o.res, RESOLUTIONS, 4) as Resolution;
+  const steps = int(o.steps, 32, 1, MAX_STEPS);
+  const gen: Record<string, Grid> = {};
+  const edits: Pattern['edits'] = {};
+  const og = isObj(o.gen) ? o.gen : {};
+  const oe = isObj(o.edits) ? o.edits : {};
+  for (const id of trackIds) {
+    gen[id] = repairGrid(og[id], steps);
+    const e = oe[id];
+    if (isObj(e)) {
+      const out: Record<number, Hit | null> = {};
+      for (const [k, h] of Object.entries(e)) {
+        const s = Number(k);
+        if (Number.isInteger(s) && s >= 0 && s < steps) out[s] = h === null ? null : repairHit(h);
+      }
+      if (Object.keys(out).length) edits[id] = out;
+    }
+  }
+  const sg = isObj(o.settings) ? o.settings : {};
+  const dg = defaultGen();
+  return {
+    id: str(o.id, `p${i + 1}`, 16),
+    name: str(o.name, String.fromCharCode(65 + i), 12),
+    steps,
+    res,
+    gen,
+    edits,
+    seed: int(o.seed, 1, 0, 0xffffffff),
+    settings: {
+      style: oneOf(sg.style, STYLES.map((s) => s.id), dg.style),
+      density: num(sg.density, dg.density, 0, 1),
+      complexity: num(sg.complexity, dg.complexity, 0, 1),
+      variation: num(sg.variation, dg.variation, 0, 1),
+      accent: num(sg.accent, dg.accent, 0, 1),
+      fills: num(sg.fills, dg.fills, 0, 1),
+      bars: int(sg.bars, dg.bars, 1, 8),
+    },
+    generation: int(o.generation, 0, 0, 1e6),
+  };
+}
+
+export function repairKit(v: unknown, fallback?: SynthKit): SynthKit {
+  const o = isObj(v) ? v : {};
+  const base = fallback ?? emptySynthKit(SOUND_PARAM_COUNT);
+  const params = Array.isArray(o.params) ? o.params : base.params;
+  const out: SynthKit = { params: [], lfoTarget: [], velTarget: [] };
+  for (let p = 0; p < SOUND_PARAM_COUNT; p++) out.params.push(int(params[p], base.params[p] ?? 0, 0, 127));
+  for (let v2 = 0; v2 < 6; v2++) {
+    out.lfoTarget.push(int((o.lfoTarget as unknown[] | undefined)?.[v2], 0, 0, SOUND_PARAM_COUNT - 1));
+    out.velTarget.push(int((o.velTarget as unknown[] | undefined)?.[v2], 0, 0, SOUND_PARAM_COUNT - 1));
+  }
+  return out;
+}
+
+function repairTrack(v: unknown, i: number, def: Track | undefined): Track {
+  const o = isObj(v) ? v : {};
+  const d = def ?? defaultTracks()[0]!;
+  const s = isObj(o.sound) ? o.sound : {};
+  const m = isObj(o.mix) ? o.mix : {};
+  const pl = isObj(o.play) ? o.play : {};
+  const midi = isObj(o.midi) ? o.midi : {};
+  const ds = defaultSound(d.sound);
+  return {
+    id: str(o.id, `t${i + 1}`, 16),
+    name: str(o.name, d.name, 12),
+    role: oneOf(o.role, ROLES, d.role) as Role,
+    sound: {
+      mode: oneOf(s.mode, ['synth', 'sample', 'hybrid'] as const, ds.mode),
+      trigger: int(s.trigger, ds.trigger, 0, 6),
+      note: int(s.note, 60, 0, 127),
+      synthLevel: num(s.synthLevel, ds.synthLevel, 0, 1),
+      sampleLevel: num(s.sampleLevel, ds.sampleLevel, 0, 1),
+      samples: Array.isArray(s.samples) ? s.samples.filter((x): x is string => typeof x === 'string').slice(0, 16) : [],
+      pick: oneOf(s.pick, ['first', 'cycle', 'random', 'velocity'] as const, 'first'),
+      start: num(s.start, 0, 0, 0.99),
+      end: num(s.end, 1, 0.01, 1),
+      tune: num(s.tune, 0, -24, 24),
+      fine: num(s.fine, 0, -100, 100),
+      gain: num(s.gain, 1, 0, 2),
+      pan: num(s.pan, 0, -1, 1),
+      reverse: bool(s.reverse, false),
+      offsetMs: num(s.offsetMs, 0, -50, 50),
+      choke: int(s.choke, ds.choke, 0, 4),
+    },
+    mix: { ...defaultMix(d.mix), volume: num(m.volume, d.mix.volume, 0, 1), pan: num(m.pan, d.mix.pan, -1, 1), mute: bool(m.mute, false), solo: bool(m.solo, false), route: oneOf(m.route, ['main', 'fx'] as const, d.mix.route), filter: num(m.filter, 0, -1, 1) },
+    play: { ...defaultPlay(), density: num(pl.density, 100, 0, 100), fill: num(pl.fill, 0, 0, 100), humanize: num(pl.humanize, 0, 0, 100), chance: num(pl.chance, 100, 0, 100), length: int(pl.length, 0, 0, MAX_STEPS) },
+    midi: { channel: int(midi.channel, d.midi.channel, 1, 16), note: int(midi.note, d.midi.note, 0, 127) },
+    lock: bool(o.lock, false),
+  };
+}
+
+/** A complete, valid project from parsed JSON (anything else throws ProjectError). */
+export function repairProject(v: unknown, initKit?: SynthKit): Project {
+  if (!isObj(v)) throw new ProjectError('This is not a CLATTER project.');
+  if (v.format !== undefined && v.format !== PROJECT_FORMAT) throw new ProjectError(`This file is not a CLATTER project (${String(v.format)}).`);
+  if (typeof v.version === 'number' && v.version > 1) throw new ProjectError('This project was saved by a newer version of CLATTER.');
+  const d = defaultProject();
+  const defs = defaultTracks();
+  const rawTracks = Array.isArray(v.tracks) ? v.tracks.slice(0, MAX_TRACKS) : [];
+  const tracks = (rawTracks.length ? rawTracks : defs).map((t, i) => repairTrack(t, i, defs[i]));
+  // unique ids
+  const seen = new Set<string>();
+  tracks.forEach((t, i) => {
+    if (seen.has(t.id)) t.id = `t${i + 1}x`;
+    seen.add(t.id);
+  });
+  const ids = tracks.map((t) => t.id);
+  const rawPatterns = Array.isArray(v.patterns) ? v.patterns.slice(0, MAX_PATTERNS) : [];
+  const patterns = (rawPatterns.length ? rawPatterns : d.patterns).map((p, i) => repairPattern(p, ids, i));
+  const pids = new Set<string>();
+  patterns.forEach((p, i) => {
+    if (pids.has(p.id)) p.id = `p${i + 1}x`;
+    pids.add(p.id);
+  });
+  const kit = isObj(v.kit) ? v.kit : {};
+  const dest = isObj(v.destruction) ? v.destruction : {};
+  const ch = isObj(dest.chop) ? dest.chop : {};
+  const ro = isObj(dest.rolls) ? dest.rolls : {};
+  const de = isObj(dest.destroy) ? dest.destroy : {};
+  const dc = defaultChop();
+  const dr = defaultRolls();
+  const dd = defaultDestroy();
+  const ev = isObj(v.evolve) ? v.evolve : {};
+  const gen = isObj(v.gen) ? v.gen : {};
+  const chain = isObj(v.chain) ? v.chain : {};
+  const master = isObj(v.master) ? v.master : {};
+  const locks = isObj(v.soundLocks) ? v.soundLocks : {};
+  const dg = defaultGen();
+  const p: Project = {
+    format: 'clatter-project',
+    version: 1,
+    name: str(v.name, 'UNTITLED', 40),
+    tempo: num(v.tempo, d.tempo, 30, 300),
+    swing: num(v.swing, 50, 50, 75),
+    seed: int(v.seed, 1, 0, 0xffffffff),
+    tracks,
+    kit: { name: str(kit.name, 'KIT', 24), seed: int(kit.seed, 0, 0, 0xffffffff), synth: repairKit(kit.synth, initKit) },
+    soundLocks: {
+      voices: [0, 1, 2, 3, 4, 5].map((i) => bool((locks.voices as unknown[] | undefined)?.[i], false)),
+      params: Array.isArray(locks.params) ? locks.params.filter((x): x is number => Number.isInteger(x) && x > 0 && x < SOUND_PARAM_COUNT) : [],
+    },
+    patterns,
+    current: typeof v.current === 'string' && pids.has(v.current) ? v.current : patterns[0]!.id,
+    chain: {
+      on: bool(chain.on, false),
+      entries: Array.isArray(chain.entries) ? chain.entries.filter(isObj).filter((e) => pids.has(String(e.pattern))).slice(0, 64).map((e) => ({ pattern: String(e.pattern), repeats: int(e.repeats, 1, 1, 16) })) : [],
+    },
+    gen: {
+      style: oneOf(gen.style, STYLES.map((s) => s.id), dg.style),
+      density: num(gen.density, dg.density, 0, 1),
+      complexity: num(gen.complexity, dg.complexity, 0, 1),
+      variation: num(gen.variation, dg.variation, 0, 1),
+      accent: num(gen.accent, dg.accent, 0, 1),
+      fills: num(gen.fills, dg.fills, 0, 1),
+      bars: int(gen.bars, dg.bars, 1, 8),
+    },
+    destruction: {
+      chop: { on: bool(ch.on, false), amount: num(ch.amount, dc.amount, 0, 1), slice: int(ch.slice, dc.slice, 1, 16), retrigger: num(ch.retrigger, dc.retrigger, 0, 1), take: int(ch.take, 0, 0, 1e6) },
+      rolls: {
+        on: bool(ro.on, false),
+        prob: num(ro.prob, dr.prob, 0, 1),
+        length: int(ro.length, dr.length, 2, 12),
+        speed: oneOf(ro.speed, ROLL_SPEEDS, dr.speed),
+        shape: oneOf(ro.shape, ['even', 'crescendo', 'decrescendo', 'human'] as const, dr.shape),
+        place: oneOf(ro.place, ['phrase', 'accent', 'anywhere'] as const, dr.place),
+        targets: Array.isArray(ro.targets) ? (ro.targets.filter((x) => ROLES.includes(x as Role)) as Role[]) : dr.targets,
+        take: int(ro.take, 0, 0, 1e6),
+      },
+      destroy: {
+        on: bool(de.on, false),
+        amount: num(de.amount, dd.amount, 0, 1),
+        stutter: num(de.stutter, dd.stutter, 0, 1),
+        pitch: num(de.pitch, dd.pitch, 0, 1),
+        reverse: num(de.reverse, dd.reverse, 0, 1),
+        gate: num(de.gate, dd.gate, 0, 1),
+        crush: num(de.crush, dd.crush, 0, 1),
+        skip: num(de.skip, dd.skip, 0, 1),
+        take: int(de.take, 0, 0, 1e6),
+      },
+    },
+    evolve: { target: oneOf(ev.target, ['off', 'rhythm', 'sound', 'both'] as const, 'off'), every: int(ev.every, 4, 1, 64), amount: num(ev.amount, 0.3, 0, 1), returnEvery: int(ev.returnEvery, 4, 0, 64) },
+    quantize: oneOf(v.quantize, ['step', 'beat', 'bar', 'pattern'] as const, 'bar'),
+    master: { volume: num(master.volume, 0.8, 0, 1), clip: bool(master.clip, true), chain: master.chain ?? null },
+    snapshots: new Array(SNAPSHOTS).fill(null),
+    notes: str(v.notes, '', 4000),
+  };
+  // snapshots: stored whole; repaired through the same functions
+  if (Array.isArray(v.snapshots)) {
+    v.snapshots.slice(0, SNAPSHOTS).forEach((s, i) => {
+      if (!isObj(s)) return;
+      try {
+        const sp = repairProject({ ...v, snapshots: [], patterns: [s.pattern], kit: { synth: s.synth }, tracks: tracks.map((t) => ({ ...t, sound: (s.sounds as Obj | undefined)?.[t.id] ?? t.sound, mix: (s.mix as Obj | undefined)?.[t.id] ?? t.mix, play: (s.play as Obj | undefined)?.[t.id] ?? t.play })), destruction: s.destruction, tempo: s.tempo, swing: s.swing }, initKit);
+        p.snapshots[i] = {
+          name: str(s.name, `SNAP ${i + 1}`, 16),
+          pattern: sp.patterns[0]!,
+          synth: sp.kit.synth,
+          sounds: Object.fromEntries(sp.tracks.map((t) => [t.id, t.sound])),
+          mix: Object.fromEntries(sp.tracks.map((t) => [t.id, t.mix])),
+          play: Object.fromEntries(sp.tracks.map((t) => [t.id, t.play])),
+          destruction: sp.destruction,
+          tempo: sp.tempo,
+          swing: sp.swing,
+        };
+      } catch {
+        /* a damaged snapshot is dropped */
+      }
+    });
+  }
+  return p;
+}
+
+export function parseProject(text: string, initKit?: SynthKit): Project {
+  let v: unknown;
+  try {
+    v = JSON.parse(text);
+  } catch {
+    throw new ProjectError('The file is not valid JSON.');
+  }
+  return repairProject(v, initKit);
+}
+
+/** Every sample id a project refers to. */
+export function projectSamples(p: Project): string[] {
+  const ids = new Set<string>();
+  for (const t of p.tracks) for (const s of t.sound.samples) ids.add(s);
+  for (const pat of p.patterns) for (const e of Object.values(pat.edits)) for (const h of Object.values(e)) if (h?.sample) ids.add(h.sample);
+  for (const g of p.patterns.flatMap((pt) => Object.values(pt.gen))) for (const h of g) if (h?.sample) ids.add(h.sample);
+  for (const s of p.snapshots) if (s) for (const snd of Object.values(s.sounds)) for (const id of snd.samples) ids.add(id);
+  return [...ids];
+}

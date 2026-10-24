@@ -252,6 +252,8 @@ export class ClatterEngine {
   private clipped = false;
   private rngState = 0x2545f491;
 
+  /** when set, the FX bus return of each block is copied here (the FX stem) */
+  fxSink: ((L: Float32Array, R: Float32Array, n: number) => void) | null = null;
   /** when set, each block's post-fader track outputs are copied here (stems) */
   stemSink: ((track: number, L: Float32Array, R: Float32Array, n: number) => void) | null = null;
 
@@ -452,6 +454,11 @@ export class ClatterEngine {
     }
   }
 
+  /** Run an action (a parameter change) at an engine frame, between blocks. */
+  scheduleAction(frame: number, fn: () => void): void {
+    this.delayedTriggers.push({ frame, fn });
+  }
+
   /** Trigger a hit now (audition, MIDI input): applied at the next block. */
   hitNow(track: number, vel: number, pitch = 0, extra: Partial<HitEvent> = {}): void {
     this.schedule({ frame: this.frame, track, vel, pitch, ...extra });
@@ -603,10 +610,15 @@ export class ClatterEngine {
       }
       lxr.processFx();
       const fo = lxr.fxOut;
+      const fl = this.fxSumL;
+      const fr = this.fxSumR;
       for (let i = 0; i < BLOCK; i++) {
-        mL[i]! += fo[i * 2]! / 32768;
-        mR[i]! += fo[i * 2 + 1]! / 32768;
+        fl[i] = fo[i * 2]! / 32768;
+        fr[i] = fo[i * 2 + 1]! / 32768;
+        mL[i]! += fl[i]!;
+        mR[i]! += fr[i]!;
       }
+      if (this.fxSink) this.fxSink(fl, fr, BLOCK);
       this.fxTail = Math.max(0, this.fxTail - BLOCK);
       this.fxUsed = this.fxTail > 0;
     }

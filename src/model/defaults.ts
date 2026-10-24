@@ -22,7 +22,6 @@ export const defaultSound = (over: Partial<TrackSound> = {}): TrackSound => ({
   note: 60,
   synthLevel: 0.8,
   sampleLevel: 0.8,
-  samples: [],
   pick: 'first',
   start: 0,
   end: 1,
@@ -34,6 +33,7 @@ export const defaultSound = (over: Partial<TrackSound> = {}): TrackSound => ({
   offsetMs: 0,
   choke: 0,
   ...over,
+  samples: [...(over.samples ?? [])],
 });
 
 export const defaultMix = (over: Partial<TrackMix> = {}): TrackMix => ({ volume: 0.8, pan: 0, mute: false, solo: false, route: 'main', filter: 0, ...over });
@@ -43,14 +43,14 @@ export const defaultPlay = (over: Partial<TrackPlay> = {}): TrackPlay => ({ dens
 export const TRACK_LAYOUT: { role: Role; sound: Partial<TrackSound>; mix?: Partial<TrackMix> }[] = [
   { role: 'kick', sound: { mode: 'synth', trigger: 0 } },
   { role: 'snare', sound: { mode: 'synth', trigger: 3 } },
-  { role: 'clap', sound: { mode: 'sample', trigger: 3 }, mix: { route: 'fx', pan: -0.1 } },
+  { role: 'clap', sound: { mode: 'sample', trigger: 3, samples: ['bundled:clap-tight'] }, mix: { route: 'fx', pan: -0.1 } },
   { role: 'chat', sound: { mode: 'synth', trigger: 5, choke: 1 }, mix: { pan: 0.15, volume: 0.72 } },
   { role: 'ohat', sound: { mode: 'synth', trigger: 6, choke: 1 }, mix: { pan: 0.15, volume: 0.7 } },
   { role: 'ltom', sound: { mode: 'synth', trigger: 1 }, mix: { pan: -0.3 } },
   { role: 'htom', sound: { mode: 'synth', trigger: 2 }, mix: { pan: 0.3, route: 'fx' } },
   { role: 'cymbal', sound: { mode: 'synth', trigger: 4 }, mix: { pan: -0.2, volume: 0.66 } },
-  { role: 'perc', sound: { mode: 'sample', trigger: 2 }, mix: { route: 'fx', pan: 0.35, volume: 0.72 } },
-  { role: 'fx', sound: { mode: 'sample', trigger: 4 }, mix: { route: 'fx', pan: -0.35, volume: 0.65 } },
+  { role: 'perc', sound: { mode: 'sample', trigger: 2, samples: ['bundled:rim', 'bundled:shaker'], pick: 'cycle' }, mix: { route: 'fx', pan: 0.35, volume: 0.72 } },
+  { role: 'fx', sound: { mode: 'sample', trigger: 4, samples: ['bundled:zap'] }, mix: { route: 'fx', pan: -0.35, volume: 0.65 } },
 ];
 
 export function defaultTracks(): Track[] {

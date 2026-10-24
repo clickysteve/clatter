@@ -10,7 +10,7 @@ export type TimedHit = Omit<HitEvent, 'frame' | 'seq'> & { time: number };
 export type ToWorklet =
   | { type: 'tracks'; tracks: EngineTrack[] }
   | { type: 'track'; index: number; track: Partial<EngineTrack> }
-  | { type: 'params'; values: [number, number][] }
+  | { type: 'params'; values: [number, number][]; /** AudioContext time to apply them (absent: now) */ time?: number }
   | { type: 'modTarget'; kind: 0 | 1; voice: number; param: number }
   | { type: 'bpm'; bpm: number }
   | { type: 'master'; volume: number; clip: boolean; chain?: unknown }

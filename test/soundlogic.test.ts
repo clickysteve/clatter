@@ -320,6 +320,15 @@ describe('distributing sounds over a pattern', () => {
     for (const k of Object.keys(out)) expect(g[Number(k)]).not.toBeNull();
     expect(mutateSounds(s, 'perc', g, first, kitParams, { ...dist, amount: 0, take: 2 })).toEqual(first);
   });
+  it('MUTATE SOUND keeps the EVOLVE glides of the steps it redraws', () => {
+    const s = withVars('perc', 2);
+    const g = grid(2);
+    const evolved = addEvolution(s, 'perc', g, distributeSounds(s, 'perc', g, undefined, kitParams, { ...dist, amount: 0.8 }), { amount: 0.5, passes: 8, locks: { ...NO_LOCKS } });
+    const glides = (o: Record<number, StepSound>) => Object.values(o).reduce((n, x) => n + (x.rules?.filter((r) => r.op === 'evolve').length ?? 0), 0);
+    expect(glides(evolved)).toBeGreaterThan(0);
+    const out = mutateSounds(s, 'perc', g, evolved, kitParams, { ...dist, amount: 1, take: 3 });
+    expect(glides(out)).toBe(glides(evolved));
+  });
   it('EVOLVE SOUND adds bounded glides and CLEAR removes only them', () => {
     const s = sound();
     const g = grid(4);

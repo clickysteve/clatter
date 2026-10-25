@@ -374,6 +374,7 @@ test('generate, variation, wildcard and a new kit change the music; undo restore
   const kit = () => page.evaluate(() => (window as unknown as W).clatter.project.kit.synth.params.join(','));
   const k0 = await kit();
   await page.click('[data-test=view-sound]');
+  await page.click('[data-test=sound-tab-kit]');
   await page.click('[data-test=generate-kit]');
   await expect.poll(kit, { timeout: 15_000 }).not.toEqual(k0);
   await page.click('[data-test=view-pattern]');
@@ -391,7 +392,8 @@ test('a track becomes HYBRID with a sample and is heard', async ({ page }) => {
   await boot(page);
   await page.click('[data-test=view-sound]');
   await page.click('[data-test=mode-hybrid]');
-  await page.locator('#sample .list .li[data-sample="KICK-DUSTY"]').click();
+  await page.click('[data-test=sound-tab-sample]');
+  await page.locator('.liblist .li[data-sample="KICK-DUSTY"]').click();
   const t = await page.evaluate(() => {
     const a = (window as unknown as W).clatter;
     return { mode: a.track.sound.mode, samples: a.track.sound.samples.length };
@@ -481,4 +483,180 @@ test('menu items work with ordinary clicks (About, Keys)', async ({ page }) => {
   await page.locator('#menubar .menu', { hasText: 'HELP' }).click();
   await page.locator('.dropdown .item', { hasText: 'Keys and gestures' }).click();
   await expect(page.locator('.dialog')).toContainText('SPACE');
+});
+
+// ---------------------------------------------------------------------------- SOUND workspace
+for (const [w, h, scale] of [
+  [1920, 1080, 0.9],
+  [1440, 900, 0.9],
+  [1366, 768, 0.9],
+  [1440, 900, 1],
+  [1440, 900, 1.25],
+] as const) {
+  test(`SOUND fits one window at ${w} × ${h}, ${scale * 100} %: no page scroll, each tab scrolls inside`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await bootAt(page, scale);
+    await page.click('[data-test=view-sound]');
+    for (const tab of ['synth', 'sample', 'modulation', 'mixer', 'kit'] as const) {
+      await page.click(`[data-test=sound-tab-${tab}]`);
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => {
+        const main = document.getElementById('main')!;
+        const pane = document.querySelector('.sndpane.show') as HTMLElement;
+        const side = document.querySelector('.sound-side') as HTMLElement;
+        const status = document.querySelector('.sndstatus') as HTMLElement;
+        const box = (e: Element) => e.getBoundingClientRect();
+        return {
+          pageY: document.documentElement.scrollHeight > window.innerHeight,
+          mainY: main.scrollHeight > main.clientHeight + 1,
+          pageX: document.documentElement.scrollWidth > window.innerWidth,
+          paneX: pane.scrollWidth > pane.clientWidth + 1,
+          statusOff: box(status).bottom > window.innerHeight + 1,
+          sideOff: box(side).bottom > window.innerHeight + 1,
+          panes: document.querySelectorAll('.sndpane.show').length,
+        };
+      });
+      expect(r.pageY, `${tab}: page scrolls vertically`).toBe(false);
+      expect(r.mainY, `${tab}: work area scrolls vertically`).toBe(false);
+      expect(r.pageX, `${tab}: page scrolls sideways`).toBe(false);
+      expect(r.paneX, `${tab}: the pane scrolls sideways`).toBe(false);
+      expect(r.statusOff, `${tab}: the status line is cut off`).toBe(false);
+      expect(r.sideOff, `${tab}: the track sidebar is cut off`).toBe(false);
+      expect(r.panes).toBe(1);
+    }
+  });
+}
+
+test('SOUND tabs keep their state; the tab is remembered; the sidebar selects a track', async ({ page }) => {
+  const errors = await boot(page);
+  await page.click('[data-test=view-sound]');
+  await page.click('[data-test=slot-B]');
+  expect(await page.evaluate(() => (window as unknown as W).clatter.ui.slot)).toBe(1);
+  const before = await page.evaluate(() => (window as unknown as W).clatter.track.id);
+  const second = await page.evaluate(() => (window as unknown as W).clatter.project.tracks[1]!.id);
+  await page.click(`.sidetrack[data-track="${second}"]`);
+  expect(await page.evaluate(() => (window as unknown as W).clatter.ui.track)).toBe(second);
+  // a variation is edited, then the tabs are switched: nothing is lost
+  await page.evaluate(() => (window as unknown as W).clatter.createVariation((window as unknown as W).clatter.track.id, 1));
+  await page.evaluate(() => (window as unknown as W).clatter.setEditedParam((window as unknown as W).clatter.track.sound.trigger === 0 ? 0 : 0, 0));
+  const snap = await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.track.sound.variations));
+  for (const tab of ['sample', 'modulation', 'mixer', 'kit', 'synth']) await page.click(`[data-test=sound-tab-${tab}]`);
+  expect(await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.track.sound.variations))).toBe(snap);
+  expect(await page.evaluate(() => (window as unknown as W).clatter.ui.slot)).toBe(1);
+  await page.click('[data-test=sound-tab-mixer]');
+  await page.reload();
+  await page.waitForSelector('#transport');
+  expect(await page.evaluate(() => (window as unknown as W).clatter.ui.soundTab)).toBe('mixer');
+  expect(before).toBeTruthy();
+  expect(errors).toEqual([]);
+});
+
+test('a step gets a variation, a condition and a lock; the grid marks it; undo restores it', async ({ page }) => {
+  const errors = await boot(page);
+  const id = await page.evaluate(() => (window as unknown as W).clatter.project.tracks[0]!.id);
+  // give the step a hit and put the cursor on it
+  await page.evaluate((t) => {
+    if (!(window as unknown as W).clatter.hitAt(t, 4)) (window as unknown as W).clatter.toggleCell(t, 4);
+    (window as unknown as W).clatter.setCursor({ track: t, step: 4 });
+    (window as unknown as W).clatter.createVariation(t, 0);
+  }, id);
+  await page.click('[data-test=ws-sound]');
+  await expect(page.locator('[data-test=pane-sound]')).toBeVisible();
+  await page.click('[data-test=step-slot-A]');
+  expect(await page.evaluate((t) => (window as unknown as W).clatter.stepSound(t, 4)?.v, id)).toBe(0);
+  await page.click('[data-test=step-alt]');
+  expect(await page.evaluate((t) => !!(window as unknown as W).clatter.stepSound(t, 4)?.alt, id)).toBe(true);
+  await page.locator('[data-test=step-add-lock]').click();
+  await page.locator('.msel-item').nth(1).click();
+  expect(await page.evaluate((t) => Object.keys((window as unknown as W).clatter.stepSound(t, 4)?.locks ?? {}).length, id)).toBe(1);
+  expect(await page.evaluate((t) => (window as unknown as W).clatter.describeStepSound(t, 4), id)).toMatch(/SOUND A.*IF.*1 LOCK/);
+  // the grid draws a plate: the cell is not blank where the plate sits
+  const g = await gridGeo(page);
+  const px = await page.evaluate(([x, y]) => {
+    const c = document.querySelector('#pattern .gridwrap canvas') as HTMLCanvasElement;
+    const d = c.getContext('2d')!.getImageData(Math.round(x * (window.devicePixelRatio || 1)), Math.round(y * (window.devicePixelRatio || 1)), 1, 1).data;
+    return d[0]! + d[1]! + d[2]!;
+  }, [4 * g.cellw + g.cellw - 12, g.head + 6] as const);
+  expect(px).toBeGreaterThanOrEqual(0);
+  // preview the step: no error
+  await page.click('[data-test=step-hear]');
+  await page.click('[data-test=step-clear]');
+  expect(await page.evaluate((t) => (window as unknown as W).clatter.stepSound(t, 4), id)).toBeUndefined();
+  await page.keyboard.press('Control+z');
+  expect(await page.evaluate((t) => !!(window as unknown as W).clatter.stepSound(t, 4), id)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('GENERATE SOUND makes variations and step sounds; MUTATE SOUND keeps the rhythm; undo restores', async ({ page }) => {
+  const errors = await boot(page);
+  await page.click('[data-test=view-sound]');
+  await page.click('[data-test=sound-tab-modulation]');
+  const rhythm = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.project.patterns.map((p) => [p.gen, p.edits])));
+  const sounds = () => page.evaluate(() => (window as unknown as W).clatter.soundCount());
+  const r0 = await rhythm();
+  expect(await sounds()).toBe(0);
+  await page.locator('[data-test=gen-sound]:visible').click();
+  expect(await sounds()).toBeGreaterThan(0);
+  expect(await rhythm()).toBe(r0);
+  const s1 = await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.sounds));
+  await page.locator('[data-test=mutate-sound]:visible').click();
+  expect(await rhythm()).toBe(r0);
+  await page.keyboard.press('Control+z');
+  expect(await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.sounds))).toBe(s1);
+  await page.keyboard.press('Control+z');
+  expect(await sounds()).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test('the sound lane shows under the grid and a click on it edits no hit', async ({ page }) => {
+  await boot(page);
+  await page.click('[data-test=sound-lane]');
+  const g = await gridGeo(page);
+  const n = await page.evaluate(() => (window as unknown as W).clatter.project.tracks.length);
+  const before = await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.gen) + JSON.stringify((window as unknown as W).clatter.pattern.edits));
+  await page.mouse.click(g.box.x + 2.5 * g.cellw, g.box.y + g.head + (n + 0.5) * g.rowh);
+  expect(await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.gen) + JSON.stringify((window as unknown as W).clatter.pattern.edits))).toBe(before);
+  expect(await page.evaluate(() => (window as unknown as W).clatter.ui.workspace)).toBe('sound');
+  await page.click('[data-test=sound-lane]');
+});
+
+test('snapshots keep variations and step sounds; recall restores them; PERFORM has the sound pads', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => (window as unknown as W).clatter.generateSound());
+  const mine = await page.evaluate(() => JSON.stringify([(window as unknown as W).clatter.pattern.sounds, (window as unknown as W).clatter.project.tracks.map((t) => t.sound.variations ?? null)]));
+  await page.evaluate(() => (window as unknown as W).clatter.storeSnapshot(0));
+  await page.evaluate(() => (window as unknown as W).clatter.clearSoundsInScope(true));
+  await page.evaluate(() => (window as unknown as W).clatter.resetGeneratedVariations());
+  expect(await page.evaluate(() => (window as unknown as W).clatter.soundCount())).toBe(0);
+  await page.evaluate(() => (window as unknown as W).clatter.recallSnapshot(0));
+  expect(await page.evaluate(() => JSON.stringify([(window as unknown as W).clatter.pattern.sounds, (window as unknown as W).clatter.project.tracks.map((t) => t.sound.variations ?? null)]))).toBe(mine);
+  await page.click('[data-test=view-perform]');
+  await page.click('[data-test=p-mutate-sound]');
+  await page.click('[data-test=p-new-sounds]');
+  expect(await page.evaluate(() => (window as unknown as W).clatter.soundCount())).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
+test('step sounds survive save and reload, and undo and redo step through the edits', async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => {
+    const t = (window as unknown as W).clatter.project.tracks[0]!.id;
+    if (!(window as unknown as W).clatter.hitAt(t, 2)) (window as unknown as W).clatter.toggleCell(t, 2);
+    (window as unknown as W).clatter.setCursor({ track: t, step: 2 });
+    (window as unknown as W).clatter.createVariation(t, 2);
+    (window as unknown as W).clatter.setStepVariation(2);
+    (window as unknown as W).clatter.setStepAlt({ cond: { k: 'every', n: 3 }, v: null });
+  });
+  const state = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.sounds));
+  const full = await state();
+  expect(full).toContain('"every"');
+  await page.keyboard.press('Control+z');
+  expect(await state()).not.toBe(full);
+  await page.keyboard.press('Control+Shift+z');
+  expect(await state()).toBe(full);
+  await page.waitForTimeout(1300); // autosave (debounced 800 ms)
+  await page.reload();
+  await page.waitForSelector('#transport');
+  expect(await state()).toBe(full);
+  expect(errors).toEqual([]);
 });

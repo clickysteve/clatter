@@ -22,7 +22,7 @@
  */
 import { clamp, VARIATION_SLOTS, type ParamRule, type SampleOverrides, type SoundCond, type StepSound, type TrackSound, type Variation } from '../model/types';
 import { rand, SALT, strCode } from '../rhythm/rng';
-import { paramDef, voiceOfTrigger, VOICE_PARAMS, type ParamDef } from './lxrParams';
+import { paramDef, TRIGGERS, voiceOfTrigger, VOICE_PARAMS, type ParamDef } from './lxrParams';
 
 // ---------------------------------------------------------------------------- parameters
 const lockable = VOICE_PARAMS.map((list) => new Map(list.filter((p) => p.kind !== 'target').map((p) => [p.id, p] as const)));
@@ -109,6 +109,20 @@ export function describeCond(c: SoundCond): string {
     case 'fill':
       return 'FILL';
   }
+}
+
+/** A step's sound in words, for tooltips and the grid key. */
+export function describeStepSound(sound: TrackSound, ss: StepSound): string {
+  const name = (i: number | null) => (i === null ? 'BASE' : String.fromCharCode(65 + i) + (sound.variations?.[i]?.name ? ` ${sound.variations[i]!.name}` : ''));
+  const parts: string[] = [];
+  if (ss.v !== undefined) parts.push('SOUND ' + name(ss.v));
+  if (ss.alt) parts.push(`IF ${describeCond(ss.alt.cond)} → ${name(ss.alt.v)}`);
+  if (ss.voice !== undefined) parts.push('VOICE ' + (TRIGGERS[ss.voice] ?? '?'));
+  const nl = Object.keys(ss.locks ?? {}).length;
+  if (nl) parts.push(`${nl} LOCK${nl > 1 ? 'S' : ''}`);
+  const nr = ss.rules?.length ?? 0;
+  if (nr) parts.push(`${nr} RULE${nr > 1 ? 'S' : ''}`);
+  return parts.join(' · ') + (ss.gen ? ' (GENERATED)' : '');
 }
 
 // ---------------------------------------------------------------------------- resolution

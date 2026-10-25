@@ -103,6 +103,8 @@ export function performView(app: App, screen: HTMLElement): View {
   }, { sub: () => 'RE-DRAW WHAT IS ON', title: 'A new take of every transformation that is on' });
   pad(ap, ag, 'NEW KIT', () => void app.generateKit(true), { sub: () => (app.ui.busy ? 'CHECKING…' : 'GENERATE'), title: 'Generate a kit (K)' });
   pad(ap, ag, 'MUTATE KIT', () => void app.mutateKit(0.25, undefined, true), { sub: () => '25%', title: 'Mutate the kit' });
+  pad(ap, ag, 'NEW SOUNDS', () => app.generateSound(true), { sub: () => 'VARIATIONS + STEPS', title: 'Generate variations A-D and distribute them over the steps. Hand-made sounds and the rhythm stay.' }).dataset.test = 'p-new-sounds';
+  pad(ap, ag, 'MUTATE SOUND', () => app.mutateSound(0.3, true), { sub: () => 'STEP SOUNDS', title: 'Redraw a share of the generated step sounds' }).dataset.test = 'p-mutate-sound';
   pad(ap, ag, 'EVOLVE', () => app.setEvolve({ target: app.project.evolve.target === 'off' ? 'both' : 'off' }), { on: () => app.project.evolve.target !== 'off', sub: () => (app.project.evolve.target === 'off' ? 'OFF' : `${app.project.evolve.target.toUpperCase()} /${app.project.evolve.every}`), title: 'Rhythm and sound evolve on their own' });
   pad(ap, ag, 'KIT HOME', () => app.evolveReturn(), { sub: () => 'UNDO THE DRIFT', title: 'Back to the kit the evolution started from' });
   subscribe(app, ['destruction', 'transport', 'kit', 'status', 'pattern'], () => ap.refresh());
@@ -185,10 +187,11 @@ export function performView(app: App, screen: HTMLElement): View {
   macro('DESTROY', 'DESTROY amount', () => Math.round(d().destroy.amount * 100), (v) => app.setDestruction((x) => (x.destroy.amount = v / 100), 'DESTROY AMOUNT'));
   macro('CHOP', 'CHOP amount', () => Math.round(d().chop.amount * 100), (v) => app.setDestruction((x) => (x.chop.amount = v / 100), 'CHOP AMOUNT'));
   macro('ROLLS', 'ROLL chance', () => Math.round(d().rolls.prob * 100), (v) => app.setDestruction((x) => (x.rolls.prob = v / 100), 'ROLL CHANCE'));
+  macro('TIMBRE', 'How far generated sounds stray from the base sound (used by NEW SOUNDS and MUTATE SOUND)', () => Math.round(app.project.timbre.amount * 100), (v) => app.setTimbre(v / 100));
   macro('FX', 'LXR FX bus amount', () => app.project.kit.synth.params[PAR.FX_DRY_WET] ?? 0, (v) => app.setParam(PAR.FX_DRY_WET, v, 'FX AMOUNT'), 0, 127, (v) => String(v));
   macro('SWING', 'Swing', () => app.project.swing, (v) => app.setSwing(v), 50, 75);
   macro('MASTER', 'Master volume', () => Math.round(app.project.master.volume * 100), (v) => app.setMaster({ volume: v / 100 }, 'MASTER VOLUME'));
-  subscribe(app, ['tracks', 'destruction', 'kit', 'transport', 'master', 'project'], () => xp.refresh());
+  subscribe(app, ['tracks', 'destruction', 'kit', 'transport', 'master', 'project', 'gen'], () => xp.refresh());
 
   // ---------------------------------------------------------------- mini grid
   const gw = win(root, { title: 'NOW PLAYING', area: 'perform', id: 'nowplaying' });

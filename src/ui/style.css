@@ -988,7 +988,7 @@ input.mtext:focus {
   scrollbar-color: var(--ink) var(--paper);
 }
 .strip {
-  width: calc(92 * var(--px));
+  width: calc(104 * var(--px));
   border: var(--u) solid var(--ink);
   display: flex;
   flex-direction: column;
@@ -1872,4 +1872,23 @@ html[data-view='pattern'] #main {
 }
 .condedit {
   gap: calc(6 * var(--px));
+}
+.sidetrack.on .tiny,
+.sidetrack.on .modetag {
+  color: var(--paper);
+}
+.sidetrack.on .meter {
+  border-color: var(--paper);
+}
+.sidetrack.on .meter .lvl {
+  background: var(--paper);
+}
+.strip .row .btn.small {
+  min-width: 0;
+  padding: 0 calc(6 * var(--px));
+}
+.gencard .row.wrap > .btn.grow {
+  flex: 1 1 auto;
+  min-width: max-content;
+  padding: 0 calc(8 * var(--px));
 }

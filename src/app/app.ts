@@ -21,7 +21,7 @@ import { defaultProject, defaultSound } from '../model/defaults';
 import { kitOf, readKitFile, writeKitFile, KIT_EXT } from '../model/kitFile';
 import { BUNDLE_EXT, parseProject, projectSamples, PROJECT_EXT, serialize } from '../model/project';
 import { buildPreset, PRESETS, resolveBundled } from '../model/presets';
-import { COND_LABEL, isEmptyStepSound, lockableParam, repairVariation, resolveStepSound, soundSampleIds } from '../sound/stepSound';
+import { describeStepSound, isEmptyStepSound, lockableParam, repairVariation, resolveStepSound, soundSampleIds } from '../sound/stepSound';
 import { addEvolution, clearEvolution, distributeSounds, generateVariations, handMade, mutateSounds, slotWritable } from '../sound/soundgen';
 import { voiceKeys } from '../sound/kitgen';
 import { clamp, clone, MAX_PATTERNS, VARIATION_SLOTS, MAX_STEPS, stepTicks, type StepSound, type Variation, type DestructionSettings, type GenSettings, type Hit, type Pattern, type Project, type Quantize, type Resolution, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from '../model/types';
@@ -320,6 +320,15 @@ export class App {
     this.say(`${label} · NEXT ${q.toUpperCase()}`);
     this.scheduler.at(q, () => {
       this.change(label, fn, topics);
+      this.say(label);
+    });
+  }
+
+  /** Run a change at the next quantise boundary while playing (it makes its own undo step). */
+  private atBoundary(label: string, fn: () => void, q: Quantize = this.project.quantize): void {
+    this.say(`${label} · NEXT ${q.toUpperCase()}`);
+    this.scheduler.at(q, () => {
+      fn();
       this.say(label);
     });
   }
@@ -1118,6 +1127,13 @@ export class App {
     this.emit(['kit', 'selection']);
   }
 
+  /** Show or hide the sound lane under the pattern grid. */
+  setSoundLane(on: boolean): void {
+    this.prefs.soundLane = on;
+    savePrefs(this.prefs);
+    this.emit(['tracks']);
+  }
+
   setSoundTab(tab: SoundTab): void {
     this.ui.soundTab = tab;
     this.prefs.soundTab = tab;
@@ -1424,17 +1440,7 @@ export class App {
   describeStepSound(trackId: string, step: number): string {
     const s = this.stepSound(trackId, step);
     const t = this.project.tracks.find((x) => x.id === trackId);
-    if (!s || !t) return '';
-    const parts: string[] = [];
-    const name = (i: number | null) => (i === null ? 'BASE' : String.fromCharCode(65 + i) + (t.sound.variations?.[i]?.name ? ` ${t.sound.variations[i]!.name}` : ''));
-    if (s.v !== undefined) parts.push('SOUND ' + name(s.v));
-    if (s.alt) parts.push(`${COND_LABEL[s.alt.cond.k]}${'n' in s.alt.cond ? ' ' + s.alt.cond.n : 'p' in s.alt.cond ? ' ' + s.alt.cond.p + '%' : ''} → ${name(s.alt.v)}`);
-    if (s.voice !== undefined) parts.push('VOICE ' + ['DRUM 1', 'DRUM 2', 'DRUM 3', 'SNARE', 'CYMBAL', 'CL HAT', 'OP HAT'][s.voice]);
-    const nl = Object.keys(s.locks ?? {}).length;
-    if (nl) parts.push(`${nl} LOCK${nl > 1 ? 'S' : ''}`);
-    const nr = s.rules?.length ?? 0;
-    if (nr) parts.push(`${nr} RULE${nr > 1 ? 'S' : ''}`);
-    return parts.join(' · ') + (s.gen ? ' (GENERATED)' : '');
+    return s && t ? describeStepSound(t.sound, s) : '';
   }
 
   soundCount(): number {
@@ -1523,13 +1529,15 @@ export class App {
   }
 
   /** MUTATE SOUND: redraw a share of the generated step sounds; hand-made ones and the rhythm stay. */
-  mutateSound(amount = 0.3): void {
+  mutateSound(amount = 0.3, quantise = false): void {
+    if (quantise && this.ui.playing) return this.atBoundary('MUTATE SOUND', () => this.mutateSound(amount));
     const { tracks, region } = this.soundScope();
     this.change('MUTATE SOUND', () => this.writeSounds('MUTATE SOUND', tracks, region, (t, grid, cur, o) => mutateSounds(t.sound, t.role, grid, cur, this.project.kit.synth.params, { ...o, amount })), ['pattern']);
   }
 
   /** GENERATE SOUND: variations for the free slots, then their distribution (one undo step). */
-  generateSound(): void {
+  generateSound(quantise = false): void {
+    if (quantise && this.ui.playing) return this.atBoundary('GENERATE SOUND', () => this.generateSound());
     this.history.begin('GENERATE SOUND');
     this.generateVariationsFor(undefined, false);
     this.distributeVariations();

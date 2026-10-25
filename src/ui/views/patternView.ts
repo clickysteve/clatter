@@ -87,6 +87,7 @@ export function patternView(app: App, screen: HTMLElement): View {
   h('div', 'grow', tb);
   button(pp, tb, 'SOURCE', null, { on: () => app.ui.sourceOnly, hold: (d) => app.setSourceOnly(d), title: 'Hold: hear and see only the written pattern (no density, fills, CHOP, ROLLS, DESTROY)' });
   button(pp, tb, 'SHOW ORIGINAL', () => app.setShowOriginal(!app.ui.showOriginal), { on: () => app.ui.showOriginal, title: 'Also show the edit history: hand-edited hits (corner flag) and generated hits you deleted (crossed outline). Off: the grid shows only what plays.' }).dataset.test = 'show-original';
+  button(pp, tb, 'SOUND LANE', () => app.setSoundLane(!app.prefs.soundLane), { on: () => app.prefs.soundLane, title: 'Show the variation and condition of every step of the selected track under the grid' }).dataset.test = 'sound-lane';
   button(pp, tb, 'KEEP EDITS', () => app.keepEdits(), { disabled: () => app.editCount() === 0, title: 'Bake the hand edits into the pattern (generation and mutation then work on them)' });
   button(pp, tb, 'RESET', () => app.reset(), { title: 'Back to the generated pattern: hand edits cleared, CHOP/ROLLS/DESTROY off' });
   button(pp, tb, '? KEY', () => gridKeyDialog(), { title: 'How to read the grid, and how to edit it' }).dataset.test = 'grid-key';

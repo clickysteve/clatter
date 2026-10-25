@@ -369,7 +369,11 @@ export function mutateSounds(sound: TrackSound, role: string, grid: Grid, existi
   for (let i = r0; i <= r1 && i < grid.length; i++) {
     if (!grid[i] || handMade(out[i])) continue;
     if (hash32(o.seed, SALT.sndMut, tc, o.take, i) / 4294967296 >= o.amount) continue;
-    if (fresh[i]) out[i] = fresh[i]!;
+    // EVOLVE glides are a separate layer: a redrawn step keeps them
+    const glides = out[i]?.rules?.filter((r) => r.op === 'evolve') ?? [];
+    const next: StepSound | undefined = fresh[i] ? { ...fresh[i]! } : glides.length ? { gen: true } : undefined;
+    if (next && glides.length) next.rules = [...(next.rules ?? []), ...glides];
+    if (next) out[i] = next;
     else delete out[i];
   }
   return out;

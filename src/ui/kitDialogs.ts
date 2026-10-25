@@ -227,9 +227,10 @@ export function kitLibraryDialog(app: App, start: KitKind = 'set', note = '', pr
     panel.refresh();
   }
   buttons(box, [['CLOSE', closeDialog, true]]);
+  // the name is set before the first (asynchronous) render, so nothing typed meanwhile is overwritten
+  if (prefill) name.value = prefill;
   void render().then(() => {
     if (!prefill) return;
-    name.value = prefill;
     name.focus();
     name.select();
   });

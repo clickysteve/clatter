@@ -10,6 +10,7 @@ import { repairChain } from '@slopfactory/core/engines';
 import { ENGINE_RATE, type EngineSample, type EngineTrack, type HitEvent } from '../audio/engine';
 import type { SampleLibrary } from '../audio/library';
 import type { Project, SynthKit, Track } from '../model/types';
+import { resolveStepSound, soundSampleIds } from '../sound/stepSound';
 import { PAR } from '../sound/lxrParamIds';
 import { HARDWARE_ONLY } from '../sound/lxrParams';
 import type { ScheduledEvent } from '../transport/scheduler';
@@ -83,7 +84,7 @@ export function configureEngine(target: EngineTarget, p: Project, lib: SampleLib
   const solo = anySolo(p);
   if (lib) {
     const used = new Set<string>();
-    for (const t of p.tracks) for (const id of t.sound.samples) used.add(id);
+    for (const t of p.tracks) for (const id of soundSampleIds(t.sound)) used.add(id);
     for (const pat of p.patterns) for (const e of Object.values(pat.edits)) for (const h of Object.values(e)) if (h?.sample) used.add(h.sample);
     for (const id of used) {
       const s = lib.get(id);
@@ -97,17 +98,23 @@ export function configureEngine(target: EngineTarget, p: Project, lib: SampleLib
 }
 
 /** A hit for the engine from a scheduled event (time in seconds; `spt` seconds per tick). */
-export function hitOf(se: ScheduledEvent, p: Project, index: Map<string, number>, spt: number): Omit<HitEvent, 'frame' | 'seq'> & { time: number } | null {
+export function hitOf(se: ScheduledEvent, p: Project, index: Map<string, number>, spt: number, fills?: ReadonlySet<string>): Omit<HitEvent, 'frame' | 'seq'> & { time: number } | null {
   const e = se.event;
   const ti = index.get(e.track);
   if (ti === undefined) return null;
   const t = p.tracks[ti]!;
+  // the step's sound, resolved for this pass on the musical clock (see src/sound/stepSound.ts)
+  const rs = e.snd ? resolveStepSound(t.sound, e.snd, (par) => p.kit.synth.params[par] ?? 0, { seed: p.seed, cycle: se.cycle, fill: e.kind === 'fill' || !!fills?.has(e.track), track: e.track, step: e.origin }) : null;
+  const trig = rs ? rs.trig : t.sound.trigger;
   const locks: number[] = [];
   if (e.crush !== undefined && t.sound.mode !== 'sample') {
-    const v = t.sound.trigger >= 5 ? 5 : t.sound.trigger;
+    const v = trig >= 5 ? 5 : trig;
     locks.push(PAR.VOICE_DECIMATION1 + v, e.crush);
   }
   return {
+    ...(rs?.switched ? { trig: rs.trig } : {}),
+    ...(rs?.params.length ? { sp: rs.params } : {}),
+    ...(rs?.sample ? { smp: rs.sample } : {}),
     time: se.time,
     track: ti,
     vel: e.vel,

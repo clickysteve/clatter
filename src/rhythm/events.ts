@@ -4,6 +4,8 @@
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
+import type { StepSound } from '../model/types';
+
 export type EventKind = 'source' | 'flam' | 'ratchet' | 'fill' | 'chop' | 'retrig' | 'roll' | 'stutter';
 
 export interface PerfEvent {
@@ -33,6 +35,8 @@ export interface PerfEvent {
   crush?: number;
   /** made or changed by DESTROY */
   destroyed?: boolean;
+  /** the sound of the source step this event plays (resolved on the musical clock at hit time) */
+  snd?: StepSound;
 }
 
 export const cloneEvent = (e: PerfEvent): PerfEvent => ({ ...e });

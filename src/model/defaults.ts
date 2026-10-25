@@ -74,7 +74,7 @@ export function defaultProject(): Project {
   const pattern = newPattern('p1', 'A', gen);
   return {
     format: 'clatter-project',
-    version: 1,
+    version: 2,
     name: 'UNTITLED',
     tempo: 124,
     swing: 50,
@@ -88,6 +88,7 @@ export function defaultProject(): Project {
     gen,
     destruction: { chop: defaultChop(), rolls: defaultRolls(), destroy: defaultDestroy() },
     evolve: { target: 'off', every: 4, amount: 0.3, returnEvery: 4 },
+    timbre: { amount: 0.5, seed: 1 },
     quantize: 'bar',
     master: { volume: 0.8, clip: true, chain: null },
     snapshots: new Array(SNAPSHOTS).fill(null),

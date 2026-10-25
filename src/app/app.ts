@@ -21,7 +21,8 @@ import { defaultProject, defaultSound } from '../model/defaults';
 import { kitOf, readKitFile, writeKitFile, KIT_EXT } from '../model/kitFile';
 import { BUNDLE_EXT, parseProject, projectSamples, PROJECT_EXT, serialize } from '../model/project';
 import { buildPreset, PRESETS, resolveBundled } from '../model/presets';
-import { clamp, clone, MAX_PATTERNS, MAX_STEPS, stepTicks, type DestructionSettings, type GenSettings, type Hit, type Pattern, type Project, type Quantize, type Resolution, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from '../model/types';
+import { repairVariation, soundSampleIds } from '../sound/stepSound';
+import { clamp, clone, MAX_PATTERNS, VARIATION_SLOTS, MAX_STEPS, stepTicks, type DestructionSettings, type GenSettings, type Hit, type Pattern, type Project, type Quantize, type Resolution, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from '../model/types';
 import { MidiController } from '../midi/controller';
 import { generate, stepsPerBar } from '../rhythm/generate';
 import { mutate, summariseOps } from '../rhythm/mutate';
@@ -400,7 +401,7 @@ export class App {
     const idx = trackIndex(p);
     const hits: TimedHit[] = [];
     for (const se of evs) {
-      const h = hitOf(se, p, idx, this.scheduler.spt);
+      const h = hitOf(se, p, idx, this.scheduler.spt, this.ui.fills);
       if (!h) continue;
       hits.push(h);
       const t = p.tracks[h.track]!;
@@ -888,7 +889,7 @@ export class App {
   syncTracks(): void {
     const solo = anySolo(this.project);
     this.project.tracks.forEach((t, i) => {
-      for (const id of t.sound.samples) {
+      for (const id of soundSampleIds(t.sound)) {
         const s = this.library.get(id);
         if (s) this.live.setSample(id, { rate: s.rate, channels: s.channels });
       }
@@ -1238,7 +1239,7 @@ export class App {
   // ------------------------------------------------------------------ kits
   kitFile(): { name: string; data: Uint8Array; type: string } {
     const kit = kitOf(this.project);
-    const ids = Object.values(kit.sounds).flatMap((s) => s.samples);
+    const ids = Object.values(kit.sounds).flatMap((s) => soundSampleIds(s));
     return { name: fileName([kit.name], KIT_EXT.slice(1)), data: writeKitFile(kit, this.library.stored(ids)), type: 'application/zip' };
   }
 
@@ -1253,7 +1254,13 @@ export class App {
         this.project.kit.seed = r.kit.seed;
         for (const t of this.project.tracks) {
           const s = r.kit.sounds[t.role];
-          if (s) t.sound = { ...defaultSound(), ...s, samples: (s.samples ?? []).filter((id) => this.library.get(id)) };
+          if (s) {
+            const vars = (Array.isArray(s.variations) ? s.variations : []).slice(0, VARIATION_SLOTS).map((v) => repairVariation(v));
+            const keep = (ids?: string[]) => (ids ?? []).filter((id) => this.library.get(id));
+            for (const v of vars) if (v?.sample?.samples) v.sample.samples = keep(v.sample.samples);
+            t.sound = { ...defaultSound(), ...s, samples: keep(s.samples), variations: vars.some(Boolean) ? vars : undefined };
+            if (!t.sound.variations) delete t.sound.variations;
+          }
         }
       },
       ['kit', 'tracks'],

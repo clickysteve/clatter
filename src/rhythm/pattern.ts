@@ -7,7 +7,8 @@
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
-import { MAX_STEPS, type GenSettings, type Grid, type Hit, type Pattern, type Resolution } from '../model/types';
+import { MAX_STEPS, clone, type GenSettings, type Grid, type Hit, type Pattern, type Resolution, type StepSound } from '../model/types';
+import { isEmptyStepSound } from '../sound/stepSound';
 import { resize, stepsPerBar } from './generate';
 
 export function sourceGrid(p: Pattern, trackId: string): Grid {
@@ -74,6 +75,19 @@ export function setLength(p: Pattern, steps: number): void {
     const e = p.edits[id]!;
     for (const k of Object.keys(e)) if (Number(k) >= n) delete e[Number(k)];
   }
+  // step sounds follow their steps; a longer pattern repeats them as it repeats the baseline
+  if (p.sounds) {
+    const old = p.steps;
+    for (const id of Object.keys(p.sounds)) {
+      const src = p.sounds[id]!;
+      const out: Record<number, StepSound> = {};
+      for (let i = 0; i < n; i++) {
+        const ss = src[i % old];
+        if (ss && (i < old || !isEmptyStepSound(ss))) out[i] = clone(ss);
+      }
+      setSounds(p, id, out);
+    }
+  }
   p.steps = n;
 }
 
@@ -93,10 +107,54 @@ export function setResolution(p: Pattern, res: Resolution, trackIds: readonly st
     });
     gen[id] = g;
   }
+  if (p.sounds) {
+    for (const id of Object.keys(p.sounds)) {
+      const out: Record<number, StepSound> = {};
+      for (const [k, ss] of Object.entries(p.sounds[id]!)) {
+        const j = Math.round(Number(k) * ratio);
+        if (j < steps && Math.abs(Number(k) * ratio - j) < 1e-6) out[j] = ss;
+      }
+      setSounds(p, id, out);
+    }
+  }
   p.gen = gen;
   p.edits = {};
   p.res = res;
   p.steps = steps;
+}
+
+// ---------------------------------------------------------------------------- step sounds
+/** The step sound of a cell (undefined when it plays its track's sound). */
+export function stepSoundAt(p: Pattern, trackId: string, step: number): StepSound | undefined {
+  return p.sounds?.[trackId]?.[step];
+}
+
+/** Replace a track's step sounds (an empty set removes the entry). */
+export function setSounds(p: Pattern, trackId: string, sounds: Record<number, StepSound>): void {
+  const keep = Object.entries(sounds).filter(([, ss]) => !isEmptyStepSound(ss));
+  if (!keep.length) {
+    if (p.sounds) {
+      delete p.sounds[trackId];
+      if (!Object.keys(p.sounds).length) delete p.sounds;
+    }
+    return;
+  }
+  (p.sounds ??= {})[trackId] = Object.fromEntries(keep);
+}
+
+/** Set (or, when empty, clear) the sound of one step. */
+export function setStepSound(p: Pattern, trackId: string, step: number, ss: StepSound | undefined): void {
+  if (step < 0 || step >= p.steps) return;
+  const cur = { ...(p.sounds?.[trackId] ?? {}) };
+  if (!ss || isEmptyStepSound(ss)) delete cur[step];
+  else cur[step] = ss;
+  setSounds(p, trackId, cur);
+}
+
+/** Number of steps with a sound override (for one track, or all). */
+export function soundCount(p: Pattern, trackId?: string): number {
+  if (trackId) return Object.keys(p.sounds?.[trackId] ?? {}).length;
+  return Object.values(p.sounds ?? {}).reduce((a, e) => a + Object.keys(e).length, 0);
 }
 
 /** Rotate a track's source by n steps (written into edits over the baseline). */
@@ -104,6 +162,12 @@ export function shiftTrack(p: Pattern, trackId: string, n: number): void {
   const src = sourceGrid(p, trackId);
   const len = src.length;
   for (let i = 0; i < len; i++) setHit(p, trackId, i, src[(((i - n) % len) + len) % len] ?? null);
+  const snd = p.sounds?.[trackId];
+  if (snd) {
+    const out: Record<number, StepSound> = {};
+    for (const [k, ss] of Object.entries(snd)) out[(((Number(k) + n) % len) + len) % len] = ss;
+    setSounds(p, trackId, out);
+  }
 }
 
 /** Clear a track (as edits, so RESET can bring it back). */
@@ -115,12 +179,25 @@ export function clearTrack(p: Pattern, trackId: string): void {
 export interface Clip {
   steps: number;
   rows: (Hit | null)[][];
+  /** the rows' step sounds (relative step → sound), when any */
+  sounds?: Record<number, StepSound>[];
 }
 
 export function copyRegion(p: Pattern, trackIds: readonly string[], from: number, to: number): Clip {
   const a = Math.max(0, Math.min(from, to));
   const b = Math.min(p.steps - 1, Math.max(from, to));
-  return { steps: b - a + 1, rows: trackIds.map((id) => sourceGrid(p, id).slice(a, b + 1)) };
+  const clip: Clip = { steps: b - a + 1, rows: trackIds.map((id) => sourceGrid(p, id).slice(a, b + 1)) };
+  if (p.sounds && trackIds.some((id) => p.sounds![id])) {
+    clip.sounds = trackIds.map((id) => {
+      const row: Record<number, StepSound> = {};
+      for (let i = a; i <= b; i++) {
+        const ss = p.sounds![id]?.[i];
+        if (ss) row[i - a] = clone(ss);
+      }
+      return row;
+    });
+  }
+  return clip;
 }
 
 export function pasteRegion(p: Pattern, trackIds: readonly string[], at: number, clip: Clip): void {
@@ -128,6 +205,7 @@ export function pasteRegion(p: Pattern, trackIds: readonly string[], at: number,
     const id = trackIds[r];
     if (!id) return;
     row.forEach((h, k) => setHit(p, id, at + k, h));
+    if (clip.sounds) row.forEach((_, k) => setStepSound(p, id, at + k, clip.sounds![r]?.[k] ? clone(clip.sounds![r]![k]!) : undefined));
   });
 }
 

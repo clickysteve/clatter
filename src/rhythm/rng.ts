@@ -68,6 +68,11 @@ export const SALT = {
   kit: 16,
   wildcard: 17,
   regen: 18,
+  sndProb: 19,
+  sndRange: 20,
+  sndGen: 21,
+  sndDist: 22,
+  sndMut: 23,
 } as const;
 
 /** Small seeded generator (mulberry32) for sequential operations. */

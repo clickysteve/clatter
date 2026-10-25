@@ -44,7 +44,7 @@ export function dialog(title: string, w: number): HTMLDivElement {
   return box;
 }
 
-function buttons(box: HTMLElement, list: [string, () => void, boolean?][]): void {
+export function buttons(box: HTMLElement, list: [string, () => void, boolean?][]): void {
   const row = h('div', 'btnrow', box);
   for (const [label, fn, def] of list) {
     const b = h('button', 'mbutton' + (def ? ' default' : ''), row, label);

@@ -11,17 +11,16 @@
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import { encodeWav16, createZip, fileName, slug } from '@slopfactory/core/export';
-import { IndexedDbSampleStore, readBundle, writeBundle } from '@slopfactory/core/storage';
+import { readBundle, writeBundle, type SampleStore } from '@slopfactory/core/storage';
 import { AudioHost, lxrWasm } from '../audio/host';
 import { SampleLibrary } from '../audio/library';
 import { renderHit, renderProject } from '../audio/render';
 import type { MetersMessage, TimedHit } from '../audio/protocol';
 import { ENGINE_RATE } from '../audio/engine';
-import { defaultProject, defaultSound } from '../model/defaults';
-import { kitOf, readKitFile, writeKitFile, KIT_EXT } from '../model/kitFile';
+import { defaultProject } from '../model/defaults';
 import { BUNDLE_EXT, parseProject, projectSamples, PROJECT_EXT, serialize } from '../model/project';
 import { buildPreset, PRESETS, resolveBundled } from '../model/presets';
-import { describeStepSound, isEmptyStepSound, lockableParam, repairVariation, resolveStepSound, soundSampleIds } from '../sound/stepSound';
+import { describeStepSound, isEmptyStepSound, lockableParam, resolveStepSound, soundSampleIds } from '../sound/stepSound';
 import { addEvolution, clearEvolution, distributeSounds, generateVariations, handMade, mutateSounds, slotWritable } from '../sound/soundgen';
 import { voiceKeys } from '../sound/kitgen';
 import { clamp, clone, MAX_PATTERNS, VARIATION_SLOTS, MAX_STEPS, stepTicks, type StepSound, type Variation, type DestructionSettings, type GenSettings, type Hit, type Pattern, type Project, type Quantize, type Resolution, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from '../model/types';
@@ -38,6 +37,7 @@ import { describeRolls } from '../destruction/rolls';
 import { describeDestroy } from '../destruction/destroy';
 import { evolveKit, generateKit, mutateKit, voiceRolesOf } from '../sound/kitgen';
 import { KitService } from '../sound/kitService';
+import { KitManager } from './kitManager';
 import { exportMidi } from '../export/midiFile';
 import { Sequence } from './sequence';
 import { anySolo, configureEngine, engineTrackOf, hitOf, kitDiff, masterChain, sendKit, trackIndex, type EngineTarget } from './soundConfig';
@@ -47,7 +47,7 @@ import { setScale } from '../ui/scale';
 import { Scheduler, startTicker } from '../transport/scheduler';
 import { PAR } from '../sound/lxrParamIds';
 
-export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master';
+export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master';
 
 export interface Selection {
   /** track indices (inclusive) */
@@ -107,6 +107,9 @@ export class App {
   readonly sequence: Sequence;
   readonly scheduler: Scheduler;
   kits: KitService | null = null;
+  /** the synth kit, sample set and full kit libraries (after boot) */
+  kitm: KitManager | null = null;
+  private audioStore: SampleStore | null = null;
   module: WebAssembly.Module | null = null;
   initKit: SynthKit | null = null;
   meters: MetersMessage | null = null;
@@ -146,13 +149,8 @@ export class App {
       previewPass: 1,
     };
     this.host = new AudioHost(opts.trackCount ?? 12, 1);
-    let store: IndexedDbSampleStore | null = null;
-    try {
-      store = typeof indexedDB === 'undefined' ? null : new IndexedDbSampleStore('clatter-samples');
-    } catch {
-      store = null;
-    }
-    this.library = new SampleLibrary(store);
+    this.audioStore = KitManager.audioStore();
+    this.library = new SampleLibrary(this.audioStore);
     this.library.onChange(() => this.emit(['library']));
     this.history = new History<DocState>(
       () => {
@@ -255,6 +253,7 @@ export class App {
     const bundled = await this.library.loadBundled(base);
     for (const s of bundled) this.bundledIds.set(s.name.toLowerCase(), s.id);
     await this.library.restore();
+    this.kitm = await KitManager.create(this, this.audioStore!);
     let restored = false;
     try {
       const raw = localStorage.getItem(AUTOSAVE_KEY);
@@ -266,7 +265,10 @@ export class App {
       restored = false;
     }
     if (!restored) await this.loadPreset(PRESETS[0]!.id, false);
-    else this.afterLoad(true);
+    else {
+      this.afterLoad(true);
+      this.kitm.projectReplaced();
+    }
     this.say(restored ? 'SESSION RESTORED' : 'READY: PRESS PLAY (SPACE)');
   }
 
@@ -295,13 +297,36 @@ export class App {
 
   private autosave(): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
-      try {
-        localStorage.setItem(AUTOSAVE_KEY, serialize(this.project));
-      } catch {
-        /* storage full or blocked */
-      }
-    }, 800);
+    this.saveTimer = setTimeout(() => this.saveNow(), 800);
+  }
+
+  /** On closing the page: write a change that is still waiting for its autosave. */
+  flushSave(): void {
+    if (this.saveTimer) this.saveNow();
+  }
+
+  /** Write the autosave now. */
+  saveNow(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    try {
+      localStorage.setItem(AUTOSAVE_KEY, serialize(this.project));
+    } catch {
+      /* storage full or blocked */
+    }
+  }
+
+  /** An undoable change made by the kit libraries (a load is one undo step). */
+  edit(label: string, fn: () => void, topics: Topic[]): void {
+    this.change(label, fn, topics);
+  }
+
+  /** The project names the sample set it uses (shown on the SAMPLE tab; not an undo step). */
+  setSampleSetName(name: string): void {
+    if (name) this.project.sampleSet = name;
+    else delete this.project.sampleSet;
+    this.autosave();
+    this.emit(['kits', 'project']);
   }
 
   /** An undoable change. */
@@ -1043,7 +1068,7 @@ export class App {
   }
 
   /** Send only what changed. */
-  private applyKitChange(next: SynthKit, time?: number): void {
+  applyKitChange(next: SynthKit, time?: number): void {
     const before = this.project.kit.synth;
     this.project.kit.synth = next;
     const d = kitDiff(before, next);
@@ -1692,24 +1717,11 @@ export class App {
     this.syncTracks();
   }
 
-  /** Preview a library sample on its own. */
+  /** Preview a library sample on its own (Slop Factory Core's auditioner: one at a time, on the engine's own context). */
   async previewSample(id: string): Promise<void> {
     const s = this.library.get(id);
-    if (!s) return;
-    try {
-      await this.host.start();
-    } catch {
-      return;
-    }
-    const ctx = this.host.ctx!;
-    const buf = ctx.createBuffer(s.channels.length, s.channels[0]!.length, s.rate);
-    s.channels.forEach((c, i) => buf.copyToChannel(c as Float32Array<ArrayBuffer>, i));
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const g = ctx.createGain();
-    g.gain.value = 0.7;
-    src.connect(g).connect(ctx.destination);
-    src.start();
+    if (!s || !this.kitm) return;
+    await this.kitm.audition.play({ sampleRate: s.rate, channels: s.channels }, { key: id });
   }
 
   // ------------------------------------------------------------------ MIDI input
@@ -1744,6 +1756,7 @@ export class App {
     this.project = proj;
     if (!undoable) this.project.snapshots = snaps.map(() => null);
     this.afterLoad(!undoable);
+    this.kitm?.projectReplaced();
     if (wasPlaying) this.scheduler.setTempo(proj.tempo);
     this.say(`PRESET ${spec.name}: ${spec.description}`);
   }
@@ -1757,6 +1770,7 @@ export class App {
     p.patterns[0]!.gen = generate(p.tracks, p.gen, p.patterns[0]!.seed, { steps: p.patterns[0]!.steps, res: 4 });
     this.project = p;
     this.afterLoad(false);
+    this.kitm?.projectReplaced();
     this.say('NEW PROJECT WITH THE LXR INIT KIT');
   }
 
@@ -1778,7 +1792,6 @@ export class App {
     const bytes = new Uint8Array(await file.arrayBuffer());
     let text: string;
     if (/\.zip$/i.test(file.name)) {
-      if (/clatterkit/i.test(file.name)) return this.importKit(bytes);
       const b = await readBundle(bytes, 'clatter');
       for (const s of b.samples) await this.library.add(s.bytes, s.name, { type: s.type });
       text = b.projectText;
@@ -1789,42 +1802,11 @@ export class App {
     this.history.push('OPEN PROJECT');
     this.project = p;
     this.afterLoad(false);
+    this.kitm?.projectReplaced();
     this.say(`OPENED ${p.name}`);
   }
 
   // ------------------------------------------------------------------ kits
-  kitFile(): { name: string; data: Uint8Array; type: string } {
-    const kit = kitOf(this.project);
-    const ids = Object.values(kit.sounds).flatMap((s) => soundSampleIds(s));
-    return { name: fileName([kit.name], KIT_EXT.slice(1)), data: writeKitFile(kit, this.library.stored(ids)), type: 'application/zip' };
-  }
-
-  async importKit(bytes: Uint8Array): Promise<void> {
-    const r = await readKitFile(bytes);
-    for (const s of r.samples) await this.library.add(s.bytes, s.name);
-    this.change(
-      'LOAD KIT',
-      () => {
-        this.applyKitChange(r.kit.synth);
-        this.project.kit.name = r.kit.name;
-        this.project.kit.seed = r.kit.seed;
-        for (const t of this.project.tracks) {
-          const s = r.kit.sounds[t.role];
-          if (s) {
-            const vars = (Array.isArray(s.variations) ? s.variations : []).slice(0, VARIATION_SLOTS).map((v) => repairVariation(v));
-            const keep = (ids?: string[]) => (ids ?? []).filter((id) => this.library.get(id));
-            for (const v of vars) if (v?.sample?.samples) v.sample.samples = keep(v.sample.samples);
-            t.sound = { ...defaultSound(), ...s, samples: keep(s.samples), variations: vars.some(Boolean) ? vars : undefined };
-            if (!t.sound.variations) delete t.sound.variations;
-          }
-        }
-      },
-      ['kit', 'tracks'],
-    );
-    this.syncTracks();
-    this.say(`KIT ${r.kit.name} LOADED`);
-  }
-
   setKitName(name: string): void {
     this.change('RENAME KIT', () => (this.project.kit.name = name.toUpperCase().slice(0, 24) || 'KIT'), ['kit']);
   }

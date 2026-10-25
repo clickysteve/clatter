@@ -593,4 +593,25 @@ export function chooseFiles(accept: string, multiple = false): Promise<File[]> {
   });
 }
 
+/** Ask the browser for a folder; every file in it (and below) comes back with its relative path. */
+export function chooseFolder(): Promise<File[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.setAttribute('webkitdirectory', '');
+    input.multiple = true;
+    input.style.display = 'none';
+    input.addEventListener('change', () => {
+      resolve([...(input.files ?? [])]);
+      input.remove();
+    });
+    input.addEventListener('cancel', () => {
+      resolve([]);
+      input.remove();
+    });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
 export const pct = (v: number): string => Math.round(v * 100) + '%';

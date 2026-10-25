@@ -43,6 +43,7 @@ async function main(): Promise<void> {
   h('div', 'hint', loading.body, 'Generative drum synthesis · LXR-02 firmware DSP in WebAssembly');
   const app = new App();
   (window as unknown as { clatter: App }).clatter = app;
+  window.addEventListener('pagehide', () => app.flushSave());
   try {
     await app.boot(import.meta.env.BASE_URL);
   } catch (err) {

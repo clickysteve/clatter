@@ -6,6 +6,7 @@
 import type { App } from '../app/app';
 import { PRESETS } from '../model/presets';
 import { aboutDialog, confirmDialog, exportDialog, helpDialog, paletteDialog } from './dialogs';
+import { importFolder, importZip, kitLibraryDialog, openKitFile } from './kitDialogs';
 import { DEFAULT_SCALE, SCALES, scaleLabel } from './scale';
 import { chooseFiles, closePopups, download, h } from './widgets';
 
@@ -61,7 +62,7 @@ export function menubar(app: App, screen: HTMLElement): { bar: HTMLElement; stat
         { label: 'Export stems (ZIP)…', action: () => exportDialog(app, 'stems') },
         { label: 'Export MIDI file…', action: () => exportDialog(app, 'midi') },
         { label: 'Export drum hits (ZIP of WAVs)', action: () => void run('RENDERING HITS', () => app.exportHits()) },
-        { label: 'Export kit (.clatterkit.zip)', action: () => save(app.kitFile()) },
+        { label: 'Kit library…', action: () => kitLibraryDialog(app, 'set') },
       ],
     ],
     [
@@ -85,8 +86,12 @@ export function menubar(app: App, screen: HTMLElement): { bar: HTMLElement; stat
         { label: 'Mutate kit', key: '⇧K', action: () => void app.mutateKit(0.3) },
         { label: 'Mutate selected voice', action: () => voiceMutate(app) },
         'sep',
-        { label: 'Load kit…', action: () => void openFile(app, '.zip') },
-        { label: 'Export kit', action: () => save(app.kitFile()) },
+        { label: 'Synth kit: save or load…', action: () => kitLibraryDialog(app, 'synth', '', app.project.kit.name) },
+        { label: 'Sample set: save or load…', action: () => kitLibraryDialog(app, 'set', '', app.kitm?.setName === 'NONE' ? '' : app.kitm?.setName) },
+        { label: 'Full kit: save or load…', action: () => kitLibraryDialog(app, 'full', '', app.kitm?.fullName) },
+        'sep',
+        { label: 'Import sample folder…', action: () => void importFolder(app) },
+        { label: 'Import sample ZIP…', action: () => void importZip(app) },
       ],
     ],
     [
@@ -191,6 +196,7 @@ export async function openFile(app: App, accept = '.json,.zip'): Promise<void> {
   const [f] = await chooseFiles(accept);
   if (!f) return;
   try {
+    if (await openKitFile(app, f)) return;
     await app.openFile(f);
   } catch (err) {
     app.say(`COULD NOT OPEN ${f.name}: ${err instanceof Error ? err.message : String(err)}`);

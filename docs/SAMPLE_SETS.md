@@ -22,7 +22,7 @@ and the synthesis stays exactly as it was.
 * **SOUND > SAMPLE**: the current set's name (with UNSAVED when the tracks' samples differ from
   the saved set), LOAD SET…, SAVE SET, IMPORT FOLDER…, IMPORT ZIP…, EXPORT SET, LIBRARY…, then the
   current track's sample editor, library list and audition buttons as before.
-* **SOUND > KIT & FX**: GENERATE / MUTATE KIT as before, and a KITS group with a line each for
+* **SOUND > KITS**: GENERATE / MUTATE KIT as before, and a KITS group with a line each for
   SYNTH KIT, SAMPLE SET and FULL KIT (SAVE… and LOAD…) and the LIBRARY….
 * **KIT menu**: the same, plus Import sample folder… and Import sample ZIP….
 * **FILE > Open project, bundle or kit…** recognises kit files, synth kit files and ZIPs of

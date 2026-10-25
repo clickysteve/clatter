@@ -35,7 +35,7 @@ every key. Projects autosave in the browser; FILE saves them as files.
 
 Views: **PATTERN** (the grid and its step editor; generator, transformation toolbar, track and
 edit panels under it; **? KEY** explains the grid), **SOUND** (a track sidebar
-and SYNTH, SAMPLE, MODULATION, MIXER and KIT & FX tabs; variations A-D per track), the **STEP SOUND**
+and SYNTH, SAMPLE, MODULATION, VARIATIONS, MIXER, FX and KITS tabs; variations A-D per track), the **STEP SOUND**
 tab of PATTERN (per-step variations, parameter locks, conditions, voice switching, generators), **PERFORM** (pads, patterns,
 snapshots, mutes, macros). Factory presets: MACHINE ROOM, BROKEN CLOCK, METALLIC WEATHER, DUSTY
 BREAKS, DIGITAL DETRITUS, INDUSTRIAL ESTATE, WRONG ANSWERS, AFTER HOURS.

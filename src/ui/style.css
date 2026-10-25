@@ -2359,3 +2359,27 @@ html[data-view='pattern'] #main {
 .namebox {
   display: block;
 }
+
+.srcrow {
+  min-height: calc(24 * var(--px));
+  padding-top: calc(1 * var(--px));
+  padding-bottom: calc(1 * var(--px));
+}
+.procstage > .btn {
+  align-self: flex-start;
+}
+.procstage .range,
+.procstage .num {
+  min-width: 0;
+}
+.modsrcs > .group .ctl {
+  --label-w: 74px;
+}
+.modsrcs > .group {
+  flex: none;
+}
+.modsrcs > .group.col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(6 * var(--px)) calc(10 * var(--px));
+}

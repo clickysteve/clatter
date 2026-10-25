@@ -374,7 +374,7 @@ test('generate, variation, wildcard and a new kit change the music; undo restore
   const kit = () => page.evaluate(() => (window as unknown as W).clatter.project.kit.synth.params.join(','));
   const k0 = await kit();
   await page.click('[data-test=view-sound]');
-  await page.click('[data-test=sound-tab-kit]');
+  await page.click('[data-test=sound-tab-kits]');
   await page.click('[data-test=generate-kit]');
   await expect.poll(kit, { timeout: 15_000 }).not.toEqual(k0);
   await page.click('[data-test=view-pattern]');
@@ -492,12 +492,16 @@ for (const [w, h, scale] of [
   [1366, 768, 0.9],
   [1440, 900, 1],
   [1440, 900, 1.25],
+  [1366, 768, 0.75],
+  [1366, 768, 1.25],
+  [1920, 1080, 0.75],
+  [1920, 1080, 1.5],
 ] as const) {
   test(`SOUND fits one window at ${w} × ${h}, ${scale * 100} %: no page scroll, each tab scrolls inside`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: h });
     await bootAt(page, scale);
     await page.click('[data-test=view-sound]');
-    for (const tab of ['synth', 'sample', 'modulation', 'mixer', 'kit'] as const) {
+    for (const tab of ['synth', 'sample', 'modulation', 'variations', 'mixer', 'fx', 'kits'] as const) {
       await page.click(`[data-test=sound-tab-${tab}]`);
       await page.waitForTimeout(150);
       const r = await page.evaluate(() => {
@@ -540,7 +544,7 @@ test('SOUND tabs keep their state; the tab is remembered; the sidebar selects a 
   await page.evaluate(() => (window as unknown as W).clatter.createVariation((window as unknown as W).clatter.track.id, 1));
   await page.evaluate(() => (window as unknown as W).clatter.setEditedParam((window as unknown as W).clatter.track.sound.trigger === 0 ? 0 : 0, 0));
   const snap = await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.track.sound.variations));
-  for (const tab of ['sample', 'modulation', 'mixer', 'kit', 'synth']) await page.click(`[data-test=sound-tab-${tab}]`);
+  for (const tab of ['sample', 'modulation', 'variations', 'mixer', 'fx', 'kits', 'synth']) await page.click(`[data-test=sound-tab-${tab}]`);
   expect(await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.track.sound.variations))).toBe(snap);
   expect(await page.evaluate(() => (window as unknown as W).clatter.ui.slot)).toBe(1);
   await page.click('[data-test=sound-tab-mixer]');
@@ -590,7 +594,7 @@ test('a step gets a variation, a condition and a lock; the grid marks it; undo r
 test('GENERATE SOUND makes variations and step sounds; MUTATE SOUND keeps the rhythm; undo restores', async ({ page }) => {
   const errors = await boot(page);
   await page.click('[data-test=view-sound]');
-  await page.click('[data-test=sound-tab-modulation]');
+  await page.click('[data-test=sound-tab-variations]');
   const rhythm = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.project.patterns.map((p) => [p.gen, p.edits])));
   const sounds = () => page.evaluate(() => (window as unknown as W).clatter.soundCount());
   const r0 = await rhythm();

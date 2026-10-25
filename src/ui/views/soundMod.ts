@@ -12,7 +12,7 @@
  */
 import type { App } from '../../app/app';
 import type { MetersMessage } from '../../audio/protocol';
-import { defaultSource } from '../../mod/config';
+import { defaultEnv, defaultLfo, defaultSource, defaultStep } from '../../mod/config';
 import { exportMod } from '../../mod/format';
 import { FACTORY_PRESETS } from '../../mod/presets';
 import { DEST_INDEX, destApplies, destDef, RATE_NOTE } from '../../mod/registry';
@@ -185,7 +185,7 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
 
   // ---- LFO
   const lfoBox = box('lfo');
-  const L = () => cur() as unknown as LfoDef;
+  const L = (): LfoDef => ({ ...defaultLfo(), ...(cur() as unknown as Partial<LfoDef>) });
   pick(lfoBox, 'WAVE', 'wave', LFO_WAVES.map((w) => ({ value: w, label: LFO_WAVE_LABEL[w] })), 'Waveform: sine, triangle, saw up/down, square, variable pulse, sample and hold, stepped random, smooth random, or one you draw').dataset.test = 'lfo-wave';
   const modeRow = h('div', 'row wrap', lfoBox);
   h('div', 'lbl', modeRow, 'RATE');
@@ -224,7 +224,7 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
 
   // ---- ENVELOPE
   const envBox = box('env');
-  const E = () => cur() as unknown as EnvDef;
+  const E = (): EnvDef => ({ ...defaultEnv(), ...(cur() as unknown as Partial<EnvDef>) });
   const envKind = pick(envBox, 'TYPE', 'kind', [{ value: 'adsr', label: 'ADSR' }, { value: 'ahdsr', label: 'AHDSR' }, { value: 'multi', label: 'MULTISTAGE' }], 'ADSR, AHDSR (adds a hold), or a multistage envelope of up to 8 breakpoints that can loop');
   envKind.dataset.test = 'env-kind';
   const syncRow = h('div', 'row wrap', envBox);
@@ -302,7 +302,7 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
 
   // ---- STEP
   const stepBox = box('step');
-  const S = () => cur() as unknown as StepDef;
+  const S = (): StepDef => ({ ...defaultStep(), ...(cur() as unknown as Partial<StepDef>) });
   slider(stepBox, 'LENGTH', 'len', { min: 1, max: MAX_STEPS, def: 8, title: 'Number of steps (1-32). The step modulator has its own length, independent of the pattern.', format: (v) => v + ' STEPS' });
   pick(stepBox, 'CLOCK', 'div', DIV_OPTS, 'Step length as a division of the beat: its own clock, independent of the pattern’s');
   pick(stepBox, 'DIRECTION', 'dir', [{ value: 'fwd', label: 'FORWARD' }, { value: 'rev', label: 'REVERSE' }, { value: 'ping', label: 'PING-PONG' }, { value: 'rand', label: 'RANDOM' }], 'Order the steps play in');

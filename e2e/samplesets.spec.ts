@@ -133,7 +133,7 @@ test('a sample set and a synth kit load independently; a full kit holds both; th
   await page.waitForSelector('.dialog:has-text("KIT LIBRARY")');
   await page.click('.mbutton:has-text("CLOSE")');
   // a synth kit: generate, save as METALLIC
-  await page.click('[data-test=sound-tab-kit]');
+  await page.click('[data-test=sound-tab-kits]');
   await page.click('[data-test=generate-kit]');
   await expect(page.locator('[data-test=generate-kit]')).toBeEnabled();
   await page.click('[data-test=kit-save-synth]');
@@ -245,10 +245,10 @@ for (const [w, h, scale] of [
     await fit('SAMPLE');
     await expect(page.locator('.sethead')).toBeVisible();
     await page.screenshot({ path: `/tmp/claude-0/shots/sample-${w}-${scale * 100}.png` });
-    await page.click('[data-test=sound-tab-kit]');
+    await page.click('[data-test=sound-tab-kits]');
     await fit('KIT & FX');
     await page.screenshot({ path: `/tmp/claude-0/shots/kit-${w}-${scale * 100}.png` });
-    await page.click('[data-test=kit-library]');
+    await page.click('[data-test=kit-library-set]');
     await fit('LIBRARY');
     await page.screenshot({ path: `/tmp/claude-0/shots/library-${w}-${scale * 100}.png` });
     await page.click('.mbutton:has-text("CLOSE")');

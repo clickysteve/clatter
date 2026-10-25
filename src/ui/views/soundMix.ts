@@ -57,7 +57,7 @@ export function mixerPane(app: App, pane: HTMLElement): PaneParts {
         nm.textContent = x().name;
       });
       const fr = h('div', 'row stripfader', s);
-      vfader(mx, fr, { get: () => x().mix.volume, set: (v) => app.setTrackMix(tr.id, { volume: v }, 'VOLUME'), begin: () => app.beginDrag('VOLUME'), end: () => app.endDrag(), height: 110, def: 0.8, title: 'Level (0.8 = 0 dB, double-click)' });
+      vfader(mx, fr, { get: () => x().mix.volume, set: (v) => app.setTrackMix(tr.id, { volume: v }, 'VOLUME'), begin: () => app.beginDrag('VOLUME'), end: () => app.endDrag(), height: 84, def: 0.8, title: 'Level (0.8 = 0 dB, double-click)' });
       const met = h('div', 'meter', fr);
       met.style.width = cpx(10);
       trackMeters.push(h('div', 'lvl', met));
@@ -76,7 +76,7 @@ export function mixerPane(app: App, pane: HTMLElement): PaneParts {
     s.dataset.channel = 'master';
     h('div', 'sname inv', s, 'MASTER');
     const fr = h('div', 'row stripfader', s);
-    vfader(mx, fr, { get: () => app.project.master.volume, set: (v) => app.setMaster({ volume: v }, 'MASTER VOLUME'), begin: () => app.beginDrag('MASTER VOLUME'), end: () => app.endDrag(), height: 110, def: 0.8, title: 'Master gain' });
+    vfader(mx, fr, { get: () => app.project.master.volume, set: (v) => app.setMaster({ volume: v }, 'MASTER VOLUME'), begin: () => app.beginDrag('MASTER VOLUME'), end: () => app.endDrag(), height: 84, def: 0.8, title: 'Master gain' });
     const mL = h('div', 'meter', fr);
     const mR = h('div', 'meter', fr);
     for (const m of [mL, mR]) m.style.width = cpx(10);
@@ -118,7 +118,7 @@ export function mixerPane(app: App, pane: HTMLElement): PaneParts {
         range(mx, c.slot, {
           get: () => Math.round(((chf()[key] as unknown as Record<string, number>)[o.f] ?? 0) * o.scale),
           set: (v) => app.patchChannelFx(t().id, key, { [o.f]: v / o.scale } as never, label),
-          min: o.min, max: o.max, def: o.def, bip: o.bip, format: o.format, begin: () => app.beginDrag(label), end: () => app.endDrag(), title: o.title, width: 120,
+          min: o.min, max: o.max, def: o.def, bip: o.bip, format: o.format, begin: () => app.beginDrag(label), end: () => app.endDrag(), title: o.title,
         });
       }
     });
@@ -157,7 +157,7 @@ export function mixerPane(app: App, pane: HTMLElement): PaneParts {
         range(mx, c.slot, {
           get: () => Math.round(((bf()[key] as unknown as Record<string, number>)[o.f] ?? 0) * o.scale),
           set: (v) => app.patchOutput((out) => ((out.bus[key] as unknown as Record<string, number>)[o.f] = v / o.scale), label),
-          min: o.min, max: o.max, def: o.def, bip: o.bip, format: o.format, begin: () => app.beginDrag(label), end: () => app.endDrag(), title: o.title, width: 120,
+          min: o.min, max: o.max, def: o.def, bip: o.bip, format: o.format, begin: () => app.beginDrag(label), end: () => app.endDrag(), title: o.title,
         });
       }
       extra?.(g);

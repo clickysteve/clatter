@@ -40,14 +40,20 @@ import { KitService } from '../sound/kitService';
 import { KitManager } from './kitManager';
 import { exportMidi } from '../export/midiFile';
 import { Sequence } from './sequence';
-import { anySolo, configureEngine, engineTrackOf, hitOf, kitDiff, masterChain, sendKit, trackIndex, type EngineTarget } from './soundConfig';
+import { anySolo, configureEngine, engineTrackOf, hitOf, kitDiff, masterChain, outputOf, sendKit, trackIndex, type EngineTarget } from './soundConfig';
+import { defaultRoute, defaultSource, diffMod, isSource, newRouteId, resolveMod } from '../mod/config';
+import { destApplies, destsFor } from '../mod/registry';
+import { buildRecipe, fitMod, generateMod, mutateMod, randomiseSource, type ModTarget } from '../mod/presets';
+import { ModLibrary } from '../mod/library';
+import { typeOfSource, type ModRoute, type SourceDef, type SourceId, type TrackMod } from '../mod/types';
+import { defaultChannelFx, defaultOutputFx, type ChannelFx, type OutputFx } from '../audio/mixfx';
 import { History } from './history';
 import { loadPrefs, savePrefs, type Prefs, type SoundTab, type Workspace } from './prefs';
 import { setScale } from '../ui/scale';
 import { Scheduler, startTicker } from '../transport/scheduler';
 import { PAR } from '../sound/lxrParamIds';
 
-export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master';
+export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod';
 
 export interface Selection {
   /** track indices (inclusive) */
@@ -90,6 +96,8 @@ export interface UiState {
   slot: number | null;
   /** the pass of the pattern the step-sound preview plays (1 = the first) */
   previewPass: number;
+  /** the modulation source the MODULATION editor shows */
+  modSel: SourceId;
 }
 
 type DocState = Omit<Project, 'snapshots'>;
@@ -124,9 +132,14 @@ export class App {
   private evolveStep = 0;
   private bundledIds = new Map<string, string>();
   readonly live: EngineTarget;
+  /** the user's modulation presets */
+  readonly modLibrary: ModLibrary;
+  /** the seed of the next generated modulation (each press differs, a press is reproducible from its seed) */
+  modSeed = 1;
 
   constructor(opts: { trackCount?: number } = {}) {
     this.prefs = loadPrefs();
+    this.modLibrary = new ModLibrary(typeof localStorage !== 'undefined' ? localStorage : null);
     this.project = defaultProject();
     this.ui = {
       view: this.prefs.view,
@@ -147,6 +160,7 @@ export class App {
       soundTab: this.prefs.soundTab,
       slot: null,
       previewPass: 1,
+      modSel: 'lfo1',
     };
     this.host = new AudioHost(opts.trackCount ?? 12, 1);
     this.audioStore = KitManager.audioStore();
@@ -944,6 +958,7 @@ export class App {
       }
       this.live.setTrack(i, engineTrackOf(t, solo));
     });
+    this.live.setOutput(outputOf(this.project));
   }
 
   setTrackSound(id: string, sound: Partial<TrackSound>, label = 'SOUND'): void {
@@ -1008,6 +1023,7 @@ export class App {
     Object.assign(this.project.master, m);
     this.history.commit();
     this.live.setMaster(this.project.master.volume, this.project.master.clip, masterChain(this.project));
+    this.live.setOutput(outputOf(this.project));
     this.autosave();
     this.emit(['master', 'history']);
   }
@@ -1166,6 +1182,276 @@ export class App {
     this.prefs.soundTab = tab;
     savePrefs(this.prefs);
     this.emit(['view']);
+  }
+
+  // ------------------------------------------------------------------ SOUND: modulation
+  /** What modulation targets on a track: its source mode and LXR voice. */
+  modTarget(t: Track = this.track): ModTarget {
+    return { mode: t.sound.mode, voice: Math.max(0, this.voiceOf(t)) };
+  }
+
+  /** The modulation of the sound being edited: the base's, or the base with the open variation's patch applied. */
+  editedMod(t: Track = this.track): TrackMod {
+    const slot = this.ui.slot;
+    return resolveMod(t.sound.mod, slot === null ? undefined : t.sound.variations?.[slot]?.mod);
+  }
+
+  /** The modulation a variation plays (null: the base's). */
+  modOfSlot(t: Track, slot: number | null): TrackMod {
+    return resolveMod(t.sound.mod, slot === null ? undefined : t.sound.variations?.[slot]?.mod);
+  }
+
+  /** Change the modulation of the sound being edited. On a variation only the differences from the base are stored. */
+  setEditedMod(fn: (m: TrackMod) => void, label = 'MODULATION'): void {
+    const t = this.track;
+    const slot = this.ui.slot;
+    const cur = this.editedMod(t);
+    const next = JSON.parse(JSON.stringify(cur)) as TrackMod;
+    fn(next);
+    if (JSON.stringify(next) === JSON.stringify(cur)) return;
+    this.history.begin(label);
+    if (slot === null) {
+      if (!next.routes.length && !Object.keys(next.sources).length) delete t.sound.mod;
+      else t.sound.mod = next;
+    } else {
+      const list = this.ensureVariations(t);
+      const v = (list[slot] ??= { name: '', params: {} });
+      const patch = diffMod(t.sound.mod, next);
+      if (patch) v.mod = patch;
+      else delete v.mod;
+      delete v.gen;
+    }
+    this.history.commit();
+    this.syncTracks();
+    this.autosave();
+    this.sequence.bump();
+    this.scheduler.invalidate();
+    this.emit(['mod', 'tracks', 'history', 'pattern']);
+  }
+
+  selectModSource(id: SourceId): void {
+    this.ui.modSel = id;
+    this.emit(['mod']);
+  }
+
+  /** Make a source active with its defaults (an LFO, an envelope, a step sequencer...). */
+  activateSource(id: SourceId): void {
+    if (typeOfSource(id) === 'macro' || id === 'vel') return this.selectModSource(id);
+    this.setEditedMod((m) => {
+      if (!m.sources[id]) (m.sources as Record<string, SourceDef>)[id] = defaultSource(id);
+    }, 'ADD SOURCE');
+    this.selectModSource(id);
+  }
+
+  /** Remove a source and every route that uses it. */
+  removeSource(id: SourceId): void {
+    this.setEditedMod((m) => {
+      delete m.sources[id];
+      m.routes = m.routes.filter((r) => r.src !== id);
+    }, 'REMOVE SOURCE');
+  }
+
+  setSource(id: SourceId, patch: Record<string, unknown>, label = 'SOURCE'): void {
+    this.setEditedMod((m) => {
+      const cur = m.sources[id] ?? defaultSource(id);
+      (m.sources as Record<string, unknown>)[id] = { ...cur, ...patch };
+    }, label);
+  }
+
+  /** Add a route from a source to a destination (the source is activated if it needs a definition). */
+  addRoute(src: SourceId, dst: string, amt = 0.3): void {
+    const t = this.track;
+    const { mode, voice } = this.modTarget(t);
+    if (!destApplies(dst, mode, voice)) return this.say('THAT DESTINATION DOES NOT EXIST ON THIS TRACK');
+    this.setEditedMod((m) => {
+      if (!m.sources[src] && typeOfSource(src) !== 'macro' && src !== 'vel' && src !== 'trig') (m.sources as Record<string, SourceDef>)[src] = defaultSource(src);
+      m.routes.push(defaultRoute(newRouteId(m), src, dst, amt));
+    }, 'ADD ROUTE');
+  }
+
+  setRoute(id: string, patch: Partial<ModRoute>, label = 'ROUTE'): void {
+    this.setEditedMod((m) => {
+      const r = m.routes.find((x) => x.id === id);
+      if (r) Object.assign(r, patch);
+    }, label);
+  }
+
+  removeRoute(id: string): void {
+    this.setEditedMod((m) => {
+      m.routes = m.routes.filter((r) => r.id !== id);
+    }, 'REMOVE ROUTE');
+  }
+
+  /** Replace the edited sound's modulation with a factory or user preset (routes the track cannot use are dropped). */
+  loadModPreset(id: string): void {
+    const t = this.track;
+    const target = this.modTarget(t);
+    const user = this.modLibrary.get(id);
+    const next = user?.mod ? fitMod(user.mod, target) : buildRecipe(id, target);
+    this.setEditedMod((m) => {
+      m.sources = next.sources;
+      m.routes = next.routes;
+    }, 'MODULATION PRESET');
+    const first = Object.keys(next.sources)[0] as SourceId | undefined;
+    if (first) this.ui.modSel = first;
+    this.say(`MODULATION: ${user?.name ?? id.replace(/^f:/, '').toUpperCase()}`);
+  }
+
+  saveModPreset(name: string): void {
+    const p = this.modLibrary.save(name, this.editedMod());
+    this.say(`MODULATION PRESET ${p.name} SAVED`);
+    this.emit(['mod']);
+  }
+
+  renameModPreset(id: string, name: string): void {
+    this.modLibrary.rename(id, name);
+    this.emit(['mod']);
+  }
+
+  duplicateModPreset(id: string): void {
+    const p = this.modLibrary.duplicate(id);
+    if (p) this.say(`MODULATION PRESET ${p.name} CREATED`);
+    this.emit(['mod']);
+  }
+
+  deleteModPreset(id: string): void {
+    this.modLibrary.remove(id);
+    this.emit(['mod']);
+  }
+
+  /** Import a portable `clatter-mod` file into the preset library (nothing changes on any track). */
+  importModPreset(text: string): string | null {
+    try {
+      const p = this.modLibrary.import(text);
+      this.say(`MODULATION PRESET ${p.name} IMPORTED`);
+      this.emit(['mod']);
+      return p.id;
+    } catch (e) {
+      this.say(e instanceof Error ? e.message : String(e));
+      return null;
+    }
+  }
+
+  clearModulation(): void {
+    this.setEditedMod((m) => {
+      m.sources = {};
+      m.routes = [];
+    }, 'CLEAR MODULATION');
+  }
+
+  /** Reproducible random modulation for the edited sound. */
+  generateModulation(intensity = 0.5): void {
+    const seed = this.modSeed++;
+    const next = generateMod(seed * 7919 + this.project.seed, this.modTarget(), intensity);
+    this.setEditedMod((m) => {
+      m.sources = next.sources;
+      m.routes = next.routes;
+    }, 'GENERATE MODULATION');
+    const first = Object.keys(next.sources)[0] as SourceId | undefined;
+    if (first) this.ui.modSel = first;
+  }
+
+  mutateModulation(intensity = 0.4): void {
+    const seed = this.modSeed++;
+    const next = mutateMod(this.editedMod(), seed * 104729 + this.project.seed, this.modTarget(), intensity);
+    this.setEditedMod((m) => {
+      m.sources = next.sources;
+      m.routes = next.routes;
+    }, 'MUTATE MODULATION');
+  }
+
+  randomiseModSource(id: SourceId): void {
+    if (!isSource(id)) return;
+    const next = randomiseSource(this.editedMod(), id, this.modSeed++ * 31 + this.project.seed);
+    this.setEditedMod((m) => {
+      m.sources = next.sources;
+    }, 'RANDOMISE SOURCE');
+  }
+
+  /** Remove a variation's modulation overrides (it plays the base's again). */
+  clearVariationMod(trackId: string, slot: number): void {
+    const v = this.project.tracks.find((x) => x.id === trackId)?.sound.variations?.[slot];
+    if (!v?.mod) return;
+    this.change('CLEAR MODULATION OVERRIDES', () => delete v.mod, ['mod', 'tracks']);
+    this.syncTracks();
+  }
+
+  /** Give a variation a related modulation: the base's, mutated, stored as a sparse patch. */
+  mutateVariationMod(trackId: string, slot: number, amount = 0.5): void {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    if (!t) return;
+    const base = resolveMod(t.sound.mod, undefined);
+    const next = mutateMod(base.routes.length ? base : generateMod(this.modSeed++ + this.project.seed, this.modTarget(t), 0.5), this.modSeed++ * 17 + this.project.seed, this.modTarget(t), amount);
+    this.change('VARIATION MODULATION', () => {
+      const list = this.ensureVariations(t);
+      const v = (list[slot] ??= { name: '', params: {} });
+      const patch = diffMod(t.sound.mod, next);
+      if (patch) v.mod = patch;
+      else delete v.mod;
+      delete v.gen;
+    }, ['mod', 'tracks', 'pattern']);
+    this.syncTracks();
+  }
+
+  /** Destinations the selected track can use right now. */
+  modDestinations() {
+    const { mode, voice } = this.modTarget();
+    return destsFor(mode, voice);
+  }
+
+  macros(): number[] {
+    return this.project.macros ?? [0, 0, 0, 0];
+  }
+
+  /** Move a performance macro (live; saved with the project, not an undo step). */
+  setMacro(i: number, v: number): void {
+    const m = (this.project.macros ??= [0, 0, 0, 0]);
+    m[i] = Math.max(0, Math.min(1, v));
+    this.live.setMacros(m.slice());
+    this.autosave();
+    this.emit(['mod']);
+  }
+
+  /** Ask the engine for the live state of one track's modulation (the editor shows it); -1 stops. */
+  private watched = -2;
+  watchMod(on: boolean): void {
+    const idx = on ? this.trackIndexOf(this.track.id) : -1;
+    if (idx === this.watched) return;
+    this.watched = idx;
+    this.host.send({ type: 'modWatch', track: idx });
+  }
+
+  // ------------------------------------------------------------------ SOUND: output stage
+  setChannelFx(trackId: string, fx: ChannelFx | undefined, label = 'CHANNEL PROCESSING'): void {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    if (!t) return;
+    this.history.begin(label);
+    if (fx) t.mix.fx = fx;
+    else delete t.mix.fx;
+    this.history.commit();
+    this.syncTracks();
+    this.autosave();
+    this.emit(['mix', 'history']);
+  }
+
+  /** Change one channel-processing stage, e.g. ('sat', { on: true, drive: 0.5 }). */
+  patchChannelFx<K extends keyof ChannelFx>(trackId: string, stage: K, patch: Partial<ChannelFx[K]>, label = 'CHANNEL PROCESSING'): void {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    if (!t) return;
+    const fx: ChannelFx = JSON.parse(JSON.stringify(t.mix.fx ?? defaultChannelFx()));
+    Object.assign(fx[stage], patch);
+    this.setChannelFx(trackId, fx, label);
+  }
+
+  outputFx(): OutputFx {
+    return this.project.master.out ?? { ...defaultOutputFx(), limiter: { ...defaultOutputFx().limiter, on: false } };
+  }
+
+  /** Change bus processing, width or the limiter. */
+  patchOutput(fn: (o: OutputFx) => void, label = 'OUTPUT'): void {
+    const o: OutputFx = JSON.parse(JSON.stringify(this.outputFx()));
+    fn(o);
+    this.setMaster({ out: o }, label);
   }
 
   /** The value a parameter has in the sound being edited: the variation's own, else the kit's. */

@@ -20,12 +20,16 @@
 import { SAMPLE_ID, type KitData, type KitInstrument } from '@slopfactory/core/kits';
 import { defaultSound } from './defaults';
 import { repairKit } from './project';
+import { repairMod } from '../mod/config';
+import { repairChannelFx, repairOutputFx, type ChannelFx, type OutputFx } from '../audio/mixfx';
+import type { TrackMod } from '../mod/types';
 import { ROLE_LABEL, ROLES, VARIATION_SLOTS, clamp, clone, type Kit, type Project, type Role, type SampleOverrides, type SourceMode, type SynthKit, type TrackMix, type TrackSound, type Variation } from './types';
 import { repairVariation } from '../sound/stepSound';
 import { CLATTER_EXT, CORE_ROLE, SET_SCHEMA, clatterExt } from '../samples/sets';
 
 export const SYNTH_KIT_FORMAT = 'clatter-synth-kit';
-export const SYNTH_KIT_VERSION = 1;
+/** 2: voices carry the track's modulation (`mod`; null = none) */
+export const SYNTH_KIT_VERSION = 2;
 export const SYNTH_KIT_EXT = '.clattersynth.json';
 export const FULL_KIT_SCHEMA = 1;
 /** role of the extra instrument that carries samples only variations use, so a full kit file has their audio */
@@ -42,6 +46,8 @@ export interface VoiceConfig {
   trigger: number;
   note: number;
   variations?: (Variation | null)[];
+  /** the track's modulation; null: the kit says none; absent (a kit from before modulation): leave the track's */
+  mod?: TrackMod | null;
 }
 export interface SynthKitData {
   name: string;
@@ -64,7 +70,7 @@ const withoutSample = (v: Variation | null): Variation | null => {
 export function synthKitOf(p: Project): SynthKitData {
   const voices: Record<string, VoiceConfig> = {};
   for (const t of firstOfRole(p)) {
-    voices[t.role] = { trigger: t.sound.trigger, note: t.sound.note, ...(t.sound.variations ? { variations: t.sound.variations.map(withoutSample) } : {}) };
+    voices[t.role] = { trigger: t.sound.trigger, note: t.sound.note, mod: t.sound.mod ? clone(t.sound.mod) : null, ...(t.sound.variations ? { variations: t.sound.variations.map(withoutSample) } : {}) };
   }
   return { name: p.kit.name, seed: p.kit.seed, synth: clone(p.kit.synth), voices };
 }
@@ -81,6 +87,10 @@ export function applyVoices(p: Project, voices: Record<string, VoiceConfig>): st
     if (!v) continue;
     t.sound.trigger = v.trigger;
     t.sound.note = v.note;
+    if (v.mod !== undefined) {
+      if (v.mod) t.sound.mod = clone(v.mod);
+      else delete t.sound.mod;
+    }
     if (v.variations) {
       const prev = t.sound.variations ?? [];
       const next: (Variation | null)[] = Array.from({ length: VARIATION_SLOTS }, (_, i) => {
@@ -104,6 +114,8 @@ function repairVoices(v: unknown): Record<string, VoiceConfig> {
     const o = v[r];
     if (!isObj(o)) continue;
     const cfg: VoiceConfig = { trigger: Math.round(num(o.trigger, 0, 0, 6)), note: Math.round(num(o.note, 60, 0, 127)) };
+    if (o.mod === null) cfg.mod = null;
+    else if (o.mod !== undefined) cfg.mod = repairMod(o.mod) ?? null;
     if (Array.isArray(o.variations)) {
       const list = Array.from({ length: VARIATION_SLOTS }, (_, i) => withoutSample(repairVariation((o.variations as unknown[])[i])));
       if (list.some(Boolean)) cfg.variations = list;
@@ -147,7 +159,7 @@ export interface SourceConfig {
   /** the samples each variation slot overrides (the audio travels in the kit's VARIATION_ROLE instrument) */
   variationSamples?: (SampleOverrides | null)[];
 }
-export type MixConfig = Pick<TrackMix, 'volume' | 'pan' | 'route' | 'filter'>;
+export type MixConfig = Pick<TrackMix, 'volume' | 'pan' | 'route' | 'filter'> & { send?: number; fx?: ChannelFx };
 
 /** CLATTER's data in a full kit's `ext.clatter` */
 export interface FullKitExt {
@@ -157,6 +169,8 @@ export interface FullKitExt {
   sources: Record<string, SourceConfig>;
   /** absent for kits from before the mixer travelled with kits: the mixer is left alone */
   mix?: Record<string, MixConfig>;
+  /** bus processing, master width and limiter; absent: the project's are left alone */
+  out?: OutputFx;
 }
 
 export function sourcesOf(sounds: Record<string, TrackSound>): Record<string, SourceConfig> {
@@ -176,10 +190,10 @@ export function fullKitOf(p: Project, name: string, set: { instruments: KitInstr
   for (const t of firstOfRole(p)) sounds[t.role] = t.sound;
   const sources = sourcesOf(sounds);
   const mix: Record<string, MixConfig> = {};
-  for (const t of firstOfRole(p)) mix[t.role] = { volume: t.mix.volume, pan: t.mix.pan, route: t.mix.route, filter: t.mix.filter };
+  for (const t of firstOfRole(p)) mix[t.role] = { volume: t.mix.volume, pan: t.mix.pan, route: t.mix.route, filter: t.mix.filter, ...(t.mix.send ? { send: t.mix.send } : {}), ...(t.mix.fx ? { fx: clone(t.mix.fx) } : {}) };
   const extra = variationSampleIds(sources);
   const instruments = [...set.instruments, ...(extra.length ? [{ role: VARIATION_ROLE, label: 'VARIATION SAMPLES', samples: extra.map((sample) => ({ sample })) }] : [])];
-  const ext: FullKitExt = { schema: FULL_KIT_SCHEMA, kind: 'full-kit', synth: synthKitOf(p), sources, mix };
+  const ext: FullKitExt = { schema: FULL_KIT_SCHEMA, kind: 'full-kit', synth: synthKitOf(p), sources, mix, ...(p.master.out ? { out: clone(p.master.out) } : {}) };
   return { name, instruments, ext: { ...set.ext, [CLATTER_EXT]: ext } };
 }
 
@@ -217,11 +231,11 @@ export function fullKitExtOf(kit: Pick<KitData, 'ext'>, init?: SynthKit): { full
     ? Object.fromEntries(
         ROLES.flatMap((r) => {
           const m = (data.mix as Obj)[r];
-          return isObj(m) ? [[r, { volume: num(m.volume, 0.8, 0, 1), pan: num(m.pan, 0, -1, 1), route: m.route === 'fx' ? 'fx' : 'main', filter: num(m.filter, 0, -1, 1) } as MixConfig]] : [];
+          return isObj(m) ? [[r, { volume: num(m.volume, 0.8, 0, 1), pan: num(m.pan, 0, -1, 1), route: m.route === 'fx' ? 'fx' : 'main', filter: num(m.filter, 0, -1, 1), ...(typeof m.send === 'number' && m.send > 0 ? { send: num(m.send, 0, 0, 1) } : {}), ...(repairChannelFx(m.fx) ? { fx: repairChannelFx(m.fx) } : {}) } as MixConfig]] : [];
         }),
       )
     : undefined;
-  return { full: { schema: Number(data.schema) || 1, kind: 'full-kit', synth: repairSynthKit(data.synth, init), sources: repairSources(data.sources), ...(mix ? { mix } : {}) }, newer: false };
+  return { full: { schema: Number(data.schema) || 1, kind: 'full-kit', synth: repairSynthKit(data.synth, init), sources: repairSources(data.sources), ...(mix ? { mix } : {}), ...(repairOutputFx(data.out) ? { out: repairOutputFx(data.out) } : {}) }, newer: false };
 }
 
 /** Write the joining data of a full kit onto the tracks: source modes, hybrid balance, variation samples, mixer. */
@@ -249,8 +263,14 @@ export function applyJoin(p: Project, full: FullKitExt, available: (id: string) 
       }
     }
     const m = full.mix?.[t.role];
-    if (m) Object.assign(t.mix, m);
+    if (m) {
+      const { send, fx, ...rest } = m;
+      Object.assign(t.mix, rest);
+      if (send !== undefined) t.mix.send = send;
+      if (fx) t.mix.fx = fx;
+    }
   }
+  if (full.out) p.master.out = full.out;
 }
 
 // ---------------------------------------------------------------- legacy kits (.clatterkit.zip)

@@ -10,6 +10,7 @@ import { PPQ, type Project } from '../model/types';
 import { Sequence } from '../app/sequence';
 import { writeSmf, type SmfTrack } from '../midi/smf';
 import { noteOff, noteOn } from '../midi/messages';
+import { tempoChanges } from '../transport/tempo';
 
 export interface MidiExportOptions {
   bars: number;
@@ -17,7 +18,7 @@ export interface MidiExportOptions {
 
 /** The project's performance over `bars` bars, as events per track (absolute ticks at PPQ). */
 export function performance(p: Project, bars: number): { track: string; tick: number; vel: number; len: number }[] {
-  const seq = new Sequence({ project: () => p });
+  const seq = new Sequence({ project: () => p, lengthTicks: () => bars * 4 * PPQ });
   const end = bars * 4 * PPQ;
   const out: { track: string; tick: number; vel: number; len: number }[] = [];
   let start = 0;
@@ -45,5 +46,7 @@ export function exportMidi(p: Project, o: MidiExportOptions): Uint8Array {
     }
     return { name: t.name, events };
   });
-  return writeSmf({ format: 1, ppq: PPQ, bpm: p.tempo, timeSig: [4, 4], tracks, endTick: o.bars * 4 * PPQ });
+  // tempo automation becomes the file's tempo map
+  const changes = tempoChanges(p.tempo, p.tempoAuto, o.bars * 4 * PPQ);
+  return writeSmf({ format: 1, ppq: PPQ, bpm: changes[0]!.bpm, tempos: changes.slice(1), timeSig: [4, 4], tracks, endTick: o.bars * 4 * PPQ });
 }

@@ -21,6 +21,8 @@ export interface SmfSpec {
   format: 0 | 1;
   ppq: number;
   bpm: number;
+  /** further tempo changes (tick, bpm), after the first tempo at tick 0 */
+  tempos?: { tick: number; bpm: number }[];
   timeSig: [number, number];
   tracks: SmfTrack[];
   /** Length of the file in ticks (end-of-track placement). */
@@ -70,15 +72,19 @@ export function writeSmf(spec: SmfSpec): Uint8Array {
   const usPerQ = Math.round(60000000 / spec.bpm);
   const [num, den] = spec.timeSig;
   const tempoMeta: SmfEvent = { tick: 0, bytes: [0xff, 0x51, 0x03, (usPerQ >> 16) & 255, (usPerQ >> 8) & 255, usPerQ & 255] };
+  const later: SmfEvent[] = (spec.tempos ?? []).map((c) => {
+    const us = Math.round(60000000 / c.bpm);
+    return { tick: c.tick, bytes: [0xff, 0x51, 0x03, (us >> 16) & 255, (us >> 8) & 255, us & 255] };
+  });
   const tsMeta: SmfEvent = { tick: 0, bytes: [0xff, 0x58, 0x04, num, Math.round(Math.log2(den)), 24, 8] };
   const end = spec.endTick ?? Math.max(0, ...spec.tracks.flatMap((t) => t.events.map((e) => e.tick)));
   const chunks: number[] = [];
   if (spec.format === 0) {
     const events = spec.tracks.flatMap((t) => t.events);
-    chunks.push(...chunk('MTrk', trackData(events, spec.tracks[0]?.name ?? 'DOWNBEAT', [tempoMeta, tsMeta], end)));
+    chunks.push(...chunk('MTrk', trackData(events, spec.tracks[0]?.name ?? 'DOWNBEAT', [tempoMeta, tsMeta, ...later], end)));
     return new Uint8Array([...chunk('MThd', [...u16(0), ...u16(1), ...u16(spec.ppq)]), ...chunks]);
   }
-  chunks.push(...chunk('MTrk', trackData([], 'DOWNBEAT', [tempoMeta, tsMeta], end)));
+  chunks.push(...chunk('MTrk', trackData([], 'DOWNBEAT', [tempoMeta, tsMeta, ...later], end)));
   for (const t of spec.tracks) chunks.push(...chunk('MTrk', trackData(t.events, t.name, [], end)));
   return new Uint8Array([...chunk('MThd', [...u16(1), ...u16(spec.tracks.length + 1), ...u16(spec.ppq)]), ...chunks]);
 }

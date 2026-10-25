@@ -22,6 +22,7 @@
  */
 import { clamp, VARIATION_SLOTS, type ParamRule, type SampleOverrides, type SoundCond, type StepSound, type TrackSound, type Variation } from '../model/types';
 import { rand, SALT, strCode } from '../rhythm/rng';
+import { repairPatch } from '../mod/config';
 import { paramDef, TRIGGERS, voiceOfTrigger, VOICE_PARAMS, type ParamDef } from './lxrParams';
 
 // ---------------------------------------------------------------------------- parameters
@@ -303,6 +304,8 @@ export function repairVariation(v: unknown): Variation | null {
     if (typeof q.reverse === 'boolean') s.reverse = q.reverse;
     if (Object.keys(s).length) out.sample = s;
   }
+  const mod = repairPatch(o.mod);
+  if (mod) out.mod = mod;
   if (o.gen === true) out.gen = true;
   if (o.lock === true) out.lock = true;
   return out;

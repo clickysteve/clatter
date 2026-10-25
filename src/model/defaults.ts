@@ -13,6 +13,7 @@ import { defaultChop } from '../destruction/chop';
 import { defaultDestroy } from '../destruction/destroy';
 import { defaultRolls } from '../destruction/rolls';
 import { defaultGen } from '../rhythm/generate';
+import { defaultOutputFx } from '../audio/mixfx';
 import { newPattern } from '../rhythm/pattern';
 import { GM_NOTE, ROLE_LABEL, SNAPSHOTS, type Project, type Role, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from './types';
 
@@ -74,7 +75,7 @@ export function defaultProject(): Project {
   const pattern = newPattern('p1', 'A', gen);
   return {
     format: 'clatter-project',
-    version: 2,
+    version: 3,
     name: 'UNTITLED',
     tempo: 124,
     swing: 50,
@@ -90,7 +91,8 @@ export function defaultProject(): Project {
     evolve: { target: 'off', every: 4, amount: 0.3, returnEvery: 4 },
     timbre: { amount: 0.5, seed: 1 },
     quantize: 'bar',
-    master: { volume: 0.8, clip: true, chain: null },
+    master: { volume: 0.8, clip: true, chain: null, out: defaultOutputFx() },
+    macros: [0, 0, 0, 0],
     snapshots: new Array(SNAPSHOTS).fill(null),
     notes: '',
   };

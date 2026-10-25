@@ -11,8 +11,8 @@ import { DEFAULT_SCALE, snapScale } from '../ui/scale';
 export const WORKSPACES = ['sequence', 'sound', 'generate', 'transform', 'track'] as const;
 export type Workspace = (typeof WORKSPACES)[number];
 
-/** The tabs of the SOUND view: SYNTH, SAMPLE, MODULATION, MIXER and KIT & FX. */
-export const SOUND_TABS = ['synth', 'sample', 'modulation', 'mixer', 'kit'] as const;
+/** The tabs of the SOUND view. (Before the overhaul the last one was 'kit': KIT & FX.) */
+export const SOUND_TABS = ['synth', 'sample', 'modulation', 'variations', 'mixer', 'fx', 'kits'] as const;
 export type SoundTab = (typeof SOUND_TABS)[number];
 
 export interface Prefs {
@@ -48,7 +48,7 @@ export function loadPrefs(): Prefs {
     return {
       view: v.view === 'sound' || v.view === 'perform' ? v.view : 'pattern',
       workspace: WORKSPACES.find((w) => w === v.workspace) ?? 'sequence',
-      soundTab: SOUND_TABS.find((w) => w === v.soundTab) ?? 'synth',
+      soundTab: SOUND_TABS.find((w) => w === v.soundTab) ?? ((v.soundTab as string) === 'kit' ? 'kits' : 'synth'),
       soundLane: v.soundLane === true,
       uiScale: snapScale(v.uiScale),
       editMode: v.editMode === 'advanced' ? 'advanced' : 'basic',

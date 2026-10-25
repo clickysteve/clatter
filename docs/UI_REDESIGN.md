@@ -165,7 +165,7 @@ Changing the scale applies at once (no reload); the grid redraws.
 * No fixed screen: the page is `menu bar / transport` above the work area. Windows are CSS grid
   and flex items.
 * The SOUND view is a track sidebar (name, source, voice, meter, M and S) beside a tabbed main
-  column (SYNTH, SAMPLE, MODULATION, MIXER, KIT & FX) with a status line under it. It does not
+  column (SYNTH, SAMPLE, MODULATION, VARIATIONS, MIXER, FX, KITS) with a status line under it. It does not
   scroll as a page: the tab panes scroll inside themselves. Tab switching only shows and hides
   panes, so editor state is kept, and the open tab is remembered (`soundTab`). It fits 1920 × 1080,
   1440 × 900 and 1366 × 768 at the default 90 % (and 100 % and 125 %), as the browser tests check.

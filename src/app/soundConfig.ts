@@ -9,7 +9,12 @@ import type { ChainConfig } from '@slopfactory/core/engines';
 import { repairChain } from '@slopfactory/core/engines';
 import { ENGINE_RATE, type EngineSample, type EngineTrack, type HitEvent } from '../audio/engine';
 import type { SampleLibrary } from '../audio/library';
-import type { Project, SynthKit, Track } from '../model/types';
+import type { Project, SynthKit, Track, TrackSound } from '../model/types';
+import { hasActiveRoutes, resolveMod } from '../mod/config';
+import { isEmptyPatch } from '../mod/types';
+import { legacyOutputFx, defaultOutputFx, type OutputFx } from '../audio/mixfx';
+import type { TrackMod } from '../mod/types';
+import { PPQ } from '../model/types';
 import { resolveStepSound, soundSampleIds } from '../sound/stepSound';
 import { PAR } from '../sound/lxrParamIds';
 import { HARDWARE_ONLY } from '../sound/lxrParams';
@@ -23,7 +28,29 @@ export interface EngineTarget {
   setBpm(bpm: number): void;
   setMaster(volume: number, clip: boolean, chain: ChainConfig): void;
   setSample(id: string, s: EngineSample): void;
+  setMacros(values: number[]): void;
+  setOutput(out: OutputFx): void;
 }
+
+/**
+ * The modulation a track's sounds play, resolved for the engine: index 0 is the base, 1-4 are
+ * variations A-D (null when a variation has no modulation override, so it plays the base's).
+ * Empty when nothing modulates, which keeps the engine free of work.
+ */
+export function modsOf(s: TrackSound): TrackMod[] | (TrackMod | null)[] {
+  const patched = (s.variations ?? []).some((v) => v?.mod && !isEmptyPatch(v.mod));
+  const base = s.mod;
+  if (!patched && !(base && (base.routes.length || Object.keys(base.sources).length))) return [];
+  const list: (TrackMod | null)[] = [resolveMod(base, undefined)];
+  for (let i = 0; i < 4; i++) {
+    const v = s.variations?.[i];
+    list.push(v?.mod && !isEmptyPatch(v.mod) ? resolveMod(base, v.mod) : null);
+  }
+  return list.some((m) => m && hasActiveRoutes(m)) ? list : [];
+}
+
+export const outputOf = (p: Project): OutputFx => p.master.out ?? legacyOutputFx();
+export { defaultOutputFx };
 
 export function engineTrackOf(t: Track, anySolo: boolean): EngineTrack {
   const s = t.sound;
@@ -49,6 +76,9 @@ export function engineTrackOf(t: Track, anySolo: boolean): EngineTrack {
     audible: !t.mix.mute && (!anySolo || t.mix.solo),
     route: t.mix.route,
     filter: t.mix.filter,
+    send: t.mix.send ?? 0,
+    fx: t.mix.fx,
+    mods: modsOf(s),
   };
 }
 
@@ -95,6 +125,8 @@ export function configureEngine(target: EngineTarget, p: Project, lib: SampleLib
   sendKit(target, p.kit.synth);
   target.setBpm(p.tempo);
   target.setMaster(p.master.volume, p.master.clip, masterChain(p));
+  target.setMacros(p.macros ?? [0, 0, 0, 0]);
+  target.setOutput(outputOf(p));
 }
 
 /** A hit for the engine from a scheduled event (time in seconds; `spt` seconds per tick). */
@@ -115,6 +147,9 @@ export function hitOf(se: ScheduledEvent, p: Project, index: Map<string, number>
     ...(rs?.switched ? { trig: rs.trig } : {}),
     ...(rs?.params.length ? { sp: rs.params } : {}),
     ...(rs?.sample ? { smp: rs.sample } : {}),
+    mv: rs?.variation != null ? rs.variation + 1 : 0,
+    tb: (se.tick % (4 * PPQ)) * spt,
+    tp: e.tick * spt,
     time: se.time,
     track: ti,
     vel: e.vel,

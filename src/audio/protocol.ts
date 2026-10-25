@@ -13,6 +13,9 @@ export type ToWorklet =
   | { type: 'params'; values: [number, number][]; /** AudioContext time to apply them (absent: now) */ time?: number }
   | { type: 'modTarget'; kind: 0 | 1; voice: number; param: number }
   | { type: 'bpm'; bpm: number }
+  | { type: 'macros'; values: number[] }
+  | { type: 'output'; out: import('./mixfx').OutputFx }
+  | { type: 'modWatch'; track: number }
   | { type: 'master'; volume: number; clip: boolean; chain?: unknown }
   | { type: 'sample'; id: string; rate: number; channels: Float32Array[] }
   | { type: 'dropSample'; id: string }
@@ -31,6 +34,11 @@ export interface MetersMessage {
   time: number;
   /** LXR voice peaks (synthesis activity) */
   voices: Float32Array;
+  /** gain reduction of the bus compressor and of the limiter (dB, positive) */
+  busReduction: number;
+  limitReduction: number;
+  /** the watched track's modulation sources, positions, routes and destination sums */
+  mod?: { track: number; out: Float32Array; pos: Float32Array; routes: Float32Array; dest: Float32Array };
 }
 
 export type FromWorklet = { type: 'ready'; rate: number; resampling: boolean } | { type: 'error'; message: string } | MetersMessage;

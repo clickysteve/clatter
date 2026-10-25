@@ -1,41 +1,47 @@
 /**
  * SOUND: what makes the sound. A track sidebar that is always there (name, voice, source, mute
- * and solo) and five contextual tabs for the selected track:
+ * and solo) and seven workspaces:
  *
- *   SYNTH       source, variations A-D, the LXR voice's parameters
- *   SAMPLE      the sample layer (of the base sound, or of the variation being edited)
- *   MODULATION  LFO and velocity, the variations and step sounds at a glance, the sound generators
- *   MIXER       every track's fader, pan, filter, mute, solo and FX send
- *   KIT & FX    generate and mutate the kit, voice locks, the FX bus, kit files
+ *   SYNTH       source (SYNTH, SAMPLE or HYBRID), BASE / A-D, the LXR voice's parameters
+ *   SAMPLE      the sample layer (of the base sound, or of the variation being edited), sample sets
+ *   MODULATION  sources (LFOs, envelopes, step, random...), editor, routing matrix (soundMod.ts)
+ *   VARIATIONS  BASE against A-D, overrides, step usage, the sound generators (soundVar.ts)
+ *   MIXER       channels with processing, bus processing, master (soundMix.ts)
+ *   FX          the LXR FX bus and who feeds it (soundMix.ts)
+ *   KITS        synth kits, sample sets, full kits, generation, voice locks (soundKits.ts)
  *
  * The page does not scroll: each tab scrolls inside its own pane when it needs to. Switching tabs
  * only shows and hides panes, so nothing is lost; the open tab is remembered.
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
-import { CHAIN_PRESETS, matchChainPreset, repairChain } from '@slopfactory/core/engines';
 import type { App } from '../../app/app';
 import { SOUND_TABS, type SoundTab } from '../../app/prefs';
-import { SLOT_NAMES, VARIATION_SLOTS, type SamplePick } from '../../model/types';
-import { FX_PARAM_LABELS, FX_PARAMS, GROUPS, PAR, TRIGGERS, VOICE_PARAMS, VOICES } from '../../sound/lxrParams';
+import { SLOT_NAMES, type SamplePick } from '../../model/types';
+import { GROUPS, TRIGGERS, VOICE_PARAMS, VOICES } from '../../sound/lxrParams';
 import { importSamples } from '../menu';
 import { importFolder, importZip, kitLibraryDialog } from '../kitDialogs';
-import { button, ctl, download, group, h, num, Panel, range, select, vfader, win } from '../widgets';
+import { button, ctl, download, group, h, Panel, range, select, win } from '../widgets';
 import { subscribe, type View } from './patternView';
-import { editingText, editVoice, generativeCard, paramCtl, slotBar, sourceStrip, variationTools, viewVoice } from './soundControls';
-import { cpx, font } from '../scale';
+import { editingText, editVoice, paramCtl, slotBar, sourceStrip, viewVoice } from './soundControls';
+import { kitsPane } from './soundKits';
+import { fxPane, mixerPane } from './soundMix';
+import { modulationPane } from './soundMod';
+import { db, type PaneParts } from './soundUi';
+import { variationsPane } from './soundVar';
+import { font } from '../scale';
 
-const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', mixer: 'MIXER', kit: 'KIT & FX' };
+const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', variations: 'VARIATIONS', mixer: 'MIXER', fx: 'FX', kits: 'KITS' };
 const TAB_TITLE: Record<SoundTab, string> = {
-  synth: 'The selected track’s source, variations and LXR voice parameters',
-  sample: 'The sample layer of the base sound or of the variation being edited',
-  modulation: 'LFO and velocity, variations and step sounds at a glance, the sound generators',
-  mixer: 'Every track: fader, pan, filter, mute, solo, FX send',
-  kit: 'Generate and mutate the kit, lock voices, the FX bus, kit files',
+  synth: 'The selected track’s source, BASE / A-D and the LXR voice parameters',
+  sample: 'The sample layer of the base sound or of the variation being edited, and sample sets',
+  modulation: 'LFOs, envelopes, step modulation, random sources and macros, routed to any parameter',
+  variations: 'The base sound beside variations A-D: overrides, step usage, conditional steps, the sound generators',
+  mixer: 'Every channel with its processing, the bus processing and the master',
+  fx: 'The LXR FX bus and which tracks feed it',
+  kits: 'Synth kits, sample sets and full kits: save, load, import, export, generate, lock voices',
 };
 const MODE_TAG = { synth: 'SYN', sample: 'SMP', hybrid: 'HYB' } as const;
-/** the groups the MODULATION tab shows (the SYNTH tab has the rest) */
-const MOD_GROUPS: readonly string[] = ['LFO', 'VELOCITY'];
 
 type SampleKey = 'tune' | 'fine' | 'gain' | 'pan' | 'reverse';
 
@@ -43,10 +49,8 @@ export function soundView(app: App, screen: HTMLElement): View {
   const root = h('div', 'view sound-view', screen);
   root.dataset.view = 'sound';
   const t = () => app.track;
-  const trackMeters: HTMLDivElement[] = [];
   const sideMeters: HTMLDivElement[] = [];
   const voiceMeters: HTMLDivElement[] = [];
-  let masterMeters: HTMLDivElement[] = [];
 
   // ================================================================ the track sidebar (always there)
   const lw = win(root, { title: 'TRACKS', area: 'sound', id: 'tracks' });
@@ -100,6 +104,8 @@ export function soundView(app: App, screen: HTMLElement): View {
   const panesEl = h('div', 'sndpanes', main);
   const status = h('div', 'sndstatus', main);
   const tp = new Panel();
+  const parts = new Map<SoundTab, PaneParts>();
+  const isOpen = new Map<SoundTab, boolean>();
   const tabEls = {} as Record<SoundTab, HTMLElement>;
   const panes = {} as Record<SoundTab, HTMLElement>;
   for (const [i, id] of SOUND_TABS.entries()) {
@@ -136,6 +142,13 @@ export function soundView(app: App, screen: HTMLElement): View {
     }
     const x = t();
     info.textContent = `${x.name} · ${x.sound.mode.toUpperCase()} · ${app.ui.slot === null ? 'BASE SOUND' : 'VARIATION ' + SLOT_NAMES[app.ui.slot]}`;
+    for (const [id, part] of parts) {
+      const on = app.ui.view === 'sound' && app.ui.soundTab === id;
+      if (isOpen.get(id) !== on) {
+        isOpen.set(id, on);
+        part.active?.(on);
+      }
+    }
   });
   subscribe(app, ['view', 'selection', 'tracks', 'kit'], () => tp.refresh());
 
@@ -152,7 +165,6 @@ export function soundView(app: App, screen: HTMLElement): View {
   const tools = h('div', 'col sndtop', syp);
   sourceStrip(app, tools, sy);
   slotBar(app, h('div', 'row wrap', tools), sy);
-  variationTools(app, tools, sy);
   const chips = h('div', 'row wrap voicechips', tools);
   VOICES.forEach((vn, v) => {
     const c = button(sy, chips, vn, () => {
@@ -181,7 +193,7 @@ export function soundView(app: App, screen: HTMLElement): View {
     shown = key;
     cols.innerHTML = '';
     const basic = app.ui.editMode === 'basic';
-    const params = VOICE_PARAMS[v]!.filter((p) => (!basic || p.basic) && !MOD_GROUPS.includes(p.group));
+    const params = VOICE_PARAMS[v]!.filter((p) => !basic || p.basic);
     for (const g of GROUPS) {
       const ps = params.filter((p) => p.group === g);
       if (!ps.length) continue;
@@ -189,7 +201,7 @@ export function soundView(app: App, screen: HTMLElement): View {
       box.classList.add('col', 'synthgroup');
       for (const p of ps) paramCtl(app, box, p, sy);
     }
-    h('div', 'hint', cols, (basic ? 'ADVANCED shows every parameter. ' : '') + 'LFO and VELOCITY are in MODULATION. Alt-click a name to lock it against kit generation ◆. A ◇ marks a value the open variation overrides.');
+    h('div', 'hint', cols, (basic ? 'ADVANCED shows every parameter. ' : '') + 'The LFO and VELOCITY groups are the LXR’s own modulators; MODULATION has CLATTER’s sources and routing matrix. Alt-click a name to lock it against kit generation ◆. A ◇ marks a value the open variation overrides.');
     sy.refresh();
   };
   sy.add(() => {
@@ -397,214 +409,29 @@ export function soundView(app: App, screen: HTMLElement): View {
   });
   window.addEventListener('clatter-palette', drawWave);
 
-  // ---------------------------------------------------------------- MODULATION
-  const mo = new Panel();
-  const mbody = h('div', 'modgrid sndscroll', panes.modulation);
-  const mcol1 = h('div', 'col', mbody);
-  const mcol2 = h('div', 'col', mbody);
-  const mcol3 = h('div', 'col', mbody);
-  h('div', 'hint', mcol1, 'THE MODULATION OF THE VOICE BEING EDITED (VARIATIONS CAN OVERRIDE THE AMOUNTS, NOT THE TARGETS).');
-  const modBox = h('div', 'col', mcol1);
-  let modShown = '';
-  const buildMod = () => {
-    const v = editVoice(app);
-    if (modShown === String(v)) return mo.refresh();
-    modShown = String(v);
-    modBox.innerHTML = '';
-    for (const g of MOD_GROUPS) {
-      const ps = VOICE_PARAMS[v]!.filter((p) => p.group === g);
-      if (!ps.length) continue;
-      const box = group(modBox, `${g} · ${VOICES[v]}`);
-      box.classList.add('col');
-      for (const p of ps) paramCtl(app, box, p, mo);
-    }
-    mo.refresh();
-  };
-  // the four variations of the selected track
-  const vg = group(mcol2, 'VARIATIONS OF THIS TRACK');
-  vg.classList.add('col');
-  const vlist = h('div', 'list', vg);
-  const vrows: HTMLDivElement[] = [];
-  for (let i = 0; i < VARIATION_SLOTS; i++) {
-    const li = h('div', 'li', vlist);
-    li.dataset.test = 'var-row-' + SLOT_NAMES[i];
-    li.addEventListener('click', () => {
-      app.setSlot(i);
-      app.setSoundTab('synth');
-    });
-    li.title = 'Edit this variation in the SYNTH tab';
-    vrows.push(li);
-  }
-  mo.add(() => {
-    const tr = t();
-    vrows.forEach((li, i) => {
-      const v = tr.sound.variations?.[i];
-      const uses = Object.values(app.pattern.sounds?.[tr.id] ?? {}).filter((s) => s.v === i || s.alt?.v === i).length;
-      const n = v ? Object.keys(v.params).length + Object.keys(v.sample ?? {}).length : 0;
-      li.textContent = `${SLOT_NAMES[i]} · ${v ? (v.name || (v.gen ? 'GENERATED' : 'BY HAND')) + (v.lock ? ' ◆' : '') + ` · ${n} OVERRIDE${n === 1 ? '' : 'S'}` : 'EMPTY'} · ${uses} STEP${uses === 1 ? '' : 'S'}`;
-      li.classList.toggle('on', app.ui.slot === i);
-    });
-  });
-  // the step sounds of the selected track in this pattern
-  const stg = group(mcol2, 'STEP SOUNDS IN THIS PATTERN');
-  stg.classList.add('col');
-  const slist = h('div', 'list steplist', stg);
-  mo.add(() => {
-    slist.innerHTML = '';
-    const tr = t();
-    const entries = Object.entries(app.pattern.sounds?.[tr.id] ?? {}).sort((a, b) => Number(a[0]) - Number(b[0]));
-    if (!entries.length) h('div', 'li', slist, 'NONE: SELECT A STEP AND USE STEP SOUND IN THE PATTERN VIEW, OR GENERATE BELOW');
-    for (const [k] of entries) {
-      const li = h('div', 'li', slist, `STEP ${Number(k) + 1} · ${app.describeStepSound(tr.id, Number(k))}`);
-      li.addEventListener('click', () => {
-        app.selectTrack(tr.id);
-        app.setCursor({ track: tr.id, step: Number(k) });
-        app.setView('pattern');
-        app.setWorkspace('sound');
-      });
-    }
-  });
-  const gg = group(mcol3, 'GENERATE');
-  gg.classList.add('col');
-  generativeCard(app, gg, mo);
-  buildMod();
-  subscribe(app, ['kit', 'tracks', 'selection', 'pattern', 'project', 'gen'], () => {
-    buildMod();
-    mo.refresh();
-  });
+  // ---------------------------------------------------------------- the other tabs
+  parts.set('modulation', modulationPane(app, panes.modulation));
+  parts.set('variations', variationsPane(app, panes.variations));
+  parts.set('mixer', mixerPane(app, panes.mixer));
+  parts.set('fx', fxPane(app, panes.fx));
+  parts.set('kits', kitsPane(app, panes.kits));
+  tp.refresh();
 
-  // ---------------------------------------------------------------- MIXER
-  const mx = new Panel();
-  const mb = h('div', 'mixer sndscroll', panes.mixer);
-  const buildMixer = () => {
-    mx.clear();
-    mb.innerHTML = '';
-    trackMeters.length = 0;
-    app.project.tracks.forEach((tr) => {
-      const x = () => app.project.tracks.find((y) => y.id === tr.id) ?? tr;
-      const s = h('div', 'strip', mb);
-      const nm = h('div', 'sname', s, tr.name);
-      nm.addEventListener('click', () => app.selectTrack(tr.id));
-      nm.addEventListener('dblclick', () => void app.audition(tr.id));
-      mx.add(() => {
-        s.classList.toggle('sel', app.ui.track === tr.id);
-        nm.textContent = x().name;
-      });
-      const fr = h('div', 'row', s);
-      fr.style.gap = cpx(6);
-      fr.style.alignItems = 'stretch';
-      vfader(mx, fr, { get: () => x().mix.volume, set: (v) => app.setTrackMix(tr.id, { volume: v }, 'VOLUME'), begin: () => app.beginDrag('VOLUME'), end: () => app.endDrag(), height: 120, def: 0.8, title: 'Volume (0.8 = 0 dB, double-click)' });
-      const met = h('div', 'meter', fr);
-      met.style.width = cpx(10);
-      trackMeters.push(h('div', 'lvl', met));
-      const db = h('div', 'hint', s);
-      mx.add(() => {
-        const v = x().mix.volume;
-        const d = v <= 0 ? -Infinity : v <= 0.8 ? -60 + (v / 0.8) * 60 : ((v - 0.8) / 0.2) * 15;
-        db.textContent = Number.isFinite(d) ? (d > 0 ? '+' : '') + d.toFixed(1) : '-∞';
-      });
-      range(mx, s, { get: () => Math.round(x().mix.pan * 100), set: (v) => app.setTrackMix(tr.id, { pan: v / 100 }, 'PAN'), min: -100, max: 100, def: 0, bip: true, format: (v) => (v === 0 ? 'C' : v < 0 ? 'L' + -v : 'R' + v), begin: () => app.beginDrag('PAN'), end: () => app.endDrag(), title: 'Pan' });
-      range(mx, s, { get: () => Math.round(x().mix.filter * 100), set: (v) => app.setTrackMix(tr.id, { filter: v / 100 }, 'FILTER'), min: -100, max: 100, def: 0, bip: true, format: (v) => (v === 0 ? 'FLT' : v < 0 ? 'LP' : 'HP'), begin: () => app.beginDrag('FILTER'), end: () => app.endDrag(), title: 'One-knob filter: left low-pass, right high-pass' });
-      const ms = h('div', 'row', s);
-      ms.style.gap = cpx(3);
-      button(mx, ms, 'M', () => app.setTrackMix(tr.id, { mute: !x().mix.mute }), { cls: 'small', on: () => x().mix.mute, title: 'Mute' });
-      button(mx, ms, 'S', () => app.setTrackMix(tr.id, { solo: !x().mix.solo }), { cls: 'small', on: () => x().mix.solo, title: 'Solo' });
-      button(mx, ms, 'FX', () => app.setTrackMix(tr.id, { route: x().mix.route === 'fx' ? 'main' : 'fx' }, 'ROUTE'), { cls: 'small', on: () => x().mix.route === 'fx', title: 'Route through the LXR FX bus (instead of straight to the master)' });
-    });
-    const s = h('div', 'strip', mb);
-    s.style.marginLeft = 'auto';
-    h('div', 'sname', s, 'MASTER').classList.add('inv');
-    const fr = h('div', 'row', s);
-    fr.style.gap = cpx(6);
-    fr.style.alignItems = 'stretch';
-    vfader(mx, fr, { get: () => app.project.master.volume, set: (v) => app.setMaster({ volume: v }, 'MASTER VOLUME'), begin: () => app.beginDrag('MASTER VOLUME'), end: () => app.endDrag(), height: 120, def: 0.8, title: 'Master volume' });
-    const mL = h('div', 'meter', fr);
-    const mR = h('div', 'meter', fr);
-    for (const m of [mL, mR]) m.style.width = cpx(10);
-    masterMeters = [h('div', 'lvl', mL), h('div', 'lvl', mR)];
-    button(mx, s, 'CLIP', () => app.setMaster({ clip: !app.project.master.clip }, 'SOFT CLIP'), { cls: 'small', on: () => app.project.master.clip, title: 'Soft clipper on the master' });
-    select(mx, s, {
-      options: () => [{ value: '', label: 'NO OUT FX' }, ...CHAIN_PRESETS.map((p) => ({ value: p.key, label: p.label }))],
-      get: () => matchChainPreset(repairChain(app.project.master.chain)) ?? '',
-      set: (k) => app.setMaster({ chain: k ? (CHAIN_PRESETS.find((p) => p.key === k)?.config ?? null) : null }, 'OUTPUT CHAIN'),
-      title: 'Slop Factory output processing on the master (Core engines)',
-    });
-  };
-  buildMixer();
-  app.on('project', buildMixer);
-  subscribe(app, ['mix', 'tracks', 'selection', 'master'], () => mx.refresh());
-
-  // ---------------------------------------------------------------- KIT AND FX
-  const kp = new Panel();
-  const kbody = h('div', 'kitgrid sndscroll', panes.kit);
-  const kleft = h('div', 'col', kbody);
-  const kright = h('div', 'col', kbody);
-  const kr = h('div', 'row wrap', kleft);
-  let mutAmt = 0.3;
-  button(kp, kr, 'GENERATE KIT', () => void app.generateKit(), { cls: 'med grow', disabled: () => app.ui.busy, title: 'A new set of synthesised drums designed for the style (K). Locked voices and parameters stay.' }).dataset.test = 'generate-kit';
-  button(kp, kr, 'MUTATE KIT', () => void app.mutateKit(mutAmt), { cls: 'med grow', disabled: () => app.ui.busy, title: 'Controlled changes to every unlocked voice (⇧K)' });
-  num(kp, kr, { get: () => Math.round(mutAmt * 100), set: (v) => ((mutAmt = v / 100), kp.refresh()), min: 5, max: 100, format: (v) => v + '%', title: 'How far MUTATE goes' });
-  const kn = h('div', 'report', kleft);
-  kp.add(() => (kn.textContent = `${app.project.kit.name} · SEED ${app.project.kit.seed}${app.ui.busy ? ' · CHECKING THE KIT IN THE ENGINE…' : ''} · ${app.project.soundLocks.params.length} PARAMS LOCKED`));
-  const kg = group(kleft, 'KITS · SYNTH, SAMPLES, BOTH');
-  kg.classList.add('col');
-  const kitLine = (label: string, kind: 'synth' | 'set' | 'full', current: () => string, title: string) => {
-    const r = h('div', 'row wrap kitline-row', kg);
-    h('div', 'lbl kitlbl', r, label).title = title;
-    const nm = h('div', 'setname grow', r);
-    kp.add(() => (nm.textContent = current()));
-    button(kp, r, 'SAVE…', () => kitLibraryDialog(app, kind, '', current() === 'NONE' ? '' : current()), { cls: 'small', title: `Save as a ${label.toLowerCase()}` }).dataset.test = `kit-save-${kind}`;
-    button(kp, r, 'LOAD…', () => kitLibraryDialog(app, kind), { cls: 'small', title: `Load a ${label.toLowerCase()}: it shows what changes first` }).dataset.test = `kit-load-${kind}`;
-  };
-  kitLine('SYNTH KIT', 'synth', () => app.project.kit.name, 'The LXR synthesis only: parameters, modulation, FX bus, voice assignments. Samples are not part of it.');
-  kitLine('SAMPLE SET', 'set', () => app.kitm?.setName ?? 'NONE', 'The samples on the tracks and how they play. The synthesis is not part of it.');
-  kitLine('FULL KIT', 'full', () => app.kitm?.fullName || 'NONE', 'A synth kit and a sample set together, with source modes, hybrid balance and mixer.');
-  button(kp, h('div', 'row wrap', kg), 'LIBRARY…', () => kitLibraryDialog(app, 'set'), { cls: 'grow', title: 'Browse, rename, duplicate, delete, import and export every kind of kit' }).dataset.test = 'kit-library';
-  const vg2 = group(kleft, 'VOICES · LOCK AND MUTATE');
-  vg2.classList.add('col');
-  VOICES.forEach((vn, v) => {
-    const r = h('div', 'row', vg2);
-    button(kp, r, vn, () => {
-      viewVoice(v);
-      const owner = app.project.tracks.find((x) => app.voiceOf(x) === v);
-      if (owner) app.selectTrack(owner.id);
-      app.setSoundTab('synth');
-    }, { cls: 'grow', title: 'Edit this voice in the SYNTH tab' });
-    button(kp, r, 'L', () => app.lockVoice(v), { cls: 'small', on: () => !!app.project.soundLocks.voices[v], title: 'Lock: GENERATE KIT, MUTATE KIT and EVOLVE leave this voice alone' });
-    button(kp, r, 'MUT', () => void app.mutateKit(0.4, [v]), { cls: 'small', title: 'Mutate this voice', disabled: () => app.ui.busy });
-  });
-  const fxg = group(kright, 'LXR FX BUS');
-  fxg.classList.add('col');
-  const fxType = () => app.project.kit.synth.params[PAR.FX_TYPE] ?? 0;
-  for (const p of FX_PARAMS) {
-    const wrap = h('div', '', fxg);
-    const isP = p.id >= PAR.FX_P1 && p.id <= PAR.FX_P4;
-    paramCtl(app, wrap, p, kp, { base: true, labelOf: isP ? () => FX_PARAM_LABELS[fxType()]?.[p.id - PAR.FX_P1] ?? p.label : undefined });
-    const only: Record<number, number> = { [PAR.FX_DIST_TYPE]: 1, [PAR.FX_WAVE]: 2, [PAR.FX_RATIO]: 3, [PAR.FX_DELAY_TYPE]: 4 };
-    if (only[p.id] !== undefined) kp.add(() => (wrap.style.display = fxType() === only[p.id] ? '' : 'none'));
-  }
-  h('div', 'hint', kright, 'Tracks with FX on in the mixer play through the bus. The FX bus belongs to the kit: variations do not change it.');
-  subscribe(app, ['kit', 'status', 'project', 'kits'], () => kp.refresh());
-
-  const all = [lp, tp, stp, sy, sp, mo, mx, kp];
+  const all = [lp, tp, stp, sy, sp, ...[...parts.values()].flatMap((x) => x.panels)];
   return {
     root,
     frame: () => {
       const m = app.meters;
       if (!m) return;
-      const db = (x: number) => Math.max(0, Math.min(1, 1 + (20 * Math.log10(Math.max(1e-6, x))) / 48));
-      for (let i = 0; i < trackMeters.length; i++) trackMeters[i]!.style.height = db(m.tracks[i] ?? 0) * 100 + '%';
       for (let i = 0; i < sideMeters.length; i++) sideMeters[i]!.style.width = db(m.tracks[i] ?? 0) * 100 + '%';
       for (let v = 0; v < voiceMeters.length; v++) voiceMeters[v]!.style.width = db(m.voices[v] ?? 0) * 100 + '%';
-      if (masterMeters[0]) masterMeters[0].style.height = db(m.masterL) * 100 + '%';
-      if (masterMeters[1]) masterMeters[1].style.height = db(m.masterR) * 100 + '%';
+      const open = parts.get(app.ui.soundTab);
+      open?.frame?.(m);
     },
     show: (on) => {
       root.classList.toggle('hidden', !on);
       if (on) {
         buildSynth(true);
-        modShown = '';
-        buildMod();
         buildLib();
         for (const p of all) p.refresh();
       }

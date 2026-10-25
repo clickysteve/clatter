@@ -15,6 +15,8 @@ import { defaultRolls } from '../destruction/rolls';
 import { defaultDestroy } from '../destruction/destroy';
 import { SOUND_PARAM_COUNT } from '../sound/lxrParamIds';
 import { repairStepSound, repairVariation, soundSampleIds } from '../sound/stepSound';
+import { repairMod } from '../mod/config';
+import { repairChannelFx, repairOutputFx } from '../audio/mixfx';
 
 export const PROJECT_FORMAT = 'clatter-project';
 export const PROJECT_EXT = '.clatter.json';
@@ -165,9 +167,20 @@ function repairTrack(v: unknown, i: number, def: Track | undefined): Track {
       reverse: bool(s.reverse, false),
       offsetMs: num(s.offsetMs, 0, -50, 50),
       choke: int(s.choke, ds.choke, 0, 4),
+      ...(repairMod(s.mod) ? { mod: repairMod(s.mod) } : {}),
       ...repairVariations(s),
     },
-    mix: { ...defaultMix(d.mix), volume: num(m.volume, d.mix.volume, 0, 1), pan: num(m.pan, d.mix.pan, -1, 1), mute: bool(m.mute, false), solo: bool(m.solo, false), route: oneOf(m.route, ['main', 'fx'] as const, d.mix.route), filter: num(m.filter, 0, -1, 1) },
+    mix: {
+      ...defaultMix(d.mix),
+      volume: num(m.volume, d.mix.volume, 0, 1),
+      pan: num(m.pan, d.mix.pan, -1, 1),
+      mute: bool(m.mute, false),
+      solo: bool(m.solo, false),
+      route: oneOf(m.route, ['main', 'fx'] as const, d.mix.route),
+      filter: num(m.filter, 0, -1, 1),
+      ...(num(m.send, 0, 0, 1) > 0 ? { send: num(m.send, 0, 0, 1) } : {}),
+      ...(repairChannelFx(m.fx) ? { fx: repairChannelFx(m.fx) } : {}),
+    },
     play: { ...defaultPlay(), density: num(pl.density, 100, 0, 100), fill: num(pl.fill, 0, 0, 100), humanize: num(pl.humanize, 0, 0, 100), chance: num(pl.chance, 100, 0, 100), length: int(pl.length, 0, 0, MAX_STEPS) },
     midi: { channel: int(midi.channel, d.midi.channel, 1, 16), note: int(midi.note, d.midi.note, 0, 127) },
     lock: bool(o.lock, false),
@@ -178,7 +191,7 @@ function repairTrack(v: unknown, i: number, def: Track | undefined): Track {
 export function repairProject(v: unknown, initKit?: SynthKit): Project {
   if (!isObj(v)) throw new ProjectError('This is not a CLATTER project.');
   if (v.format !== undefined && v.format !== PROJECT_FORMAT) throw new ProjectError(`This file is not a CLATTER project (${String(v.format)}).`);
-  if (typeof v.version === 'number' && v.version > 2) throw new ProjectError('This project was saved by a newer version of CLATTER.');
+  if (typeof v.version === 'number' && v.version > 3) throw new ProjectError('This project was saved by a newer version of CLATTER.');
   const d = defaultProject();
   const defs = defaultTracks();
   const rawTracks = Array.isArray(v.tracks) ? v.tracks.slice(0, MAX_TRACKS) : [];
@@ -213,7 +226,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
   const dg = defaultGen();
   const p: Project = {
     format: 'clatter-project',
-    version: 2,
+    version: 3,
     name: str(v.name, 'UNTITLED', 40),
     tempo: num(v.tempo, d.tempo, 30, 300),
     swing: num(v.swing, 50, 50, 75),
@@ -267,7 +280,8 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
     evolve: { target: oneOf(ev.target, ['off', 'rhythm', 'sound', 'both'] as const, 'off'), every: int(ev.every, 4, 1, 64), amount: num(ev.amount, 0.3, 0, 1), returnEvery: int(ev.returnEvery, 4, 0, 64) },
     timbre: { amount: num(isObj(v.timbre) ? v.timbre.amount : undefined, 0.5, 0, 1), seed: int(isObj(v.timbre) ? v.timbre.seed : undefined, 1, 0, 0xffffffff) },
     quantize: oneOf(v.quantize, ['step', 'beat', 'bar', 'pattern'] as const, 'bar'),
-    master: { volume: num(master.volume, 0.8, 0, 1), clip: bool(master.clip, true), chain: master.chain ?? null },
+    master: { volume: num(master.volume, 0.8, 0, 1), clip: bool(master.clip, true), chain: master.chain ?? null, ...(repairOutputFx(master.out) ? { out: repairOutputFx(master.out) } : {}) },
+    ...(Array.isArray(v.macros) ? { macros: [0, 1, 2, 3].map((i) => num((v.macros as unknown[])[i], 0, 0, 1)) } : {}),
     snapshots: new Array(SNAPSHOTS).fill(null),
     notes: str(v.notes, '', 4000),
   };

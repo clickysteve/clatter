@@ -2016,3 +2016,370 @@ html[data-view='pattern'] #main {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------------ SOUND: the seven workspaces */
+.sndpane {
+  overflow: hidden;
+}
+
+/* MODULATION */
+.modws {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: calc(14 * var(--px));
+  grid-template-columns: minmax(calc(170 * var(--px)), 0.7fr) minmax(0, 1.15fr) minmax(0, 1.35fr);
+  align-items: stretch;
+}
+.modws > .group {
+  min-height: 0;
+  overflow: hidden;
+}
+:root.lt-1100 .modws {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  overflow-y: auto;
+}
+:root.lt-1100 .modroutes {
+  grid-column: 1 / -1;
+}
+.srclist {
+  flex: 1;
+  min-height: 0;
+}
+.srcrow {
+  position: relative;
+  min-height: calc(30 * var(--px));
+}
+.srcrow.idle .srcname {
+  opacity: 0.55;
+}
+.srcrow .srcname {
+  flex: none;
+  min-width: calc(66 * var(--px));
+}
+.srcrow .srctag {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.srcrow .srcn {
+  flex: none;
+  min-width: calc(24 * var(--px));
+  text-align: right;
+}
+.srcrow.on .tiny {
+  color: inherit;
+}
+.srcmeter {
+  width: calc(46 * var(--px));
+  height: calc(8 * var(--px));
+  flex: none;
+}
+.srcrow.on .srcmeter {
+  border-color: var(--paper);
+  background: var(--ink);
+}
+.srcrow.on .srcmeter .lvl {
+  background: var(--paper);
+}
+.srctitle {
+  font-family: var(--font-chip);
+  letter-spacing: 1px;
+}
+.livev {
+  min-width: calc(72 * var(--px));
+  text-align: right;
+}
+.modedit > .modparams {
+  flex: 1;
+  min-height: 0;
+}
+.plot {
+  position: relative;
+  flex: none;
+  height: calc(120 * var(--px));
+  border: var(--u) solid var(--ink);
+  background: var(--paper);
+  cursor: crosshair;
+  touch-action: none;
+}
+.plot canvas {
+  position: absolute;
+  left: calc(2 * var(--px));
+  top: calc(2 * var(--px));
+  width: calc(100% - 4 * var(--px));
+  height: calc(100% - 4 * var(--px));
+  display: block;
+}
+.plotmark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--u);
+  background: var(--ink);
+  mix-blend-mode: difference;
+  pointer-events: none;
+  display: none;
+}
+.plotmark.wide {
+  background: var(--ink);
+  opacity: 0.22;
+  mix-blend-mode: normal;
+}
+.ptrow {
+  gap: calc(6 * var(--px));
+}
+.modroutes {
+  min-height: 0;
+}
+.routelist {
+  flex: 1;
+  min-height: 0;
+  gap: calc(8 * var(--px));
+}
+.route {
+  border: var(--u) solid var(--ink);
+  padding: calc(6 * var(--px));
+  display: flex;
+  flex-direction: column;
+  gap: calc(5 * var(--px));
+  flex: none;
+}
+.route.off {
+  opacity: 0.55;
+}
+.route.dead {
+  background-image: var(--hatch);
+}
+.route .rtag {
+  white-space: nowrap;
+}
+.route .rnote {
+  line-height: 1.15;
+}
+.routemeters {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--px));
+  min-width: calc(60 * var(--px));
+}
+.bipbar {
+  position: relative;
+  height: calc(7 * var(--px));
+  border: var(--u) solid var(--ink);
+  background: var(--paper);
+  overflow: hidden;
+}
+.bipbar::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ink);
+  opacity: 0.5;
+}
+.bipbar::after {
+  content: '';
+  position: absolute;
+  left: var(--l, 50%);
+  width: var(--w, 0);
+  top: 0;
+  bottom: 0;
+  background: var(--ink);
+}
+.bipbar.dest {
+  opacity: 0.6;
+}
+
+/* VARIATIONS */
+.varws,
+.fxws,
+.kitws {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: var(--ink) var(--paper);
+}
+.varws,
+.fxws {
+  display: grid;
+  gap: calc(16 * var(--px)) calc(22 * var(--px));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(360 * var(--px))), 1fr));
+  align-content: start;
+  align-items: start;
+}
+.vartable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.vartable th {
+  text-align: left;
+  font-family: var(--font-chip);
+  padding: calc(3 * var(--px)) calc(6 * var(--px));
+  border-bottom: var(--u) solid var(--ink);
+}
+.vartable td {
+  padding: calc(3 * var(--px)) calc(6 * var(--px));
+  border-bottom: 1px dotted var(--ink);
+  white-space: nowrap;
+}
+.varrow {
+  cursor: default;
+}
+.varrow:hover:not(.on) {
+  box-shadow: inset 0 0 0 var(--u) var(--ink);
+}
+.varrow.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.varrow.on .btn {
+  border-color: var(--paper);
+}
+.varrow.empty td:not(.varact) {
+  opacity: 0.6;
+}
+.difflist {
+  max-height: calc(240 * var(--px));
+}
+
+/* MIXER */
+.mixer {
+  flex: none;
+  gap: calc(5 * var(--px));
+  overflow-x: auto;
+}
+.mixer .strip {
+  flex: 1 1 calc(84 * var(--px));
+  width: auto;
+  min-width: calc(78 * var(--px));
+  max-width: calc(128 * var(--px));
+}
+.mixer .strip.master {
+  flex: 0 0 calc(104 * var(--px));
+  margin-left: auto;
+}
+.stripfader {
+  gap: calc(6 * var(--px));
+  align-items: stretch;
+}
+.stripbtns {
+  gap: calc(3 * var(--px));
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.stripbtns .btn.small {
+  padding-left: calc(5 * var(--px));
+  padding-right: calc(5 * var(--px));
+}
+.grmeter {
+  width: 100%;
+  height: calc(8 * var(--px));
+}
+.mixproc {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: calc(16 * var(--px));
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(calc(230 * var(--px)), 0.7fr);
+  align-items: start;
+  scrollbar-color: var(--ink) var(--paper);
+}
+:root.lt-1500 .mixproc {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+:root.lt-1100 .mixproc {
+  grid-template-columns: minmax(0, 1fr);
+}
+.procwrap {
+  display: grid;
+  gap: calc(14 * var(--px));
+  grid-template-columns: repeat(auto-fill, minmax(calc(190 * var(--px)), 1fr));
+}
+.procstage {
+  padding-top: calc(32 * var(--px));
+}
+.procstage .ctl {
+  --label-w: 74px;
+}
+.signalpath {
+  flex: none;
+  line-height: 1.15;
+}
+
+/* FX */
+.sendrow {
+  gap: calc(8 * var(--px));
+}
+.sendrow .sname {
+  min-width: calc(80 * var(--px));
+  padding: calc(2 * var(--px)) calc(6 * var(--px));
+  cursor: default;
+}
+.sendrow .sname.inv {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* KITS */
+.kitws {
+  display: flex;
+  flex-direction: column;
+  gap: calc(16 * var(--px));
+}
+.kitcards {
+  display: grid;
+  gap: calc(16 * var(--px));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(280 * var(--px))), 1fr));
+  align-items: stretch;
+}
+.kitcard .setname {
+  min-height: calc(26 * var(--px));
+}
+.kitlower {
+  display: grid;
+  gap: calc(16 * var(--px)) calc(22 * var(--px));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(320 * var(--px))), 1fr));
+  align-items: start;
+}
+.voicerow {
+  gap: calc(6 * var(--px));
+}
+.voiceowners {
+  min-width: calc(90 * var(--px));
+  max-width: calc(150 * var(--px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.namebox {
+  display: block;
+}
+
+.srcrow {
+  min-height: calc(24 * var(--px));
+  padding-top: calc(1 * var(--px));
+  padding-bottom: calc(1 * var(--px));
+}
+.procstage > .btn {
+  align-self: flex-start;
+}
+.procstage .range,
+.procstage .num {
+  min-width: 0;
+}
+.modsrcs > .group .ctl {
+  --label-w: 74px;
+}
+.modsrcs > .group {
+  flex: none;
+}
+.modsrcs > .group.col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(6 * var(--px)) calc(10 * var(--px));
+}

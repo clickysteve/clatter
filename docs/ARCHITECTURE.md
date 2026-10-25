@@ -29,7 +29,8 @@ pattern can play any kit.
 |---|---|
 | `lxr/` | The LXR firmware files (unchanged), CLATTER's shims and WebAssembly bridge, import and extraction tools. See [LXR_PORT.md](LXR_PORT.md). |
 | `scripts/` | `build-lxr.mjs` (the WebAssembly build), `make-samples.mjs` (the bundled demonstration samples). |
-| `src/audio/` | `lxr/lxr.ts` (the engine's TypeScript face), `engine.ts` (ClatterEngine: voices, samples, HYBRID, mixer, FX bus, master, meters, stems), `worklet.ts` and `host.ts` (the AudioWorklet and its main-thread side), `resample.ts`, `render.ts` (offline render), `library.ts` (samples). |
+| `src/mod/` | The modulation engine (pure, no browser): `types.ts` and `config.ts` (the model, repair, sparse variation patches), `registry.ts` (every destination, once), `shapes.ts` and `runtime.ts` (sources and routing, run by the audio engine and by the editor's plot), `presets.ts` (recipes, generation, mutation), `format.ts` (the portable `clatter-mod` format and platform capabilities), `library.ts` (user presets). See [MODULATION.md](MODULATION.md). |
+| `src/audio/` | `lxr/lxr.ts` (the engine's TypeScript face), `engine.ts` (ClatterEngine: voices, samples, HYBRID, modulation, mixer, FX bus, bus and master processing, meters, stems), `mixfx.ts` (channel, bus and master processors), `worklet.ts` and `host.ts` (the AudioWorklet and its main-thread side), `resample.ts`, `render.ts` (offline render), `library.ts` (samples). |
 | `src/model/` | Types, defaults, project files (serialise, defensive repair), presets, kit files (`kits.ts`: synth kit and full kit). |
 | `src/samples/` | Sample sets: file-name recognition and mapping, folder/ZIP intake, sets on tracks. Pure, no browser. |
 | `src/rhythm/` | Seeded randomness, Euclid, styles, generation, mutation, pattern editing, realisation. |
@@ -91,6 +92,13 @@ than audio.
   restores the kit values at that voice's next hit. Randomness is keyed-hash based, so playback and
   export agree. See [STEP_SOUND.md](STEP_SOUND.md).
 
+- **Modulation** (`src/mod/`). Each track has sources (4 LFOs, 2 envelopes, a step sequencer,
+  random sources, velocity, trigger, 4 macros) and a routing matrix to destinations from one
+  registry (LXR parameters, the sample layer, hybrid blend, mixer parameters). The engine runs
+  one `ModRuntime` per track at control rate; the last track to trigger a shared LXR voice owns
+  its modulation. Variations hold sparse patches of the base modulation. See
+  [MODULATION.md](MODULATION.md).
+
 ## The engine
 
 `ClatterEngine` is plain TypeScript with no browser APIs, used **identically** in the
@@ -138,10 +146,17 @@ interfaces. Nothing from the LXR firmware is in Core, and CLATTER does not chang
 - `test/scheduler.test.ts`: look-ahead, tempo changes, boundaries, MIDI clock.
 - `test/project.test.ts`: files round-trip and repair, presets, kit files, history.
 - `test/kits.test.ts`: sample sets, synth kits and full kits (naming, intake, libraries, files, compatibility).
+- `test/mod.test.ts`, `test/modengine.test.ts`: sources, routing, inheritance, the registry, presets,
+  the portable format, and modulation in the real engine (continuous vs trigger destinations,
+  shared voices, variations, sample and track destinations).
+- `test/mixer.test.ts`, `test/persist.test.ts`: channel, bus and master processing, the limiter;
+  project and kit compatibility with versions 1 and 2, repair of hostile data, preset libraries.
 - `test/export.test.ts`: deterministic offline renders, stems that sum to the master, WAV,
   drum hits, the MIDI file.
 - `test/gridmodel.test.ts`: what the grid shows is what plays (sounding, silent, added, deleted
   cells; beat and bar structure from the resolution).
+- `e2e/sound.spec.ts`: the seven SOUND tabs (modulation editing, variations table, ten mixer
+  channels, FX, KITS).
 - `e2e/app.spec.ts` (Playwright, Chromium): start-up and audio, grid hit-testing, editing by
   click, drag and right-click, cell boundaries and the SHOW ORIGINAL overlay, sideways scrolling,
   type sizes and overflow at 1920 × 1080, 1440 × 900 and 1366 × 768, palette legibility,

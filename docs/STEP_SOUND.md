@@ -93,7 +93,7 @@ What the generators never touch: hand-made step sounds and variations (editing b
 
 ## Where things live
 
-* SOUND view: a persistent track sidebar plus SYNTH, SAMPLE, MODULATION, MIXER and KIT & FX tabs.
+* SOUND view: a persistent track sidebar plus SYNTH, SAMPLE, MODULATION, VARIATIONS, MIXER, FX and KITS tabs (see MODULATION.md).
   Each tab scrolls inside its pane; the page does not. The open tab is remembered.
 * PATTERN view: the STEP SOUND tab under the grid, grid markers, and the optional SOUND LANE.
 * PERFORM view: NEW SOUNDS and MUTATE SOUND pads (quantised) and a TIMBRE macro.
@@ -131,3 +131,11 @@ product. See `docs/LXR_PORT.md`, `NOTICE.md` and `THIRD_PARTY_NOTICES.md`.
 * `docs/img/sound-synth-1440x900.png`: SOUND, SYNTH tab with variation A open, at 1440 × 900.
 * `docs/img/pattern-step-sound-1440x900.png`: PATTERN with the STEP SOUND tab, step markers and the sound lane.
 * `docs/img/sound-modulation-1366x768.png`: SOUND, MODULATION tab at 1366 × 768.
+
+## Modulation in variations and step sounds
+
+Since the SOUND overhaul a variation may also override the track's modulation (a sparse patch,
+`Variation.mod`; see [MODULATION.md](MODULATION.md)). A step that names a variation (or switches
+to one under a condition) therefore plays that variation's modulation as well as its parameters.
+Step locks and modulation can share a parameter: modulation moves around the locked value, and
+the kit value returns at the voice's next hit.

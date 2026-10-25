@@ -75,7 +75,7 @@ export function defaultProject(): Project {
   const pattern = newPattern('p1', 'A', gen);
   return {
     format: 'clatter-project',
-    version: 3,
+    version: 4,
     name: 'UNTITLED',
     tempo: 124,
     swing: 50,

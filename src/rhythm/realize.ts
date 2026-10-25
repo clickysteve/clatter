@@ -27,6 +27,7 @@ import { stepsPerBar } from './generate';
 import { mutate } from './mutate';
 import { sourceGrids } from './pattern';
 import { hash32, rand, Rng, SALT, strCode } from './rng';
+import { needsPrev, trigRow } from './trigger';
 
 export interface RealizeTrack {
   id: string;
@@ -44,6 +45,12 @@ export interface RealizeInput {
   evolve: EvolveSettings;
   /** play only the source (no evolution, transformations or performance randomness) */
   sourceOnly?: boolean;
+  /**
+   * Where this cycle sits for trigger conditions (see src/rhythm/trigger.ts): the pass of its
+   * pattern (0 = the first), whether it is the final one of a run whose length is known, and
+   * the tracks with a FILL held. Absent: pass = cycle, nothing known, no fills.
+   */
+  trig?: { pass: number; last: boolean; fills?: ReadonlySet<string> };
 }
 
 export const CELL_PLAYED = 1;
@@ -52,6 +59,8 @@ export const CELL_ADDED = 4;
 export const CELL_DESTROYED = 8;
 export const CELL_MOVED = 16;
 export const CELL_EVOLVED = 32;
+/** a written hit that its trigger condition kept from playing on this pass */
+export const CELL_CONDITION = 64;
 
 export interface Realization {
   cycle: number;
@@ -115,16 +124,34 @@ export function realize(input: RealizeInput, cycle: number): Realization {
   // 1. events of the (evolved) source; polymeter: a track with its own length runs across cycles
   let events: PerfEvent[] = [];
   const posOf = (t: RealizeTrack, i: number) => (t.play.length > 0 && t.play.length < steps ? (cycle * steps + i) % t.play.length : i);
+  const tinfo = input.trig ?? { pass: cycle, last: false };
   for (const t of input.tracks) {
     const g = grids[t.id] ?? [];
     const s = src[t.id] ?? [];
     const row = new Uint8Array(steps);
     cells[t.id] = row;
+    // trigger conditions first: which of the written steps play on this pass
+    const conds = input.sourceOnly ? undefined : p.trig?.[t.id];
+    let plays: boolean[] | null = null;
+    if (conds && Object.keys(conds).length) {
+      const base = { seed, pattern: p.id, pass: tinfo.pass, cycle, last: tinfo.last, fill: !!tinfo.fills?.has(t.id), track: t.id };
+      let before = false;
+      if (tinfo.pass > 0 && cycle > 0 && Object.values(conds).some(needsPrev)) {
+        const gp = evolvedGrids(input, cycle - 1, src).grids[t.id] ?? [];
+        const pp = (i: number) => (t.play.length > 0 && t.play.length < steps ? ((cycle - 1) * steps + i) % t.play.length : i);
+        before = trigRow(steps, (i) => !!gp[pp(i)], (i) => conds[pp(i)], { ...base, pass: tinfo.pass - 1, cycle: cycle - 1, last: false }, false)[steps - 1]!;
+      }
+      plays = trigRow(steps, (i) => !!g[posOf(t, i)], (i) => conds[posOf(t, i)], base, before);
+    }
     for (let i = 0; i < steps; i++) {
       const pos = posOf(t, i);
       const h = g[pos];
       if (!!h !== !!s[pos]) row[pos]! |= CELL_EVOLVED;
       if (!h) continue;
+      if (plays && !plays[i]) {
+        row[pos]! |= CELL_SUPPRESSED | CELL_CONDITION;
+        continue;
+      }
       events.push({ key: `${t.id}|${i}`, tick: i * T, track: t.id, vel: h.vel, pitch: h.note ?? 0, kind: 'source', origin: pos, step: i, prob: h.prob, flam: h.flam, ratchet: h.ratchet, sample: h.sample });
     }
   }

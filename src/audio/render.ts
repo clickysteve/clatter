@@ -13,6 +13,7 @@ import { clone, PPQ, type Project, type SynthKit } from '../model/types';
 import { Sequence } from '../app/sequence';
 import { configureEngine, hitOf, kitDiff, trackIndex, type EngineTarget } from '../app/soundConfig';
 import { Scheduler } from '../transport/scheduler';
+import { bpmAt, secondsAt, tempoActive } from '../transport/tempo';
 import type { ChainConfig } from '@slopfactory/core/engines';
 
 export interface RenderOptions {
@@ -70,11 +71,17 @@ export async function renderProject(module: WebAssembly.Module, project: Project
   const e = await newEngine(module, p, lib);
   const target = directTarget(e);
   let frame = 0;
-  const seq = new Sequence({ project: () => p });
+  const seq = new Sequence({ project: () => p, lengthTicks: () => o.bars * 4 * PPQ });
   const index = trackIndex(p);
   let lastKit = p.kit.synth;
-  const musicFrames = Math.round(o.bars * 4 * PPQ * (60 / (p.tempo * PPQ)) * ENGINE_RATE);
+  // the length of the music in frames: with tempo automation the seconds are summed cell by cell, as the scheduler plays them
+  const musicTicks = o.bars * 4 * PPQ;
+  const musicFrames = Math.round(secondsAt(p.tempo, p.tempoAuto, musicTicks) * ENGINE_RATE);
+  const auto = tempoActive(p.tempoAuto);
+  e.setBpm(bpmAt(p.tempo, p.tempoAuto, 0));
   const sched = new Scheduler(seq, {
+    tempo: auto ? (t) => bpmAt(p.tempo, p.tempoAuto, t) : undefined,
+    onTempo: (bpm, time) => e.scheduleAction(Math.round(time * ENGINE_RATE), () => e.setBpm(bpm)),
     now: () => frame / ENGINE_RATE,
     lookahead: 0.05,
     startDelay: 0,

@@ -97,7 +97,7 @@ export function stepSoundEditor(app: App, pane: HTMLElement, panel: Panel): void
   // audition
   const pr = h('div', 'row wrap', body);
   h('div', 'lbl', pr, 'PASS').title = 'Which pass of the pattern to hear: conditions (EVERY, FIRST, LAST, ALTERNATE, EVOLVE) depend on it';
-  num(panel, pr, { get: () => app.ui.previewPass, set: (v) => ((app.ui.previewPass = v), panel.refresh()), min: 1, max: 64, title: 'Which pass of the pattern to hear' }).dataset.test = 'step-pass';
+  num(panel, pr, { get: () => app.ui.previewPass, set: (v) => (app.setPreviewPass(v), panel.refresh()), min: 1, max: 64, title: 'Which pass of the pattern to hear' }).dataset.test = 'step-pass';
   button(panel, pr, '▶ STEP', () => {
     const c = cell();
     if (c) void app.auditionStep(c.track, c.step);

@@ -7,6 +7,7 @@
 import type { App } from '../../app/app';
 import { button, h, num, Panel, select } from '../widgets';
 import { cpx } from '../scale';
+import { exportDialog } from '../dialogs';
 
 export function transportWindow(app: App, chrome: HTMLElement, menubar: HTMLElement): { panel: Panel; meters: (l: number, r: number, clip: boolean) => void; rebuildPatterns: () => void } {
   const bar = h('div', 'bar', chrome);
@@ -21,6 +22,9 @@ export function transportWindow(app: App, chrome: HTMLElement, menubar: HTMLElem
   button(panel, play, '■ STOP', () => app.stop(), { title: 'Stop (space, esc)' }).dataset.test = 'stop';
   h('div', 'lbl', play, 'BPM');
   num(panel, play, { get: () => app.project.tempo, set: (v) => app.setTempo(v), min: 30, max: 300, step: 1, title: 'Tempo (drag, or click and type)' }).dataset.test = 'bpm';
+  const curve = button(panel, play, 'CURVE', () => app.toggleTempoAuto(), { on: () => !!app.project.tempoAuto?.on, title: 'The tempo curve (WILDCARD tab): on plays the BPM scaled by the curve, off holds the BPM' });
+  curve.dataset.test = 'tempo-curve-toggle';
+  panel.add(() => (curve.style.display = app.project.tempoAuto ? '' : 'none'));
   h('div', 'lbl', play, 'SWING');
   num(panel, play, { get: () => app.project.swing, set: (v) => app.setSwing(v), min: 50, max: 75, format: (v) => v + '%', title: 'Swing of the off-sixteenths' });
 
@@ -43,7 +47,7 @@ export function transportWindow(app: App, chrome: HTMLElement, menubar: HTMLElem
   rebuildPatterns();
   panel.add(() => patPanel.refresh());
   button(panel, patterns, 'CHAIN', () => app.setChain(!app.project.chain.on), { on: () => app.project.chain.on, title: 'Play the patterns in a chain (each twice by default)' });
-  h('div', 'lbl', patterns, 'QUANT');
+  h('div', 'lbl qlbl', patterns, 'QUANT');
   select(panel, patterns, {
     options: () => (['step', 'beat', 'bar', 'pattern'] as const).map((q) => ({ value: q, label: q.toUpperCase() })),
     get: () => app.project.quantize,
@@ -53,6 +57,7 @@ export function transportWindow(app: App, chrome: HTMLElement, menubar: HTMLElem
 
   // history, level and panic
   const end = h('div', 'cluster end', bar);
+  button(panel, end, 'EXPORT', () => exportDialog(app, 'master'), { disabled: () => app.exporter.busy, title: 'Export the performance as a WAV, stems or MIDI file (rendering carries on in the background)' }).dataset.test = 'export';
   button(panel, end, 'UNDO', () => app.undo(), { disabled: () => !app.history.canUndo, title: 'Undo (⌘Z)' });
   button(panel, end, 'REDO', () => app.redo(), { disabled: () => !app.history.canRedo, title: 'Redo (⇧⌘Z)' });
   const mbox = h('div', 'col meterbox', end);

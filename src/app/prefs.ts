@@ -5,10 +5,12 @@
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import { defaultMidiPrefs, type MidiPrefs } from '../midi/controller';
+import { EXPORT_DEFAULTS } from './exportJob';
+import { defaultWild, repairWild, type WildSettings } from '../destruction/wildcardProject';
 import { DEFAULT_SCALE, snapScale } from '../ui/scale';
 
 /** The tabs of the PATTERN view's workspace under the grid. */
-export const WORKSPACES = ['sequence', 'sound', 'generate', 'transform', 'track'] as const;
+export const WORKSPACES = ['sequence', 'trigger', 'sound', 'generate', 'transform', 'wildcard', 'track'] as const;
 export type Workspace = (typeof WORKSPACES)[number];
 
 /** The tabs of the SOUND view. (Before the overhaul the last one was 'kit': KIT & FX.) */
@@ -29,6 +31,8 @@ export interface Prefs {
   midi: MidiPrefs;
   exportBars: number;
   exportTail: number;
+  /** WILDCARD: intensity, scope, categories, the seed of the last press, and whether the seed is held between presses */
+  wildcard: WildSettings & { fixed: boolean };
   /** keyboard plays the selected track on number keys etc. */
   seenHelp: boolean;
   /** collapsible panels the user closed (window id -> collapsed) */
@@ -37,7 +41,7 @@ export interface Prefs {
 
 const KEY = 'clatter.prefs';
 
-export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', soundTab: 'synth', soundLane: false, uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: 8, exportTail: 2, seenHelp: false, collapsed: {} });
+export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', soundTab: 'synth', soundLane: false, uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: EXPORT_DEFAULTS.bars, exportTail: EXPORT_DEFAULTS.tail, wildcard: { ...defaultWild(), fixed: false }, seenHelp: false, collapsed: {} });
 
 export function loadPrefs(): Prefs {
   try {
@@ -53,8 +57,10 @@ export function loadPrefs(): Prefs {
       uiScale: snapScale(v.uiScale),
       editMode: v.editMode === 'advanced' ? 'advanced' : 'basic',
       midi: { ...d.midi, ...(v.midi ?? {}) },
-      exportBars: typeof v.exportBars === 'number' ? Math.max(1, Math.min(256, v.exportBars)) : d.exportBars,
-      exportTail: typeof v.exportTail === 'number' ? Math.max(0, Math.min(20, v.exportTail)) : d.exportTail,
+      // export length is not remembered between visits: a fresh export dialog offers the defaults
+      wildcard: { ...repairWild(v.wildcard), fixed: (v.wildcard as { fixed?: unknown } | undefined)?.fixed === true },
+      exportBars: d.exportBars,
+      exportTail: d.exportTail,
       seenHelp: v.seenHelp === true,
       collapsed: v.collapsed && typeof v.collapsed === 'object' ? Object.fromEntries(Object.entries(v.collapsed).filter(([, x]) => typeof x === 'boolean')) : {},
     };

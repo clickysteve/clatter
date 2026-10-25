@@ -19,11 +19,15 @@
  *   - Quantised actions. at('bar', fn) runs fn when planning reaches the next bar line (or
  *     step, beat, pattern end), before anything at or after that line is scheduled, so a
  *     transformation or a snapshot lands exactly on the boundary.
- *   - Tempo. A tempo change re-anchors at the horizon: no gap, no overlap.
+ *   - Tempo. A tempo change re-anchors at the horizon: no gap, no overlap. Tempo automation
+ *     (the `tempo` option) is the same thing done at every TEMPO_GRID boundary: planning stops
+ *     there, asks for the tempo of the next cell and re-anchors, so time is piecewise linear in
+ *     ticks and the playhead, MIDI clock and offline render all agree.
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import { PPQ, type Quantize } from '../model/types';
+import { TEMPO_GRID } from './tempo';
 import type { PerfEvent } from '../rhythm/events';
 
 export interface PlannedCycle {
@@ -57,6 +61,10 @@ export interface SchedulerOptions {
   onCycle?: (k: number, c: PlannedCycle, time: number) => void;
   /** bar lines as they are scheduled (sound evolution, chain) */
   onBar?: (bar: number, time: number, tick: number) => void;
+  /** tempo automation: the BPM at a tick, or null for the plain tempo (see src/transport/tempo.ts) */
+  tempo?: (tick: number) => number | null;
+  /** the tempo automation changed the tempo (the engine follows it for tempo-synced effects) */
+  onTempo?: (bpm: number, time: number) => void;
   lookahead?: number;
   /** delay from START to the first beat (seconds) */
   startDelay?: number;
@@ -74,11 +82,19 @@ interface CycleState {
 const PULSE = PPQ / 24;
 const BAR = PPQ * 4;
 
+/** From `tick` on (at `time`) a tick lasts `spt` seconds. */
+interface Segment {
+  tick: number;
+  time: number;
+  spt: number;
+}
+
 export class Scheduler {
+  /** the plain tempo; the tempo in force can differ while tempo automation runs (see spt) */
   bpm = 120;
   running = false;
-  private anchorTime = 0;
-  private anchorTick = 0;
+  private cur = 120;
+  private segs: Segment[] = [{ tick: 0, time: 0, spt: 0.5 / PPQ }];
   /** ticks planned so far */
   horizon = 0;
   private cycles: CycleState[] = [];
@@ -95,23 +111,48 @@ export class Scheduler {
     this.lookahead = o.lookahead ?? 0.12;
   }
 
-  /** Seconds per tick. */
+  /** Seconds per tick, at the horizon. */
   get spt(): number {
-    return 60 / (this.bpm * PPQ);
+    return 60 / (this.cur * PPQ);
+  }
+
+  /** The tempo in force at the horizon. */
+  get currentBpm(): number {
+    return this.cur;
   }
 
   timeOf(tick: number): number {
-    return this.anchorTime + (tick - this.anchorTick) * this.spt;
+    const segs = this.segs;
+    let i = segs.length - 1;
+    while (i > 0 && segs[i]!.tick > tick) i--;
+    const s = segs[i]!;
+    return s.time + (tick - s.tick) * s.spt;
   }
 
   tickAt(time: number): number {
-    return this.anchorTick + (time - this.anchorTime) / this.spt;
+    const segs = this.segs;
+    let i = segs.length - 1;
+    while (i > 0 && segs[i]!.time > time) i--;
+    const s = segs[i]!;
+    return s.tick + (time - s.time) / s.spt;
+  }
+
+  /** From the horizon on, ticks last as long as `bpm` says. */
+  private retime(bpm: number): void {
+    const tick = this.horizon;
+    const time = this.timeOf(tick);
+    this.cur = bpm;
+    const last = this.segs[this.segs.length - 1]!;
+    const seg = { tick, time, spt: 60 / (bpm * PPQ) };
+    if (last.tick === tick) this.segs[this.segs.length - 1] = seg;
+    else this.segs.push(seg);
+    if (this.segs.length > 512) this.segs.splice(0, this.segs.length - 256);
   }
 
   start(atTime?: number): void {
     this.running = true;
-    this.anchorTime = atTime ?? this.o.now() + (this.o.startDelay ?? 0.06);
-    this.anchorTick = 0;
+    this.cur = this.o.tempo?.(0) ?? this.bpm;
+    this.segs = [{ tick: 0, time: atTime ?? this.o.now() + (this.o.startDelay ?? 0.06), spt: 60 / (this.cur * PPQ) }];
     this.horizon = 0;
     this.cycles = [];
     this.pending = [];
@@ -128,13 +169,24 @@ export class Scheduler {
 
   setTempo(bpm: number): void {
     const b = Math.max(20, Math.min(400, bpm));
-    if (b === this.bpm) return;
-    if (this.running) {
-      const t = this.timeOf(this.horizon);
-      this.anchorTick = this.horizon;
-      this.anchorTime = t;
-    }
+    if (b === this.bpm && b === this.cur) return;
     this.bpm = b;
+    // with tempo automation the next cell asks for its own tempo; without, the new one holds from here
+    if (this.running) this.retime(this.o.tempo?.(this.horizon) ?? b);
+    else this.cur = this.o.tempo?.(0) ?? b;
+  }
+
+  /** Tempo automation was changed, switched on or off: follow it from the horizon. */
+  retempo(): void {
+    if (this.running) this.followTempo();
+    else this.cur = this.o.tempo?.(0) ?? this.bpm;
+  }
+
+  private followTempo(): void {
+    const want = this.o.tempo?.(this.horizon) ?? this.bpm;
+    if (Math.abs(want - this.cur) < 1e-9) return;
+    this.retime(want);
+    this.o.onTempo?.(want, this.timeOf(this.horizon));
   }
 
   /** The state changed: unscheduled events of the current and future cycles are realised again. */
@@ -219,6 +271,11 @@ export class Scheduler {
       // the next stop: a quantised action, a cycle end, or the target
       let stopAt = until;
       if (this.pending.length && this.pending[0]!.tick < stopAt) stopAt = Math.max(this.horizon, this.pending[0]!.tick);
+      this.followTempo();
+      if (this.o.tempo) {
+        const cell = (Math.floor(this.horizon / TEMPO_GRID + 1e-9) + 1) * TEMPO_GRID;
+        if (cell < stopAt) stopAt = cell;
+      }
       const c = this.cycleFor(this.horizon);
       const ce = c.start + c.plan.ticks;
       if (ce < stopAt) stopAt = ce;

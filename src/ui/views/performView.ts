@@ -90,7 +90,7 @@ export function performView(app: App, screen: HTMLElement): View {
   pad(ap, ag, 'REGEN', () => app.regenerate(true), { sub: () => 'AFTER BAR 1', title: 'New material after the first bar (R)' });
   pad(ap, ag, 'FILL', null, { hold: (d) => app.fill(d), sub: () => 'HOLD', title: 'Hold for a fill (F)' }).dataset.test = 'p-fill';
   pad(ap, ag, 'SOURCE', null, { hold: (d) => app.setSourceOnly(d), sub: () => 'HOLD: WRITTEN ONLY', title: 'Hold: only the written pattern, no transformations' });
-  pad(ap, ag, 'WILDCARD', () => void app.wildcard(true), { sub: () => 'RE-IMAGINE', title: 'One bounded re-imagining (W)' });
+  pad(ap, ag, 'WILDCARD', () => app.wildcard(true), { sub: () => `${app.prefs.wildcard.intensity}% ${app.prefs.wildcard.scope.toUpperCase()}`, title: 'Re-imagine the instrument on the next quantise boundary, with the settings of the WILDCARD tab (W)' });
   pad(ap, ag, 'RESET', () => app.reset(), { sub: () => 'TO THE PATTERN', title: 'Hand edits cleared and transformations off' });
   const d = () => app.project.destruction;
   pad(ap, ag, 'CHOP', () => app.toggleChop(true), { on: () => d().chop.on, sub: () => (d().chop.on ? 'ON' : 'OFF'), title: 'CHOP on/off (C)' });

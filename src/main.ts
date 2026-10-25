@@ -15,7 +15,7 @@ import { patternView, type View } from './ui/views/patternView';
 import { soundView } from './ui/views/soundView';
 import { performView } from './ui/views/performView';
 import { bindKeys } from './ui/keys';
-import { closePopups, h, win } from './ui/widgets';
+import { closePopups, download, h, toast, win } from './ui/widgets';
 import { installTooltips } from './ui/tooltip';
 import { aboutDialog } from './ui/dialogs';
 import { cpx, initScale } from './ui/scale';
@@ -66,6 +66,12 @@ async function main(): Promise<void> {
   app.on('status', showStatus);
   app.on('midi', showStatus);
   showStatus();
+
+  app.deliver = (f) => download(f.name, f.data, f.type);
+  app.on('notice', () => {
+    const n = app.ui.notice;
+    if (n) toast(n.text, n.level);
+  });
 
   const transport = transportWindow(app, chrome, bar);
   for (const t of ['transport', 'pattern', 'history', 'project', 'view'] as const) app.on(t, () => transport.panel.refresh());

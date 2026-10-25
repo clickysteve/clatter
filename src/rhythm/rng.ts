@@ -73,6 +73,8 @@ export const SALT = {
   sndGen: 21,
   sndDist: 22,
   sndMut: 23,
+  trig: 24,
+  wild: 25,
 } as const;
 
 /** Small seeded generator (mulberry32) for sequential operations. */

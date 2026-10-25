@@ -16,6 +16,9 @@ import { defaultDestroy } from '../destruction/destroy';
 import { SOUND_PARAM_COUNT } from '../sound/lxrParamIds';
 import { repairStepSound, repairVariation, soundSampleIds } from '../sound/stepSound';
 import { repairMod } from '../mod/config';
+import { repairTrig } from '../rhythm/trigger';
+import { repairWild } from '../destruction/wildcardProject';
+import { repairTempoAuto } from '../transport/tempo';
 import { repairChannelFx, repairOutputFx } from '../audio/mixfx';
 
 export const PROJECT_FORMAT = 'clatter-project';
@@ -90,6 +93,21 @@ function repairPattern(v: unknown, trackIds: string[], i: number): Pattern {
       if (Object.keys(out).length) (sounds ??= {})[id] = out;
     }
   }
+  // trigger conditions (projects before version 4 have none: every step plays, as it always did)
+  let trig: Pattern['trig'];
+  if (isObj(o.trig)) {
+    for (const id of trackIds) {
+      const e: unknown = (o.trig as Obj)[id];
+      if (!isObj(e)) continue;
+      const out: Record<number, import('./types').TrigCond> = {};
+      for (const [k, c] of Object.entries(e as Obj)) {
+        const st = Number(k);
+        const r = Number.isInteger(st) && st >= 0 && st < steps ? repairTrig(c) : null;
+        if (r) out[st] = r;
+      }
+      if (Object.keys(out).length) (trig ??= {})[id] = out;
+    }
+  }
   const sg = isObj(o.settings) ? o.settings : {};
   const dg = defaultGen();
   return {
@@ -111,6 +129,7 @@ function repairPattern(v: unknown, trackIds: string[], i: number): Pattern {
     },
     generation: int(o.generation, 0, 0, 1e6),
     ...(sounds ? { sounds } : {}),
+    ...(trig ? { trig } : {}),
   };
 }
 
@@ -191,7 +210,7 @@ function repairTrack(v: unknown, i: number, def: Track | undefined): Track {
 export function repairProject(v: unknown, initKit?: SynthKit): Project {
   if (!isObj(v)) throw new ProjectError('This is not a CLATTER project.');
   if (v.format !== undefined && v.format !== PROJECT_FORMAT) throw new ProjectError(`This file is not a CLATTER project (${String(v.format)}).`);
-  if (typeof v.version === 'number' && v.version > 3) throw new ProjectError('This project was saved by a newer version of CLATTER.');
+  if (typeof v.version === 'number' && v.version > 4) throw new ProjectError('This project was saved by a newer version of CLATTER.');
   const d = defaultProject();
   const defs = defaultTracks();
   const rawTracks = Array.isArray(v.tracks) ? v.tracks.slice(0, MAX_TRACKS) : [];
@@ -226,9 +245,10 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
   const dg = defaultGen();
   const p: Project = {
     format: 'clatter-project',
-    version: 3,
+    version: 4,
     name: str(v.name, 'UNTITLED', 40),
     tempo: num(v.tempo, d.tempo, 30, 300),
+    ...(repairTempoAuto(v.tempoAuto) ? { tempoAuto: repairTempoAuto(v.tempoAuto) } : {}),
     swing: num(v.swing, 50, 50, 75),
     seed: int(v.seed, 1, 0, 0xffffffff),
     tracks,
@@ -280,6 +300,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
     evolve: { target: oneOf(ev.target, ['off', 'rhythm', 'sound', 'both'] as const, 'off'), every: int(ev.every, 4, 1, 64), amount: num(ev.amount, 0.3, 0, 1), returnEvery: int(ev.returnEvery, 4, 0, 64) },
     timbre: { amount: num(isObj(v.timbre) ? v.timbre.amount : undefined, 0.5, 0, 1), seed: int(isObj(v.timbre) ? v.timbre.seed : undefined, 1, 0, 0xffffffff) },
     quantize: oneOf(v.quantize, ['step', 'beat', 'bar', 'pattern'] as const, 'bar'),
+    ...(isObj(v.wildcard) ? { wildcard: repairWild(v.wildcard) } : {}),
     master: { volume: num(master.volume, 0.8, 0, 1), clip: bool(master.clip, true), chain: master.chain ?? null, ...(repairOutputFx(master.out) ? { out: repairOutputFx(master.out) } : {}) },
     ...(Array.isArray(v.macros) ? { macros: [0, 1, 2, 3].map((i) => num((v.macros as unknown[])[i], 0, 0, 1)) } : {}),
     snapshots: new Array(SNAPSHOTS).fill(null),

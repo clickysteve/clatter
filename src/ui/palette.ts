@@ -40,10 +40,50 @@ export const COLOUR: Palette = {
   },
 };
 
+/** AMFAS (All My Friends Are Synths): the house colours, exactly as supplied in AMFAS.clatter-palette.json. */
+export const AMFAS: Palette = {
+  id: 'amfas',
+  name: 'AMFAS',
+  builtIn: true,
+  colors: {
+    desktop: '#ff6600',
+    paper: '#fafafa',
+    ink: '#1e1c1a',
+    dim: '#4f4f4f',
+    activity: '#d23c1e',
+    selection: '#ff6600',
+    rhythm: '#000000',
+    destruction: '#ff0000',
+    sound: '#c00202',
+    perform: '#002db3',
+    transport: '#ffa200',
+  },
+};
+
+/** AMFAS INVERT: the same house on black, exactly as supplied in AMFAS INVERT.clatter-palette.json. */
+export const AMFAS_INVERT: Palette = {
+  id: 'amfas-invert',
+  name: 'AMFAS INVERT',
+  builtIn: true,
+  colors: {
+    desktop: '#ff6600',
+    paper: '#000000',
+    ink: '#ff643d',
+    dim: '#f54242',
+    activity: '#d23c1e',
+    selection: '#ff6600',
+    rhythm: '#ffffff',
+    destruction: '#ff0000',
+    sound: '#ffffff',
+    perform: '#002db3',
+    transport: '#ffa200',
+  },
+};
+
 export const PALETTE_CONFIG: PaletteConfig = {
   app: 'clatter',
   roles: CLATTER_ROLES,
-  builtIns: [{ ...ATARI, name: 'Classic' }, DARK, COLOUR, ...SHARED_PRESETS.filter((p) => p.id !== ATARI.id && p.id !== DARK.id)],
+  builtIns: [{ ...ATARI, name: 'Classic' }, DARK, COLOUR, AMFAS, AMFAS_INVERT, ...SHARED_PRESETS.filter((p) => p.id !== ATARI.id && p.id !== DARK.id)],
   accept: ['emmm-palette', 'breakery-palette', 'downbeat-palette', 'anvil-palette', 'goodbits-palette'],
 };
 

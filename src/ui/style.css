@@ -1496,36 +1496,155 @@ input.mtext:focus {
 }
 
 /* ------------------------------------------------------------ SOUND and PERFORM layouts */
-.sound-top {
-  display: grid;
+/* SOUND: a track sidebar and a tabbed main column. The page does not scroll: a pane does. */
+html[data-view='sound'] #main {
+  padding-bottom: calc(14 * var(--px));
+}
+.view.sound-view {
+  flex-direction: row;
+  align-items: stretch;
+  height: 100%;
+  min-height: calc(480 * var(--px)); /* a window shorter than this (at this scale) scrolls instead of crushing the panes */
   gap: calc(16 * var(--px));
-  grid-template-columns: calc(340 * var(--px)) minmax(0, 1fr) calc(420 * var(--px));
-  grid-template-areas: 'tracks synth sample';
-  align-items: start;
 }
-.sa-tracks {
-  grid-area: tracks;
+.sound-side {
+  flex: none;
+  width: calc(230 * var(--px));
+  min-height: 0;
 }
-.sa-synth {
-  grid-area: synth;
+.sound-side > .body {
+  overflow: hidden;
+  display: flex;
 }
-.sa-sample {
-  grid-area: sample;
+.sidelist {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--px));
+  scrollbar-color: var(--ink) var(--paper);
+}
+.sidetrack {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--px));
+  padding: calc(4 * var(--px)) calc(6 * var(--px));
+  border: var(--u) solid var(--ink);
+  cursor: default;
+}
+.sidetrack:hover:not(.on) {
+  box-shadow: inset 0 0 0 var(--u) var(--ink);
+}
+.sidetrack.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.sidetrack.on .btn {
+  border-color: var(--paper);
+}
+.sidetrack .modetag {
+  letter-spacing: 1px;
+}
+.sidetrack .msbtns {
+  flex: none;
+  gap: calc(3 * var(--px));
+}
+.sidemeter {
+  height: calc(6 * var(--px));
+  width: 100%;
+  flex: none;
+}
+.sound-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sndpanes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+.sndpane {
+  display: none;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--paper);
+  border: var(--u) solid var(--ink);
+  outline: var(--u) solid var(--paper);
+  padding: var(--pad);
+  gap: calc(10 * var(--px));
+  flex-direction: column;
+}
+.sndpane.show {
+  display: flex;
+}
+.sndtop {
+  flex: none;
+}
+.sndscroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: var(--ink) var(--paper);
+}
+.sndstatus {
+  flex: none;
+  margin-top: calc(8 * var(--px));
+  padding: calc(3 * var(--px)) calc(8 * var(--px));
+  font-family: var(--font-2);
+  font-size: var(--fs-2);
+  color: var(--ink);
+  background: var(--paper);
+  border: var(--u) solid var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slotbar > .btn {
+  min-width: calc(54 * var(--px));
+}
+.voicechips .chip {
+  position: relative;
+  padding-bottom: calc(8 * var(--px));
+}
+.chipmeter {
+  position: absolute;
+  left: calc(3 * var(--px));
+  right: calc(3 * var(--px));
+  bottom: calc(2 * var(--px));
+  height: calc(3 * var(--px));
 }
 .sample-body {
   display: grid;
   gap: calc(16 * var(--px)) calc(22 * var(--px));
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(400 * var(--px))), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(360 * var(--px))), 1fr));
+  align-content: start;
   align-items: start;
 }
-.sound-top > .win {
-  min-width: 0;
-}
-.sound-bottom {
+.modgrid,
+.kitgrid {
   display: grid;
-  gap: calc(16 * var(--px));
-  grid-template-columns: minmax(0, 1fr) minmax(calc(400 * var(--px)), calc(500 * var(--px)));
+  gap: calc(16 * var(--px)) calc(22 * var(--px));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(300 * var(--px))), 1fr));
+  align-content: start;
   align-items: start;
+}
+.liblist {
+  max-height: calc(260 * var(--px));
+  overflow-y: auto;
+}
+.steplist {
+  max-height: calc(200 * var(--px));
+  overflow-y: auto;
+}
+.ctl.overridden .lock {
+  font-weight: bold;
 }
 .synthcols {
   column-width: calc(340 * var(--px));
@@ -1551,23 +1670,10 @@ input.mtext:focus {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   align-items: start;
 }
-/* below 1500 logical px wide */
-:root.lt-1500 .sound-top {
-  grid-template-columns: calc(340 * var(--px)) minmax(0, 1fr);
-  grid-template-areas: 'tracks synth' 'sample sample';
-}
 /* below 1300 logical px wide */
-:root.lt-1300 .sound-bottom {
-  grid-template-columns: minmax(0, 1fr);
-}
 :root.lt-1300 .perform-top,
 :root.lt-1300 .perform-mid {
   grid-template-columns: minmax(0, 1fr);
-}
-/* below 900 logical px wide */
-:root.lt-900 .sound-top {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: 'tracks' 'synth' 'sample';
 }
 
 /* ------------------------------------------------------------ PATTERN: sequencer and workspace
@@ -1688,6 +1794,9 @@ html[data-view='pattern'] #main {
 .wspane-sequence.show {
   grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
 }
+.wspane-sound.show {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(340 * var(--px))), 1fr));
+}
 .wspane-transform.show {
   display: flex;
   align-items: flex-start;
@@ -1755,4 +1864,12 @@ html[data-view='pattern'] #main {
 .wscard .row.wrap > .btn.grow {
   flex: 1 1 auto;
   min-width: max-content;
+}
+
+.rulebox {
+  padding: calc(4 * var(--px)) 0;
+  border-top: var(--u) dotted var(--ink);
+}
+.condedit {
+  gap: calc(6 * var(--px));
 }

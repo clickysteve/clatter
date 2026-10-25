@@ -6,6 +6,7 @@
  *   GENERATE   style and the generator, accent and fills, evolution
  *   TRANSFORM  CHOP, ROLLS, DESTROY and WILDCARD
  *   TRACK      the selected track: source, mute and solo, performance, loop length and MIDI
+ *   STEP SOUND the sound of the selected step: variation, voice, locks, conditions, generators
  *
  * The page does not scroll: the grid takes the height that is left above the workspace (its rows
  * shrink to fit, then it scrolls inside its frame) and a workspace tab whose controls need more
@@ -25,6 +26,7 @@ import { openPopover } from '../popover';
 import { onScale, sz } from '../scale';
 import { button, ctl, group, h, num, Panel, range, select, win } from '../widgets';
 import { stepEditor } from './stepEditor';
+import { stepSoundEditor } from './stepSoundEditor';
 
 export interface View {
   root: HTMLDivElement;
@@ -56,12 +58,13 @@ export function subscribe(app: App, topics: Topic[], fn: () => void): void {
 /** The workspace under the grid: a share of the window's height, within these limits (unscaled pixels). */
 const WORKSPACE = { min: 168, max: 300, share: 0.28 };
 
-const WS_LABEL: Record<Workspace, string> = { sequence: 'SEQUENCE', generate: 'GENERATE', transform: 'TRANSFORM', track: 'TRACK' };
+const WS_LABEL: Record<Workspace, string> = { sequence: 'SEQUENCE', generate: 'GENERATE', transform: 'TRANSFORM', track: 'TRACK', sound: 'STEP SOUND' };
 const WS_TITLE: Record<Workspace, string> = {
   sequence: 'The step being edited, and the tools for the selection',
   generate: 'Generate, vary and mutate the pattern',
   transform: 'CHOP, ROLLS, DESTROY and WILDCARD',
   track: 'The selected track: source, performance, loop length, MIDI',
+  sound: 'The sound of the selected step: variation, voice, locks, conditions',
 };
 
 export function patternView(app: App, screen: HTMLElement): View {
@@ -239,6 +242,21 @@ export function patternView(app: App, screen: HTMLElement): View {
     showWhere();
   });
   window.addEventListener('clatter-palette', () => grid.draw());
+
+  // ---------------------------------------------------------------- STEP SOUND
+  const np = new Panel();
+  stepSoundEditor(app, panes.sound, np);
+  infos.sound = () => {
+    const c = app.cursorCell();
+    const t = c ? app.project.tracks.find((x) => x.id === c.track) : null;
+    if (!t || !c) return 'NO STEP SELECTED';
+    const d = app.describeStepSound(c.track, c.step);
+    return `${t.name} · STEP ${c.step + 1} · ${d || 'PLAYS THE TRACK’S SOUND'}`;
+  };
+  subscribe(app, ['selection', 'pattern', 'tracks', 'kit', 'project', 'gen'], () => {
+    np.refresh();
+    wp.refresh();
+  });
 
   // ---------------------------------------------------------------- GENERATE
   const gp = new Panel();
@@ -456,7 +474,7 @@ export function patternView(app: App, screen: HTMLElement): View {
     wp.refresh();
   });
 
-  const all = [gp, pp, sp, dp, tp, ep, wp];
+  const all = [gp, pp, sp, dp, tp, ep, wp, np];
   let lastCycle = -1;
   return {
     root,

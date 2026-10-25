@@ -21,12 +21,14 @@ import { defaultProject, defaultSound } from '../model/defaults';
 import { kitOf, readKitFile, writeKitFile, KIT_EXT } from '../model/kitFile';
 import { BUNDLE_EXT, parseProject, projectSamples, PROJECT_EXT, serialize } from '../model/project';
 import { buildPreset, PRESETS, resolveBundled } from '../model/presets';
-import { repairVariation, soundSampleIds } from '../sound/stepSound';
-import { clamp, clone, MAX_PATTERNS, VARIATION_SLOTS, MAX_STEPS, stepTicks, type DestructionSettings, type GenSettings, type Hit, type Pattern, type Project, type Quantize, type Resolution, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from '../model/types';
+import { COND_LABEL, isEmptyStepSound, lockableParam, repairVariation, resolveStepSound, soundSampleIds } from '../sound/stepSound';
+import { addEvolution, clearEvolution, distributeSounds, generateVariations, handMade, mutateSounds, slotWritable } from '../sound/soundgen';
+import { voiceKeys } from '../sound/kitgen';
+import { clamp, clone, MAX_PATTERNS, VARIATION_SLOTS, MAX_STEPS, stepTicks, type StepSound, type Variation, type DestructionSettings, type GenSettings, type Hit, type Pattern, type Project, type Quantize, type Resolution, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from '../model/types';
 import { MidiController } from '../midi/controller';
 import { generate, stepsPerBar } from '../rhythm/generate';
 import { mutate, summariseOps } from '../rhythm/mutate';
-import { clearTrack, commitEdits, copyRegion, editCount, newPattern, pasteRegion, setHit, setLength, setResolution, shiftTrack, sourceGrid, type Clip } from '../rhythm/pattern';
+import { clearTrack, commitEdits, copyRegion, editCount, newPattern, pasteRegion, setHit, setLength, setResolution, setSounds, setStepSound, shiftTrack, soundCount, sourceGrid, stepSoundAt, type Clip } from '../rhythm/pattern';
 import { hash32, randomSeed, Rng } from '../rhythm/rng';
 import { styleById } from '../rhythm/styles';
 import type { Realization } from '../rhythm/realize';
@@ -40,7 +42,7 @@ import { exportMidi } from '../export/midiFile';
 import { Sequence } from './sequence';
 import { anySolo, configureEngine, engineTrackOf, hitOf, kitDiff, masterChain, sendKit, trackIndex, type EngineTarget } from './soundConfig';
 import { History } from './history';
-import { loadPrefs, savePrefs, type Prefs, type Workspace } from './prefs';
+import { loadPrefs, savePrefs, type Prefs, type SoundTab, type Workspace } from './prefs';
 import { setScale } from '../ui/scale';
 import { Scheduler, startTicker } from '../transport/scheduler';
 import { PAR } from '../sound/lxrParamIds';
@@ -82,6 +84,12 @@ export interface UiState {
   cursor: { track: string; step: number } | null;
   /** the grid also shows what the pattern was before hand edits (deleted generated hits, edit marks) */
   showOriginal: boolean;
+  /** the tab open in the SOUND view */
+  soundTab: SoundTab;
+  /** the sound the SYNTH editor edits: null = the base sound, 0-3 = variation A-D of the selected track */
+  slot: number | null;
+  /** the pass of the pattern the step-sound preview plays (1 = the first) */
+  previewPass: number;
 }
 
 type DocState = Omit<Project, 'snapshots'>;
@@ -103,6 +111,8 @@ export class App {
   initKit: SynthKit | null = null;
   meters: MetersMessage | null = null;
   clip: Clip | null = null;
+  /** the step sound COPY took */
+  soundClip: StepSound | null = null;
   private fns = new Map<Topic, Set<() => void>>();
   private stopTicker: (() => void) | null = null;
   private sentSamples = new Set<string>();
@@ -131,6 +141,9 @@ export class App {
       paintVel: 100,
       cursor: null,
       showOriginal: false,
+      soundTab: this.prefs.soundTab,
+      slot: null,
+      previewPass: 1,
     };
     this.host = new AudioHost(opts.trackCount ?? 12, 1);
     let store: IndexedDbSampleStore | null = null;
@@ -1095,6 +1108,541 @@ export class App {
       this.autosave();
       this.emit(['kit']);
     }
+  }
+
+
+  // ------------------------------------------------------------------ SOUND: variations
+  /** Which sound the SYNTH editor shows: the base sound, or variation A-D of the selected track. */
+  setSlot(slot: number | null): void {
+    this.ui.slot = slot;
+    this.emit(['kit', 'selection']);
+  }
+
+  setSoundTab(tab: SoundTab): void {
+    this.ui.soundTab = tab;
+    this.prefs.soundTab = tab;
+    savePrefs(this.prefs);
+    this.emit(['view']);
+  }
+
+  /** The value a parameter has in the sound being edited: the variation's own, else the kit's. */
+  paramValue(p: number): number {
+    const v = this.ui.slot !== null ? this.track.sound.variations?.[this.ui.slot] : null;
+    return v?.params[p] ?? this.project.kit.synth.params[p] ?? 0;
+  }
+
+  /** Does the sound being edited override this parameter? */
+  paramOverridden(p: number): boolean {
+    return this.ui.slot !== null && this.track.sound.variations?.[this.ui.slot]?.params[p] !== undefined;
+  }
+
+  private ensureVariations(t: Track): (Variation | null)[] {
+    const sound = t.sound;
+    const list = (sound.variations ??= []);
+    while (list.length < VARIATION_SLOTS) list.push(null);
+    return list;
+  }
+
+  private tidyVariations(t: Track): void {
+    if (t.sound.variations && t.sound.variations.every((v) => !v)) delete t.sound.variations;
+  }
+
+  /**
+   * Set a parameter of the sound being edited. On the base sound this is the kit; on a variation
+   * it is that variation's own value (equal to the kit's: the override is dropped and the
+   * parameter follows the kit again). Editing by hand clears the variation's `gen` mark.
+   */
+  setEditedParam(p: number, v: number, label = 'SYNTH'): void {
+    const slot = this.ui.slot;
+    if (slot === null) return this.setParam(p, v, label);
+    const t = this.track;
+    const def = lockableParam(t.sound.trigger, p);
+    if (!def) return this.setParam(p, v, label);
+    const val = clamp(Math.round(v), 0, def.max);
+    if (this.paramValue(p) === val) return;
+    this.history.begin(label);
+    const list = this.ensureVariations(t);
+    const cur = (list[slot] ??= { name: '', params: {} });
+    if (val === (this.project.kit.synth.params[p] ?? 0)) delete cur.params[p];
+    else cur.params[p] = val;
+    delete cur.gen;
+    this.history.commit();
+    this.autosave();
+    this.sequence.bump();
+    this.scheduler.invalidate();
+    this.emit(['kit', 'history', 'pattern']);
+  }
+
+  /** A sample-layer setting of the sound being edited: the variation's own, else the track's. */
+  sampleValue<K extends 'tune' | 'fine' | 'gain' | 'pan' | 'reverse'>(k: K): TrackSound[K] {
+    const v = this.ui.slot !== null ? this.track.sound.variations?.[this.ui.slot] : null;
+    return (v?.sample?.[k] ?? this.track.sound[k]) as TrackSound[K];
+  }
+
+  sampleOverridden(k: 'tune' | 'fine' | 'gain' | 'pan' | 'reverse'): boolean {
+    return this.ui.slot !== null && this.track.sound.variations?.[this.ui.slot]?.sample?.[k] !== undefined;
+  }
+
+  /** Set tune, fine, gain, pan or reverse on the base sound, or as an override of the edited variation. */
+  setEditedSample(patch: Pick<Partial<TrackSound>, 'tune' | 'fine' | 'gain' | 'pan' | 'reverse'>, label: string): void {
+    const slot = this.ui.slot;
+    const t = this.track;
+    if (slot === null) return this.setTrackSound(t.id, patch, label);
+    this.history.begin(label);
+    const list = this.ensureVariations(t);
+    const cur = (list[slot] ??= { name: '', params: {} });
+    const smp = (cur.sample ??= {});
+    for (const [k, val] of Object.entries(patch)) {
+      const key = k as 'tune' | 'fine' | 'gain' | 'pan' | 'reverse';
+      if (val === t.sound[key]) delete smp[key];
+      else (smp as Record<string, unknown>)[key] = val;
+    }
+    if (!Object.keys(smp).length) delete cur.sample;
+    delete cur.gen;
+    this.history.commit();
+    this.syncTracks();
+    this.autosave();
+    this.sequence.bump();
+    this.scheduler.invalidate();
+    this.emit(['tracks', 'history', 'pattern']);
+  }
+
+  /** Make a parameter of the edited variation follow the kit again. */
+  inheritParam(p: number): void {
+    const slot = this.ui.slot;
+    const v = slot === null ? null : this.track.sound.variations?.[slot];
+    if (!v || v.params[p] === undefined) return;
+    this.change('INHERIT PARAMETER', () => delete v.params[p], ['kit']);
+  }
+
+  /** Create variation `slot` of a track from its base sound (an empty one that inherits everything). */
+  createVariation(trackId: string, slot: number, name = ''): void {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    if (!t) return;
+    this.change('NEW VARIATION', () => (this.ensureVariations(t)[slot] = { name: name.toUpperCase().slice(0, 10), params: {} }), ['tracks', 'kit']);
+    this.setSlot(slot);
+  }
+
+  /** Copy a variation (or, with from = null, the base sound's sample settings) to another slot. */
+  duplicateVariation(trackId: string, from: number, to: number): void {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    const src = t?.sound.variations?.[from];
+    if (!t || !src) return;
+    this.change('DUPLICATE VARIATION', () => (this.ensureVariations(t)[to] = { ...clone(src), name: src.name, gen: undefined, lock: undefined }), ['tracks', 'kit']);
+    this.setSlot(to);
+  }
+
+  renameVariation(trackId: string, slot: number, name: string): void {
+    const v = this.project.tracks.find((x) => x.id === trackId)?.sound.variations?.[slot];
+    if (v) this.change('RENAME VARIATION', () => (v.name = name.toUpperCase().slice(0, 10)), ['tracks']);
+  }
+
+  clearVariation(trackId: string, slot: number): void {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    if (!t?.sound.variations?.[slot]) return;
+    this.change('CLEAR VARIATION', () => {
+      this.ensureVariations(t)[slot] = null;
+      this.tidyVariations(t);
+    }, ['tracks', 'kit']);
+  }
+
+  lockVariation(trackId: string, slot: number): void {
+    const v = this.project.tracks.find((x) => x.id === trackId)?.sound.variations?.[slot];
+    if (v) this.change(v.lock ? 'UNLOCK VARIATION' : 'LOCK VARIATION', () => (v.lock = v.lock ? undefined : true), ['tracks']);
+  }
+
+  /** Protect (or release) a track's variations and step sounds from the sound generators. */
+  lockTrackSound(trackId: string): void {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    if (t) this.change(t.sound.soundLock ? 'UNLOCK TRACK SOUND' : 'LOCK TRACK SOUND', () => (t.sound.soundLock = t.sound.soundLock ? undefined : true), ['tracks']);
+  }
+
+  /** The same LXR parameter on another voice (drum voices share a layout; others map by name). */
+  private translateParams(params: Record<number, number>, fromTrig: number, toTrig: number): Record<number, number> | null {
+    const a = voiceKeys(fromTrig >= 5 ? 5 : fromTrig);
+    const b = voiceKeys(toTrig >= 5 ? 5 : toTrig);
+    const out: Record<number, number> = {};
+    for (const [k, val] of Object.entries(params)) {
+      const key = (Object.keys(a) as (keyof typeof a)[]).find((x) => a[x] === Number(k));
+      const to = key ? b[key] : undefined;
+      if (to !== undefined && lockableParam(toTrig, to)) out[to] = val;
+    }
+    return Object.keys(out).length || !Object.keys(params).length ? out : null;
+  }
+
+  /** Copy a variation to a compatible track (same kind of voice, or both sample tracks). */
+  copyVariationTo(trackId: string, slot: number, toTrackId: string, toSlot = slot): boolean {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    const d = this.project.tracks.find((x) => x.id === toTrackId);
+    const src = t?.sound.variations?.[slot];
+    if (!t || !d || !src) return false;
+    const params = this.translateParams(src.params, t.sound.trigger, d.sound.trigger);
+    if (!params) {
+      this.say(`${d.name} CANNOT TAKE THAT VARIATION`);
+      return false;
+    }
+    this.change('COPY VARIATION', () => (this.ensureVariations(d)[toSlot] = { name: src.name, params, ...(src.sample ? { sample: clone(src.sample) } : {}) }), ['tracks', 'kit']);
+    this.say(`VARIATION ${String.fromCharCode(65 + slot)} COPIED TO ${d.name}`);
+    return true;
+  }
+
+  // ------------------------------------------------------------------ STEP SOUND
+  stepSound(trackId: string, step: number): StepSound | undefined {
+    return stepSoundAt(this.pattern, trackId, step);
+  }
+
+  /** The steps the Step Sound editor acts on: the selected region's hits, or the cursor step. */
+  soundTargets(): { track: string; step: number }[] {
+    const s = this.ui.sel;
+    if (s && !(s.t0 === s.t1 && s.s0 === s.s1)) {
+      const out: { track: string; step: number }[] = [];
+      for (let ti = Math.min(s.t0, s.t1); ti <= Math.max(s.t0, s.t1); ti++) {
+        const t = this.project.tracks[ti];
+        if (!t) continue;
+        for (let st = Math.min(s.s0, s.s1); st <= Math.max(s.s0, s.s1) && st < this.pattern.steps; st++) if (this.hitAt(t.id, st)) out.push({ track: t.id, step: st });
+      }
+      return out;
+    }
+    const c = this.cursorCell();
+    return c ? [c] : [];
+  }
+
+  /** Change the sound of the target steps. `fn` gets a copy of each step's sound ({} when none). */
+  editStepSound(fn: (cur: StepSound, track: Track) => StepSound | undefined, label: string, targets = this.soundTargets()): void {
+    if (!targets.length) return;
+    this.change(
+      label,
+      () => {
+        for (const x of targets) {
+          const t = this.project.tracks.find((y) => y.id === x.track);
+          if (!t) continue;
+          const next = fn(clone(stepSoundAt(this.pattern, x.track, x.step) ?? {}), t);
+          if (next) delete next.gen; // changed by hand: the generators leave it alone
+          setStepSound(this.pattern, x.track, x.step, next && !isEmptyStepSound(next) ? next : undefined);
+        }
+      },
+      ['pattern'],
+    );
+  }
+
+  /** Keep only what the voice a step plays has (after a voice switch). */
+  private fitToVoice(ss: StepSound, track: Track): StepSound {
+    const trig = ss.voice ?? track.sound.trigger;
+    if (ss.locks) {
+      for (const k of Object.keys(ss.locks)) if (!lockableParam(trig, Number(k))) delete ss.locks[Number(k)];
+      if (!Object.keys(ss.locks).length) delete ss.locks;
+    }
+    if (ss.rules) {
+      ss.rules = ss.rules.filter((r) => lockableParam(trig, r.p));
+      if (!ss.rules.length) delete ss.rules;
+    }
+    return ss;
+  }
+
+  setStepVariation(v: number | undefined, label = 'STEP VARIATION'): void {
+    this.editStepSound((s) => {
+      if (v === undefined) delete s.v;
+      else s.v = v;
+      return s;
+    }, label);
+  }
+
+  setStepVoice(trig: number | undefined): void {
+    this.editStepSound((s, t) => {
+      if (trig === undefined || trig === t.sound.trigger) delete s.voice;
+      else s.voice = trig;
+      return this.fitToVoice(s, t);
+    }, 'STEP VOICE');
+  }
+
+  /** Lock a parameter on the target steps (null: back to the track's value). */
+  setStepLock(p: number, v: number | null): void {
+    this.editStepSound((s, t) => {
+      const def = lockableParam(s.voice ?? t.sound.trigger, p);
+      if (!def) return s;
+      if (v === null) {
+        if (s.locks) delete s.locks[p];
+        if (s.locks && !Object.keys(s.locks).length) delete s.locks;
+      } else (s.locks ??= {})[p] = clamp(Math.round(v), 0, def.max);
+      return s;
+    }, 'STEP LOCK');
+  }
+
+  setStepAlt(alt: StepSound['alt'] | null): void {
+    this.editStepSound((s) => {
+      if (alt) s.alt = clone(alt);
+      else delete s.alt;
+      return s;
+    }, 'STEP CONDITION');
+  }
+
+  addStepRule(rule: import('../model/types').ParamRule): void {
+    this.editStepSound((s, t) => {
+      if (lockableParam(s.voice ?? t.sound.trigger, rule.p)) s.rules = [...(s.rules ?? []), clone(rule)].slice(0, 8);
+      return s;
+    }, 'STEP RULE');
+  }
+
+  setStepRule(i: number, rule: import('../model/types').ParamRule | null): void {
+    this.editStepSound((s) => {
+      const rules = [...(s.rules ?? [])];
+      if (rule) rules[i] = clone(rule);
+      else rules.splice(i, 1);
+      if (rules.length) s.rules = rules;
+      else delete s.rules;
+      return s;
+    }, 'STEP RULE');
+  }
+
+  /** CLEAR LOCKS: the locks and rules go; the variation, condition and voice stay. */
+  clearStepLocks(): void {
+    this.editStepSound((s) => {
+      delete s.locks;
+      delete s.rules;
+      return s;
+    }, 'CLEAR STEP LOCKS');
+  }
+
+  clearStepSounds(targets = this.soundTargets()): void {
+    this.editStepSound(() => undefined, 'CLEAR STEP SOUND', targets);
+  }
+
+  copyStepSound(): void {
+    const c = this.soundTargets()[0];
+    if (!c) return;
+    const s = this.stepSound(c.track, c.step);
+    this.soundClip = s ? clone(s) : null;
+    this.say(s ? 'STEP SOUND COPIED' : 'THAT STEP HAS NO SOUND CHANGES: PASTE WILL CLEAR');
+  }
+
+  pasteStepSound(): void {
+    const clip = this.soundClip;
+    this.editStepSound((_, t) => (clip ? this.fitToVoice(clone(clip), t) : undefined), 'PASTE STEP SOUND');
+  }
+
+  /** Describe a step's sound for tooltips and the grid key. */
+  describeStepSound(trackId: string, step: number): string {
+    const s = this.stepSound(trackId, step);
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    if (!s || !t) return '';
+    const parts: string[] = [];
+    const name = (i: number | null) => (i === null ? 'BASE' : String.fromCharCode(65 + i) + (t.sound.variations?.[i]?.name ? ` ${t.sound.variations[i]!.name}` : ''));
+    if (s.v !== undefined) parts.push('SOUND ' + name(s.v));
+    if (s.alt) parts.push(`${COND_LABEL[s.alt.cond.k]}${'n' in s.alt.cond ? ' ' + s.alt.cond.n : 'p' in s.alt.cond ? ' ' + s.alt.cond.p + '%' : ''} → ${name(s.alt.v)}`);
+    if (s.voice !== undefined) parts.push('VOICE ' + ['DRUM 1', 'DRUM 2', 'DRUM 3', 'SNARE', 'CYMBAL', 'CL HAT', 'OP HAT'][s.voice]);
+    const nl = Object.keys(s.locks ?? {}).length;
+    if (nl) parts.push(`${nl} LOCK${nl > 1 ? 'S' : ''}`);
+    const nr = s.rules?.length ?? 0;
+    if (nr) parts.push(`${nr} RULE${nr > 1 ? 'S' : ''}`);
+    return parts.join(' · ') + (s.gen ? ' (GENERATED)' : '');
+  }
+
+  soundCount(): number {
+    return soundCount(this.pattern);
+  }
+
+  /**
+   * Hear a step with its resolved sound (the pass chosen in the editor), or with the track's
+   * base sound for comparison. Goes through the same resolver the sequencer uses.
+   */
+  async auditionStep(trackId: string, step: number, base = false): Promise<void> {
+    if (this.host.state !== 'running') {
+      try {
+        await this.host.start();
+        configureEngine(this.live, this.project, this.library);
+      } catch {
+        return;
+      }
+    }
+    const i = this.trackIndexOf(trackId);
+    const t = this.project.tracks[i];
+    if (!t) return;
+    const hit = this.hitAt(trackId, step);
+    const ss = base ? undefined : this.stepSound(trackId, step);
+    const rs = ss ? resolveStepSound(t.sound, ss, (par) => this.project.kit.synth.params[par] ?? 0, { seed: this.project.seed, cycle: Math.max(0, this.ui.previewPass - 1), fill: this.ui.fills.has(trackId), track: trackId, step }) : null;
+    this.host.send({
+      type: 'hits',
+      hits: [{ time: this.host.now + 0.01, track: i, vel: hit?.vel ?? 110, pitch: hit?.note ?? 0, ...(rs?.switched ? { trig: rs.trig } : {}), ...(rs?.params.length ? { sp: rs.params } : {}), ...(rs?.sample ? { smp: rs.sample } : {}) }],
+    });
+  }
+
+  // ------------------------------------------------------------------ GENERATIVE SOUND
+  /** The tracks (and steps) the sound generators work on: the selection, else every track. */
+  soundScope(): { tracks: Track[]; region?: [number, number] } {
+    const s = this.ui.sel;
+    if (!s) return { tracks: this.project.tracks };
+    const a = Math.min(s.t0, s.t1);
+    const b = Math.max(s.t0, s.t1);
+    return { tracks: this.project.tracks.slice(a, b + 1), region: [Math.min(s.s0, s.s1), Math.max(s.s0, s.s1)] };
+  }
+
+  setTimbre(amount: number): void {
+    this.history.begin('TIMBRE');
+    this.project.timbre.amount = clamp(amount, 0, 1);
+    this.history.commit();
+    this.autosave();
+    this.emit(['gen', 'history']);
+  }
+
+  private geometry() {
+    const p = this.pattern;
+    return { steps: p.steps, perBeat: p.res, perBar: p.res * 4 };
+  }
+
+  private newSoundSeed(): number {
+    const seed = randomSeed();
+    this.project.timbre.seed = seed;
+    return seed;
+  }
+
+  /** GENERATE VARIATIONS: fill the free slots A-D of the tracks in scope with related timbres. */
+  generateVariationsFor(tracks = this.soundScope().tracks, force = false): void {
+    const seed = randomSeed();
+    this.change(
+      'GENERATE VARIATIONS',
+      () => {
+        let n = 0;
+        for (const t of tracks) {
+          const next = generateVariations(t.sound, t.role, this.project.kit.synth.params, { seed, amount: this.project.timbre.amount, locks: this.project.soundLocks, force });
+          const before = JSON.stringify(t.sound.variations ?? null);
+          t.sound.variations = next;
+          this.tidyVariations(t);
+          if (JSON.stringify(t.sound.variations ?? null) !== before) n++;
+        }
+        this.syncTracks();
+        this.say(n ? `VARIATIONS FOR ${n} TRACK${n > 1 ? 'S' : ''} · TIMBRE ${Math.round(this.project.timbre.amount * 100)}%` : 'NO FREE SLOTS (LOCKED OR HAND-MADE)');
+      },
+      ['tracks', 'kit'],
+    );
+  }
+
+  /** DISTRIBUTE: assign the variations to the steps of the tracks in scope, by role. */
+  distributeVariations(): void {
+    const { tracks, region } = this.soundScope();
+    this.change('DISTRIBUTE VARIATIONS', () => this.writeSounds('DISTRIBUTE', tracks, region, (t, grid, cur, o) => distributeSounds(t.sound, t.role, grid, cur, this.project.kit.synth.params, o)), ['pattern']);
+  }
+
+  /** MUTATE SOUND: redraw a share of the generated step sounds; hand-made ones and the rhythm stay. */
+  mutateSound(amount = 0.3): void {
+    const { tracks, region } = this.soundScope();
+    this.change('MUTATE SOUND', () => this.writeSounds('MUTATE SOUND', tracks, region, (t, grid, cur, o) => mutateSounds(t.sound, t.role, grid, cur, this.project.kit.synth.params, { ...o, amount })), ['pattern']);
+  }
+
+  /** GENERATE SOUND: variations for the free slots, then their distribution (one undo step). */
+  generateSound(): void {
+    this.history.begin('GENERATE SOUND');
+    this.generateVariationsFor(undefined, false);
+    this.distributeVariations();
+    this.history.commit();
+    this.emit(['history']);
+  }
+
+  /** MUTATE BOTH: the rhythm and the sound in one undo step. */
+  mutateBoth(): void {
+    this.history.begin('MUTATE BOTH');
+    this.mutate();
+    this.mutateSound(0.3);
+    this.history.commit();
+    this.emit(['history']);
+  }
+
+  private writeSounds(label: string, tracks: Track[], region: [number, number] | undefined, fn: (t: Track, grid: import('../model/types').Grid, cur: Record<number, StepSound> | undefined, o: import('../sound/soundgen').DistributeOptions) => Record<number, StepSound>): void {
+    const seed = this.newSoundSeed();
+    const p = this.pattern;
+    let steps = 0;
+    for (const t of tracks) {
+      const next = fn(t, sourceGrid(p, t.id), p.sounds?.[t.id], { seed, take: 0, amount: this.project.timbre.amount, locks: this.project.soundLocks, region, ...this.geometry() });
+      setSounds(p, t.id, next);
+      steps += Object.keys(next).length;
+    }
+    this.say(`${label} · TIMBRE ${Math.round(this.project.timbre.amount * 100)}% · ${steps} STEP SOUNDS`);
+  }
+
+  /** EVOLVE SOUND: bounded glides on a few parameters of the tracks in scope. */
+  addSoundEvolution(passes = 8): void {
+    const { tracks } = this.soundScope();
+    this.change(
+      'EVOLVE SOUND',
+      () => {
+        for (const t of tracks) setSounds(this.pattern, t.id, addEvolution(t.sound, t.role, sourceGrid(this.pattern, t.id), this.pattern.sounds?.[t.id], { amount: Math.max(0.1, this.project.timbre.amount), passes, locks: this.project.soundLocks }));
+        this.say(`SOUND EVOLUTION OVER ${passes} PASSES · IT RETURNS TO THE BASE SOUND`);
+      },
+      ['pattern'],
+    );
+  }
+
+  clearSoundEvolution(): void {
+    const { tracks } = this.soundScope();
+    this.change('CLEAR EVOLUTION', () => tracks.forEach((t) => setSounds(this.pattern, t.id, clearEvolution(this.pattern.sounds?.[t.id]))), ['pattern']);
+  }
+
+  /** RESET SOUND: remove the generated step sounds (and, with all, the hand-made ones) in scope. */
+  clearSoundsInScope(all = false): void {
+    const { tracks, region } = this.soundScope();
+    this.change(
+      all ? 'CLEAR ALL STEP SOUNDS' : 'RESET GENERATED SOUNDS',
+      () => {
+        for (const t of tracks) {
+          const cur = this.pattern.sounds?.[t.id] ?? {};
+          const keep: Record<number, StepSound> = {};
+          for (const [k, ss] of Object.entries(cur)) {
+            const inside = !region || (Number(k) >= region[0] && Number(k) <= region[1]);
+            if (!inside || (!all && handMade(ss))) keep[Number(k)] = ss;
+          }
+          setSounds(this.pattern, t.id, keep);
+        }
+      },
+      ['pattern'],
+    );
+  }
+
+  /** RESET VARIATIONS: remove the generated variations of the tracks in scope (hand-made and locked stay). */
+  resetGeneratedVariations(): void {
+    const { tracks } = this.soundScope();
+    this.change('RESET VARIATIONS', () => {
+      for (const t of tracks) {
+        if (t.sound.soundLock || !t.sound.variations) continue;
+        t.sound.variations = t.sound.variations.map((v, i) => (v && slotWritable(t.sound, i) && v.gen ? null : v));
+        this.tidyVariations(t);
+      }
+      this.syncTracks();
+    }, ['tracks', 'kit', 'pattern']);
+  }
+
+  /** Randomise or mutate the variation being edited (a new take of its recipe, or a nudge of its values). */
+  randomizeVariation(trackId: string, slot: number, amount: number): void {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    if (!t) return;
+    const seed = randomSeed();
+    this.change(
+      'RANDOMISE VARIATION',
+      () => {
+        const only: (Variation | null)[] = generateVariations({ ...t.sound, variations: undefined }, t.role, this.project.kit.synth.params, { seed, amount, locks: this.project.soundLocks, force: true });
+        const fresh = only[slot];
+        if (fresh) this.ensureVariations(t)[slot] = { ...fresh, lock: t.sound.variations?.[slot]?.lock };
+        this.syncTracks();
+      },
+      ['tracks', 'kit'],
+    );
+  }
+
+  mutateVariation(trackId: string, slot: number, amount: number): void {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    const v = t?.sound.variations?.[slot];
+    if (!t || !v) return;
+    const rng = new Rng(randomSeed());
+    this.change(
+      'MUTATE VARIATION',
+      () => {
+        for (const [k, val] of Object.entries(v.params)) {
+          const def = lockableParam(t.sound.trigger, Number(k));
+          if (!def || this.project.soundLocks.params.includes(Number(k))) continue;
+          v.params[Number(k)] = clamp(Math.round(val + rng.bell() * 40 * amount * (def.kind === 'menu' ? 0 : 1)), 0, def.max);
+        }
+        delete v.gen;
+      },
+      ['kit'],
+    );
   }
 
   // ------------------------------------------------------------------ samples

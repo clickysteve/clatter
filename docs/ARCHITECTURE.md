@@ -82,6 +82,13 @@ than audio.
   never further than a limit from where it started, and KIT HOME returns.
 - **Locks.** Voices and individual parameters can be locked against generation, mutation and
   evolution.
+- **Variations and step sounds** (`sound/stepSound.ts`, `sound/soundgen.ts`). A track has up to four
+  sparse variations (A-D) of its base sound; a step may name one, a condition, another voice,
+  parameter locks and rules. `resolveStepSound` is a pure function (kit → track → variation →
+  step locks → rules) run once per hit in `app/soundConfig.ts` (`hitOf`); the hit carries the
+  resulting `(param, value)` pairs to the engine, which sets them just before the trigger and
+  restores the kit values at that voice's next hit. Randomness is keyed-hash based, so playback and
+  export agree. See [STEP_SOUND.md](STEP_SOUND.md).
 
 ## The engine
 

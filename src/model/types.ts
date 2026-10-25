@@ -15,6 +15,8 @@
 
 import type { ChannelFx, OutputFx } from '../audio/mixfx';
 import type { ModPatch, TrackMod } from '../mod/types';
+import type { TempoAuto } from '../transport/tempo';
+import type { WildSettings } from '../destruction/wildcardProject';
 
 /** Ticks per quarter note (musical time unit; 24 per sixteenth). */
 export const PPQ = 96;
@@ -70,6 +72,33 @@ export type SoundCond =
   | { k: 'alt' }
   | { k: 'fill' };
 export type SoundCondKind = SoundCond['k'];
+
+/**
+ * Whether a programmed step plays at all (a trigger condition). Independent of the step's sound:
+ * the condition is decided first, and only a step that plays resolves its sound variation.
+ * A step with no entry is ALWAYS. Counting is per pattern pass: see src/rhythm/trigger.ts.
+ *
+ *   always   every pass                    prob    n % of the passes (seeded)
+ *   every    pass `at` of every `n`        first   the first pass since the pattern began
+ *   last     the final pass (length known) odd     passes 1, 3, 5...
+ *   even     passes 2, 4, 6...             alt     `run` passes on, `run` off, repeating
+ *   fill     only while a FILL is active   nofill  only while no FILL is active
+ *   prev     if the step before it played  noprev  if the step before it did not
+ */
+export type TrigCond =
+  | { k: 'always' }
+  | { k: 'prob'; p: number }
+  | { k: 'every'; n: number; at: number }
+  | { k: 'first' }
+  | { k: 'last' }
+  | { k: 'odd' }
+  | { k: 'even' }
+  | { k: 'alt'; run: number }
+  | { k: 'fill' }
+  | { k: 'nofill' }
+  | { k: 'prev' }
+  | { k: 'noprev' };
+export type TrigKind = TrigCond['k'];
 
 /** Sample-layer settings a variation or a step can change (the track's own where absent). */
 export interface SampleOverrides {
@@ -265,6 +294,8 @@ export interface Pattern {
   generation: number;
   /** step sounds: track → step → StepSound (sparse; absent in projects older than 0.2) */
   sounds?: Record<string, Record<number, StepSound>>;
+  /** trigger conditions: track → step → condition (sparse: absent = ALWAYS; absent in projects older than 0.4) */
+  trig?: Record<string, Record<number, TrigCond>>;
 }
 
 /** CHOP: the pattern cut into slices and rearranged (after The Breakery's CHOP). */
@@ -393,11 +424,13 @@ export interface MasterSettings {
 
 export interface Project {
   format: 'clatter-project';
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   /** the four performance macros 0-1 (absent: 0) */
   macros?: number[];
   name: string;
   tempo: number;
+  /** tempo automation: a loop of tempo changes under the performance (absent in projects older than 0.4: none) */
+  tempoAuto?: TempoAuto;
   /** swing 50-75 % */
   swing: number;
   /** the project seed (performance randomness) */
@@ -416,6 +449,8 @@ export interface Project {
   /** the sound generators' amount and seed */
   timbre: TimbreSettings;
   quantize: Quantize;
+  /** the settings and seed of the last WILDCARD applied (record only; absent if none) */
+  wildcard?: WildSettings;
   master: MasterSettings;
   snapshots: (Snapshot | null)[];
   notes: string;

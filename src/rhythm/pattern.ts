@@ -7,7 +7,7 @@
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
-import { MAX_STEPS, clone, type GenSettings, type Grid, type Hit, type Pattern, type Resolution, type StepSound } from '../model/types';
+import { MAX_STEPS, clone, type GenSettings, type Grid, type Hit, type Pattern, type Resolution, type StepSound, type TrigCond } from '../model/types';
 import { isEmptyStepSound } from '../sound/stepSound';
 import { resize, stepsPerBar } from './generate';
 
@@ -88,6 +88,19 @@ export function setLength(p: Pattern, steps: number): void {
       setSounds(p, id, out);
     }
   }
+  // conditions repeat with the baseline too
+  if (p.trig) {
+    const old = p.steps;
+    for (const id of Object.keys(p.trig)) {
+      const src = p.trig[id]!;
+      const out: Record<number, TrigCond> = {};
+      for (let i = 0; i < n; i++) {
+        const c = src[i % old];
+        if (c) out[i] = { ...c };
+      }
+      setTrigs(p, id, out);
+    }
+  }
   p.steps = n;
 }
 
@@ -117,10 +130,54 @@ export function setResolution(p: Pattern, res: Resolution, trackIds: readonly st
       setSounds(p, id, out);
     }
   }
+  if (p.trig) {
+    for (const id of Object.keys(p.trig)) {
+      const out: Record<number, TrigCond> = {};
+      for (const [k, c] of Object.entries(p.trig[id]!)) {
+        const j = Math.round(Number(k) * ratio);
+        if (j < steps && Math.abs(Number(k) * ratio - j) < 1e-6) out[j] = c;
+      }
+      setTrigs(p, id, out);
+    }
+  }
   p.gen = gen;
   p.edits = {};
   p.res = res;
   p.steps = steps;
+}
+
+// ---------------------------------------------------------------------------- trigger conditions
+/** The trigger condition of a step (undefined: ALWAYS). */
+export function trigAt(p: Pattern, trackId: string, step: number): TrigCond | undefined {
+  return p.trig?.[trackId]?.[step];
+}
+
+/** Replace a track's conditions (an empty set removes the entry). */
+export function setTrigs(p: Pattern, trackId: string, trigs: Record<number, TrigCond>): void {
+  const keep = Object.entries(trigs).filter(([, c]) => c.k !== 'always');
+  if (!keep.length) {
+    if (p.trig) {
+      delete p.trig[trackId];
+      if (!Object.keys(p.trig).length) delete p.trig;
+    }
+    return;
+  }
+  (p.trig ??= {})[trackId] = Object.fromEntries(keep);
+}
+
+/** Set (or, when ALWAYS or undefined, clear) the condition of one step. */
+export function setStepTrig(p: Pattern, trackId: string, step: number, c: TrigCond | undefined): void {
+  if (step < 0 || step >= p.steps) return;
+  const cur = { ...(p.trig?.[trackId] ?? {}) };
+  if (!c || c.k === 'always') delete cur[step];
+  else cur[step] = c;
+  setTrigs(p, trackId, cur);
+}
+
+/** Number of steps with a condition (for one track, or all). */
+export function trigCount(p: Pattern, trackId?: string): number {
+  if (trackId) return Object.keys(p.trig?.[trackId] ?? {}).length;
+  return Object.values(p.trig ?? {}).reduce((a, e) => a + Object.keys(e).length, 0);
 }
 
 // ---------------------------------------------------------------------------- step sounds
@@ -168,6 +225,12 @@ export function shiftTrack(p: Pattern, trackId: string, n: number): void {
     for (const [k, ss] of Object.entries(snd)) out[(((Number(k) + n) % len) + len) % len] = ss;
     setSounds(p, trackId, out);
   }
+  const trg = p.trig?.[trackId];
+  if (trg) {
+    const out: Record<number, TrigCond> = {};
+    for (const [k, c] of Object.entries(trg)) out[(((Number(k) + n) % len) + len) % len] = c;
+    setTrigs(p, trackId, out);
+  }
 }
 
 /** Clear a track (as edits, so RESET can bring it back). */
@@ -181,6 +244,8 @@ export interface Clip {
   rows: (Hit | null)[][];
   /** the rows' step sounds (relative step → sound), when any */
   sounds?: Record<number, StepSound>[];
+  /** the rows' trigger conditions (relative step → condition), when any */
+  trig?: Record<number, TrigCond>[];
 }
 
 export function copyRegion(p: Pattern, trackIds: readonly string[], from: number, to: number): Clip {
@@ -197,6 +262,16 @@ export function copyRegion(p: Pattern, trackIds: readonly string[], from: number
       return row;
     });
   }
+  if (p.trig && trackIds.some((id) => p.trig![id])) {
+    clip.trig = trackIds.map((id) => {
+      const row: Record<number, TrigCond> = {};
+      for (let i = a; i <= b; i++) {
+        const c = p.trig![id]?.[i];
+        if (c) row[i - a] = { ...c };
+      }
+      return row;
+    });
+  }
   return clip;
 }
 
@@ -206,6 +281,7 @@ export function pasteRegion(p: Pattern, trackIds: readonly string[], at: number,
     if (!id) return;
     row.forEach((h, k) => setHit(p, id, at + k, h));
     if (clip.sounds) row.forEach((_, k) => setStepSound(p, id, at + k, clip.sounds![r]?.[k] ? clone(clip.sounds![r]![k]!) : undefined));
+    if (clip.trig) row.forEach((_, k) => setStepTrig(p, id, at + k, clip.trig![r]?.[k] ? { ...clip.trig![r]![k]! } : undefined));
   });
 }
 

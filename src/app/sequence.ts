@@ -20,6 +20,8 @@ export interface SequenceOptions {
   fills?: () => ReadonlySet<string>;
   /** play only the written source */
   sourceOnly?: () => boolean;
+  /** the length of the run in ticks when it is known (an export), so LAST CYCLE can be decided */
+  lengthTicks?: () => number | null;
   /** a cycle began with this pattern (the app makes it current) */
   onPattern?: (id: string, k: number) => void;
 }
@@ -30,6 +32,8 @@ export class Sequence implements CycleSource {
   private chainPos = 0;
   private chainRep = 0;
   private lastPattern = '';
+  /** where each recent cycle sits: its pattern, pass of that pattern, start and length in ticks */
+  private info = new Map<number, { pattern: string; pass: number; start: number; ticks: number; last: boolean }>();
   /** the latest realisation per cycle (display) */
   latest: Realization | null = null;
 
@@ -44,6 +48,7 @@ export class Sequence implements CycleSource {
     this.chainPos = 0;
     this.chainRep = 0;
     this.lastPattern = '';
+    this.info.clear();
     this.cache.clear();
   }
 
@@ -77,22 +82,36 @@ export class Sequence implements CycleSource {
       this.lastPattern = p.id;
       this.o.onPattern?.(p.id, k);
     }
-    return { pattern: p.id, ticks: p.steps * stepTicks(p.res) };
+    const ticks = p.steps * stepTicks(p.res);
+    // the pass counter for trigger conditions: it runs on while a pattern repeats and restarts when another one begins
+    const before = k > 0 ? this.info.get(k - 1) : undefined;
+    const start = before ? before.start + before.ticks : 0;
+    const pass = before && before.pattern === p.id ? before.pass + 1 : 0;
+    const length = this.o.lengthTicks?.() ?? null;
+    this.info.set(k, { pattern: p.id, pass, start, ticks, last: length !== null && start + ticks >= length - 1e-6 });
+    this.info.delete(k - 64);
+    return { pattern: p.id, ticks };
   }
 
   /** The realisation of cycle k of a pattern (cached for the current version). */
-  realization(k: number, patternId: string): Realization {
-    const key = `${k}|${patternId}`;
+  realization(k: number, patternId: string, preview = false): Realization {
+    const key = `${k}|${patternId}${preview ? '|p' : ''}`;
     const hit = this.cache.get(key);
     if (hit) return hit;
     const proj = this.o.project();
     const fills = this.o.fills?.();
     const tracks: Track[] = fills && fills.size ? proj.tracks.map((t) => (fills.has(t.id) ? { ...t, play: { ...t.play, fill: Math.max(t.play.fill, 85) } } : t)) : proj.tracks;
-    const r = realize({ seed: proj.seed, swing: proj.swing, pattern: this.pattern(patternId), tracks, destruction: proj.destruction, evolve: proj.evolve, sourceOnly: this.o.sourceOnly?.() }, k);
+    const r = realize({ seed: proj.seed, swing: proj.swing, pattern: this.pattern(patternId), tracks, destruction: proj.destruction, evolve: proj.evolve, sourceOnly: this.o.sourceOnly?.(), trig: this.trigAt(k, patternId, fills, preview) }, k);
     if (this.cache.size > 16) this.cache.clear();
     this.cache.set(key, r);
     this.latest = r;
     return r;
+  }
+
+  /** Pass counting for cycle k (a cycle never planned, as in a stopped preview, counts k passes of one pattern). */
+  private trigAt(k: number, patternId: string, fills: ReadonlySet<string> | undefined, preview: boolean): { pass: number; last: boolean; fills?: ReadonlySet<string> } {
+    const i = preview ? undefined : this.info.get(k);
+    return i && i.pattern === patternId ? { pass: i.pass, last: i.last, fills } : { pass: k, last: false, fills };
   }
 
   events(k: number, patternId: string): readonly PerfEvent[] {

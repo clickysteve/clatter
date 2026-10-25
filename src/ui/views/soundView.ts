@@ -18,7 +18,8 @@ import type { App } from '../../app/app';
 import { SOUND_TABS, type SoundTab } from '../../app/prefs';
 import { SLOT_NAMES, VARIATION_SLOTS, type SamplePick } from '../../model/types';
 import { FX_PARAM_LABELS, FX_PARAMS, GROUPS, PAR, TRIGGERS, VOICE_PARAMS, VOICES } from '../../sound/lxrParams';
-import { importSamples, openFile } from '../menu';
+import { importSamples } from '../menu';
+import { importFolder, importZip, kitLibraryDialog } from '../kitDialogs';
 import { button, ctl, download, group, h, num, Panel, range, select, vfader, win } from '../widgets';
 import { subscribe, type View } from './patternView';
 import { editingText, editVoice, generativeCard, paramCtl, slotBar, sourceStrip, variationTools, viewVoice } from './soundControls';
@@ -202,6 +203,33 @@ export function soundView(app: App, screen: HTMLElement): View {
 
   // ---------------------------------------------------------------- SAMPLE
   const sp = new Panel();
+  const sethead = h('div', 'row wrap sethead', panes.sample);
+  h('div', 'lbl', sethead, 'SAMPLE SET');
+  const setName = h('div', 'setname', sethead);
+  setName.dataset.test = 'set-name';
+  sp.add(() => {
+    const km = app.kitm;
+    const dirty = !!km && km.session.currentId !== null && km.session.dirty;
+    setName.textContent = (km?.setName ?? 'NONE') + (dirty ? ' · UNSAVED' : '');
+    setName.title = 'The sample set on the tracks. A set is the samples of all tracks with their playback settings; the synth kit is separate.';
+  });
+  button(sp, sethead, 'LOAD SET…', () => kitLibraryDialog(app, 'set'), { title: 'Choose a saved sample set; it shows which tracks change before loading. The synth kit is not touched.' }).dataset.test = 'set-load';
+  button(sp, sethead, 'SAVE SET', () => {
+    const km = app.kitm;
+    if (!km) return;
+    if (km.session.currentId) {
+      void km.session.save().then(() => app.say(`SAMPLE SET ${km.session.name} SAVED`), (e) => app.say(String(e instanceof Error ? e.message : e)));
+    } else kitLibraryDialog(app, 'set', '', km.setName === 'NONE' ? '' : km.setName);
+  }, { title: 'Save the samples on the tracks to the current set (or name a new one)' }).dataset.test = 'set-save';
+  button(sp, sethead, 'IMPORT FOLDER…', () => void importFolder(app), { title: 'A folder of drum samples: CLATTER proposes which sample goes on which track' }).dataset.test = 'set-import-folder';
+  button(sp, sethead, 'IMPORT ZIP…', () => void importZip(app), { title: 'A ZIP of drum samples or a .kit.zip' }).dataset.test = 'set-import-zip';
+  button(sp, sethead, 'EXPORT SET', () => {
+    const km = app.kitm;
+    if (!km) return;
+    void km.exportCurrent('set', km.setName === 'NONE' ? app.project.name : km.setName).then((f) => download(f.name, f.data, f.type), (e) => app.say(`EXPORT FAILED: ${e instanceof Error ? e.message : String(e)}`));
+  }, { title: 'The samples on the tracks as a portable .kit.zip (manifest, audio, assignments, playback settings)' }).dataset.test = 'set-export';
+  button(sp, sethead, 'LIBRARY…', () => kitLibraryDialog(app, 'set'), { title: 'Browse, rename, duplicate, delete, import and export sample sets, synth kits and full kits' });
+  subscribe(app, ['kits', 'project'], () => sp.refresh());
   const sbody = h('div', 'sample-body sndscroll', panes.sample);
   const sb1 = h('div', 'col', sbody);
   const sb2 = h('div', 'col', sbody);
@@ -518,12 +546,20 @@ export function soundView(app: App, screen: HTMLElement): View {
   num(kp, kr, { get: () => Math.round(mutAmt * 100), set: (v) => ((mutAmt = v / 100), kp.refresh()), min: 5, max: 100, format: (v) => v + '%', title: 'How far MUTATE goes' });
   const kn = h('div', 'report', kleft);
   kp.add(() => (kn.textContent = `${app.project.kit.name} · SEED ${app.project.kit.seed}${app.ui.busy ? ' · CHECKING THE KIT IN THE ENGINE…' : ''} · ${app.project.soundLocks.params.length} PARAMS LOCKED`));
-  const kf = h('div', 'row wrap', kleft);
-  button(kp, kf, 'EXPORT KIT', () => {
-    const f = app.kitFile();
-    download(f.name, f.data, f.type);
-  }, { cls: 'grow', title: 'Save the kit (.clatterkit.zip)' });
-  button(kp, kf, 'LOAD KIT…', () => void openFile(app, '.zip'), { cls: 'grow', title: 'Load a kit, project or bundle' });
+  const kg = group(kleft, 'KITS · SYNTH, SAMPLES, BOTH');
+  kg.classList.add('col');
+  const kitLine = (label: string, kind: 'synth' | 'set' | 'full', current: () => string, title: string) => {
+    const r = h('div', 'row wrap kitline-row', kg);
+    h('div', 'lbl kitlbl', r, label).title = title;
+    const nm = h('div', 'setname grow', r);
+    kp.add(() => (nm.textContent = current()));
+    button(kp, r, 'SAVE…', () => kitLibraryDialog(app, kind, '', current() === 'NONE' ? '' : current()), { cls: 'small', title: `Save as a ${label.toLowerCase()}` }).dataset.test = `kit-save-${kind}`;
+    button(kp, r, 'LOAD…', () => kitLibraryDialog(app, kind), { cls: 'small', title: `Load a ${label.toLowerCase()}: it shows what changes first` }).dataset.test = `kit-load-${kind}`;
+  };
+  kitLine('SYNTH KIT', 'synth', () => app.project.kit.name, 'The LXR synthesis only: parameters, modulation, FX bus, voice assignments. Samples are not part of it.');
+  kitLine('SAMPLE SET', 'set', () => app.kitm?.setName ?? 'NONE', 'The samples on the tracks and how they play. The synthesis is not part of it.');
+  kitLine('FULL KIT', 'full', () => app.kitm?.fullName || 'NONE', 'A synth kit and a sample set together, with source modes, hybrid balance and mixer.');
+  button(kp, h('div', 'row wrap', kg), 'LIBRARY…', () => kitLibraryDialog(app, 'set'), { cls: 'grow', title: 'Browse, rename, duplicate, delete, import and export every kind of kit' }).dataset.test = 'kit-library';
   const vg2 = group(kleft, 'VOICES · LOCK AND MUTATE');
   vg2.classList.add('col');
   VOICES.forEach((vn, v) => {
@@ -548,7 +584,7 @@ export function soundView(app: App, screen: HTMLElement): View {
     if (only[p.id] !== undefined) kp.add(() => (wrap.style.display = fxType() === only[p.id] ? '' : 'none'));
   }
   h('div', 'hint', kright, 'Tracks with FX on in the mixer play through the bus. The FX bus belongs to the kit: variations do not change it.');
-  subscribe(app, ['kit', 'status', 'project'], () => kp.refresh());
+  subscribe(app, ['kit', 'status', 'project', 'kits'], () => kp.refresh());
 
   const all = [lp, tp, stp, sy, sp, mo, mx, kp];
   return {

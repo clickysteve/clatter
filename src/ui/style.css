@@ -729,7 +729,7 @@ input.num {
 }
 .msel-list {
   position: fixed;
-  z-index: 20001;
+  z-index: 31000;
   background: var(--paper);
   color: var(--ink);
   border: var(--u) solid var(--ink);
@@ -1891,4 +1891,128 @@ html[data-view='pattern'] #main {
   flex: 1 1 auto;
   min-width: max-content;
   padding: 0 calc(8 * var(--px));
+}
+
+/* sample sets and kits: the SAMPLE tab's set row, the KIT & FX tab's kit lines, the kit dialogs */
+.sethead {
+  flex: none;
+  align-items: center;
+}
+.setname {
+  border: var(--u) solid var(--ink);
+  min-height: var(--ctl-h);
+  padding: 0 calc(10 * var(--px));
+  display: inline-flex;
+  align-items: center;
+  min-width: calc(120 * var(--px));
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.setname.grow {
+  flex: 1;
+}
+.kitlbl {
+  min-width: calc(96 * var(--px));
+}
+.kitdlg {
+  gap: calc(8 * var(--px));
+}
+.kitdlg .kname {
+  cursor: text;
+  justify-content: flex-start;
+  min-width: calc(160 * var(--px));
+  text-transform: uppercase;
+}
+.kitdlg .kithint,
+.kitdlg .kitsec,
+.kitdlg .kitline {
+  flex: none;
+}
+.kitdlg .kitsec {
+  margin-top: calc(8 * var(--px));
+}
+.kitdlg .kitlist {
+  flex: 1 1 auto;
+  min-height: calc(120 * var(--px));
+  max-height: 40vh;
+}
+.kitdlg .kitstatus {
+  flex: none;
+  min-height: calc(32 * var(--px));
+  color: var(--ink);
+}
+.dialog .kscroll {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: calc(80 * var(--px));
+  border: var(--u) solid var(--ink);
+  scrollbar-color: var(--ink) var(--paper);
+  font-family: var(--font);
+  font-size: var(--fs);
+  line-height: 1.2;
+}
+.kitdlg .btn.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.maprow {
+  display: grid;
+  grid-template-columns: calc(110 * var(--px)) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  align-items: center;
+  gap: calc(8 * var(--px));
+  padding: calc(3 * var(--px)) calc(8 * var(--px));
+  min-height: calc(40 * var(--px));
+  border-bottom: 1px dotted var(--ink);
+}
+.maprow.mapimport {
+  grid-template-columns: calc(110 * var(--px)) minmax(0, 1.6fr) auto minmax(0, 1fr);
+}
+.maphead {
+  flex: none;
+  border: 0;
+  min-height: 0;
+  color: var(--dim);
+  font-family: var(--font-2);
+  font-size: var(--fs-2);
+}
+.maprow .mapname {
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.maprow .now,
+.maprow .mapafter {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-2);
+  font-size: var(--fs-2);
+}
+.maprow .now {
+  color: var(--dim);
+}
+.maprow.changes .mapafter {
+  box-shadow: inset 0 calc(-2 * var(--px)) 0 var(--ink);
+}
+.maprow.empty .mapfile {
+  opacity: 0.6;
+}
+.maprow.amb .mapname::after {
+  content: ' ≈';
+}
+.maprow-note {
+  padding: 0 calc(8 * var(--px)) calc(4 * var(--px));
+  font-family: var(--font-2);
+  font-size: var(--fs-2);
+  color: var(--dim);
+}
+.mapfile .msel {
+  width: 100%;
+  justify-content: flex-start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

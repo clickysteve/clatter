@@ -30,7 +30,8 @@ pattern can play any kit.
 | `lxr/` | The LXR firmware files (unchanged), CLATTER's shims and WebAssembly bridge, import and extraction tools. See [LXR_PORT.md](LXR_PORT.md). |
 | `scripts/` | `build-lxr.mjs` (the WebAssembly build), `make-samples.mjs` (the bundled demonstration samples). |
 | `src/audio/` | `lxr/lxr.ts` (the engine's TypeScript face), `engine.ts` (ClatterEngine: voices, samples, HYBRID, mixer, FX bus, master, meters, stems), `worklet.ts` and `host.ts` (the AudioWorklet and its main-thread side), `resample.ts`, `render.ts` (offline render), `library.ts` (samples). |
-| `src/model/` | Types, defaults, project files (serialise, defensive repair), presets, kit files. |
+| `src/model/` | Types, defaults, project files (serialise, defensive repair), presets, kit files (`kits.ts`: synth kit and full kit). |
+| `src/samples/` | Sample sets: file-name recognition and mapping, folder/ZIP intake, sets on tracks. Pure, no browser. |
 | `src/rhythm/` | Seeded randomness, Euclid, styles, generation, mutation, pattern editing, realisation. |
 | `src/destruction/` | CHOP, ROLLS, DESTROY, WILDCARD. |
 | `src/sound/` | LXR parameter tables, the kit designer (generate, mutate, evolve), the kit check (in a Worker). |
@@ -116,7 +117,7 @@ The project is one plain object. Every action goes through `App` (`src/app/app.t
 records undo history (whole-document snapshots; a drag is one step), replans the scheduler,
 updates the engine with only what changed, autosaves to local storage, and notifies the views
 by topic. Project files are JSON (`.clatter.json`) or a ZIP bundle with the samples
-(`.clatter.zip`); kits are `.clatterkit.zip`. Loading repairs anything damaged instead of
+(`.clatter.zip`); sample sets and full kits are Slop Factory `.kit.zip` files, synth kits `.clattersynth.json`, and the earlier `.clatterkit.zip` still opens (see `docs/SAMPLE_SETS.md`). Loading repairs anything damaged instead of
 failing (`src/model/project.ts`). Samples are content-addressed (SHA-256) and stored in
 IndexedDB (Slop Factory Core's storage).
 
@@ -136,6 +137,7 @@ interfaces. Nothing from the LXR firmware is in Core, and CLATTER does not chang
 - `test/destruction.test.ts`: CHOP, ROLLS, DESTROY, WILDCARD.
 - `test/scheduler.test.ts`: look-ahead, tempo changes, boundaries, MIDI clock.
 - `test/project.test.ts`: files round-trip and repair, presets, kit files, history.
+- `test/kits.test.ts`: sample sets, synth kits and full kits (naming, intake, libraries, files, compatibility).
 - `test/export.test.ts`: deterministic offline renders, stems that sum to the master, WAV,
   drum hits, the MIDI file.
 - `test/gridmodel.test.ts`: what the grid shows is what plays (sounding, silent, added, deleted

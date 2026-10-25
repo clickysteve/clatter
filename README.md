@@ -20,7 +20,7 @@ CLATTER is a Slop Factory drum workstation built from three systems that stay in
 And: a mixer with meters, FX routing and Slop Factory output processing; a PERFORM view with
 quantised pads, fills, mutes, macros and snapshots; Web MIDI (notes and clock in and out,
 recording, panic); export of the master, stems, a MIDI file, every drum hit and the kit; project
-files, bundles with samples, kit files, undo for everything, eight factory presets, and the
+files, bundles with samples, sample sets (import a folder or ZIP of drum samples, save, load, export), synth kits and full kits (`docs/SAMPLE_SETS.md`), undo for everything, eight factory presets, and the
 Slop Factory's 1-bit look with its palettes (Classic, Dark, Colour, your own).
 
 > CLATTER is an independent project. It is **not** an Erica Synths product and is not endorsed by

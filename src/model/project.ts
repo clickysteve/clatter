@@ -220,6 +220,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
     seed: int(v.seed, 1, 0, 0xffffffff),
     tracks,
     kit: { name: str(kit.name, 'KIT', 24), seed: int(kit.seed, 0, 0, 0xffffffff), synth: repairKit(kit.synth, initKit) },
+    ...(str(v.sampleSet, '', 24) ? { sampleSet: str(v.sampleSet, '', 24) } : {}),
     soundLocks: {
       voices: [0, 1, 2, 3, 4, 5].map((i) => bool((locks.voices as unknown[] | undefined)?.[i], false)),
       params: Array.isArray(locks.params) ? locks.params.filter((x): x is number => Number.isInteger(x) && x > 0 && x < SOUND_PARAM_COUNT) : [],

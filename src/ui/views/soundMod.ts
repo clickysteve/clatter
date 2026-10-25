@@ -625,16 +625,17 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
     if (!md || md.track !== trackIdx()) return;
     const id = sel();
     const k = srcIndex(id);
+    const cfg = mod();
     for (const sid of SOURCE_IDS) {
       const r = rows.get(sid)!;
       const v = md.out[srcIndex(sid)] ?? 0;
-      const d = mod().sources[sid];
+      const d = cfg.sources[sid];
       setW(r.bar, d && isBipolar(d) ? (v + 1) / 2 : sid === 'vel' || sid === 'trig' || sid.startsWith('m') ? Math.abs(v) : (v + 1) / 2);
     }
     const v = md.out[k] ?? 0;
     const txt = `OUT ${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
     if (live.textContent !== txt) live.textContent = txt;
-    const d = def();
+    const d = cfg.sources[id];
     const p = md.pos[k] ?? 0;
     if (d?.type === 'lfo' && plotInfo.cycles === 1 && d.wave !== 'custom') pm.at((((p - d.phase) % 1) + 1) % 1);
     else if (d?.type === 'lfo' && d.wave === 'custom') pm.at(p);
@@ -642,7 +643,7 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
     else pm.at(null);
     if (d?.type === 'step') sm.at(Math.floor(p) / d.len, 1 / d.len);
     else sm.at(null);
-    const routes = mod().routes;
+    const routes = cfg.routes;
     for (let i = 0; i < routeUi.length; i++) {
       const u = routeUi[i]!;
       bip(u.bar, md.routes[i] ?? 0);

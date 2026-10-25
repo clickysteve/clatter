@@ -389,6 +389,8 @@ export interface Project {
   seed: number;
   tracks: Track[];
   kit: { name: string; seed: number; synth: SynthKit };
+  /** the sample set the tracks' samples came from or were saved as (display; the samples themselves are on the tracks) */
+  sampleSet?: string;
   soundLocks: SoundLocks;
   patterns: Pattern[];
   current: string;

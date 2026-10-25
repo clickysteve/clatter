@@ -158,7 +158,7 @@ export function gridKeyDialog(): void {
   const paper = cs.getPropertyValue('--paper').trim() || '#fff';
   const colors = { ink, paper, activity: cs.getPropertyValue('--activity').trim() || ink, selection: cs.getPropertyValue('--selection').trim() || ink };
   const hit = (vel: number, prob = 100): Hit => ({ vel, prob });
-  const base: CellView = { state: 'hit', hit: hit(100), origin: 'gen', vel: 100, strokes: 1, base: null, prob: 100, flam: false, added: false, why: null, kinds: ['source'], destroyed: false, evolved: false, outside: false };
+  const base: CellView = { state: 'hit', hit: hit(100), origin: 'gen', vel: 100, strokes: 1, base: null, prob: 100, flam: false, added: false, why: null, kinds: ['source'], destroyed: false, evolved: false, outside: false, snd: null };
   const empty: CellView = { ...base, state: 'empty', hit: null, vel: 0, strokes: 0, kinds: [] };
   const items: [CellView, boolean, string, string][] = [
     [{ ...base, vel: 110 }, false, 'A hit that sounds', 'A solid block. The grid shows what actually plays in the cycle on show, so you can read the rhythm straight off it. The taller the block, the harder the hit (velocity).'],
@@ -169,6 +169,9 @@ export function gridKeyDialog(): void {
     [{ ...base, state: 'silent', hit: hit(100, 50), prob: 50, why: 'chance', vel: 100 }, false, 'Written, but silent this pass', 'An outlined block: the hit is in your pattern but did not play in the cycle on show (its chance, the track’s density, or CHOP or DESTROY moving or skipping it). Clicking removes it.'],
     [empty, false, 'An empty step', 'Nothing sounds, and nothing is written. Clicking adds a hit (the pointer shows a faint preview of it).'],
     [{ ...base, origin: 'edit' }, true, 'SHOW ORIGINAL: a hand edit', 'With SHOW ORIGINAL on, a small flag in the corner marks a hit you wrote by hand.'],
+    [{ ...base, snd: { letter: 'B', cond: false, voice: false, edits: false, condText: '', text: '' } }, false, 'A step with its own sound', 'A small plate at the top right names the variation (A to D) the step plays instead of the track’s base sound.'],
+    [{ ...base, snd: { letter: 'C', cond: true, voice: false, edits: true, condText: '', text: '' } }, false, 'A conditional sound, with locks', 'A “?” after the letter means a condition decides (a share of the passes, every Nth, first or last, alternate, fill). The corner triangle means the step has parameter locks or rules. Hover the step to read them.'],
+    [{ ...base, snd: { letter: null, cond: false, voice: true, edits: false, condText: '', text: '' } }, false, 'A step that triggers another voice', 'A “>” means the step plays another LXR voice than its track’s.'],
     [{ ...empty, origin: 'deleted', base: hit(100) }, true, 'SHOW ORIGINAL: a deleted hit', 'A crossed-out outline marks a generated hit you deleted. Without SHOW ORIGINAL it is simply an empty step.'],
   ];
   h('p', '', s, 'Every step has its own cell. The lines between cells get heavier at beats and heavier again at bars; every other beat is lightly dotted, and the header counts bars and beats. All of that follows the pattern’s resolution (GRID), so it stays right for 1/16, 1/32 and triplet patterns.');

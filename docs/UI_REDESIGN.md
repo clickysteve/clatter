@@ -164,7 +164,16 @@ Changing the scale applies at once (no reload); the grid redraws.
 
 * No fixed screen: the page is `menu bar / transport` above the work area. Windows are CSS grid
   and flex items.
-* The SOUND view's columns and the PERFORM view's pads re-flow with the window.
+* The SOUND view is a track sidebar (name, source, voice, meter, M and S) beside a tabbed main
+  column (SYNTH, SAMPLE, MODULATION, MIXER, KIT & FX) with a status line under it. It does not
+  scroll as a page: the tab panes scroll inside themselves. Tab switching only shows and hides
+  panes, so editor state is kept, and the open tab is remembered (`soundTab`). It fits 1920 × 1080,
+  1440 × 900 and 1366 × 768 at the default 90 % (and 100 % and 125 %), as the browser tests check.
+* The PATTERN workspace has a fifth tab, STEP SOUND, and the grid can show a SOUND LANE under the
+  tracks (off by default). Step sounds are marked on the cells themselves: a plate with the
+  variation letter, `?` for a condition, `>` for a voice switch and a corner triangle for locks or
+  rules (see ? KEY).
+* The PERFORM view's pads re-flow with the window (it still scrolls as a page).
 * The pop-up lists, dialogs and tooltips are positioned in window coordinates.
 * The palette editor (Slop Factory Core, fixed pixel layout) is shown scaled as a unit.
 

@@ -8,13 +8,21 @@ import { defaultMidiPrefs, type MidiPrefs } from '../midi/controller';
 import { DEFAULT_SCALE, snapScale } from '../ui/scale';
 
 /** The tabs of the PATTERN view's workspace under the grid. */
-export const WORKSPACES = ['sequence', 'generate', 'transform', 'track'] as const;
+export const WORKSPACES = ['sequence', 'sound', 'generate', 'transform', 'track'] as const;
 export type Workspace = (typeof WORKSPACES)[number];
+
+/** The tabs of the SOUND view: SYNTH, SAMPLE, MODULATION, MIXER and KIT & FX. */
+export const SOUND_TABS = ['synth', 'sample', 'modulation', 'mixer', 'kit'] as const;
+export type SoundTab = (typeof SOUND_TABS)[number];
 
 export interface Prefs {
   view: 'pattern' | 'sound' | 'perform';
   /** the tab open under the pattern grid */
   workspace: Workspace;
+  /** the tab open in the SOUND view */
+  soundTab: SoundTab;
+  /** the sound lane under the selected track in the pattern grid */
+  soundLane: boolean;
   /** interface scale (1 = 100 %); see src/ui/scale.ts */
   uiScale: number;
   editMode: 'basic' | 'advanced';
@@ -29,7 +37,7 @@ export interface Prefs {
 
 const KEY = 'clatter.prefs';
 
-export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: 8, exportTail: 2, seenHelp: false, collapsed: {} });
+export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', soundTab: 'synth', soundLane: false, uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: 8, exportTail: 2, seenHelp: false, collapsed: {} });
 
 export function loadPrefs(): Prefs {
   try {
@@ -40,6 +48,8 @@ export function loadPrefs(): Prefs {
     return {
       view: v.view === 'sound' || v.view === 'perform' ? v.view : 'pattern',
       workspace: WORKSPACES.find((w) => w === v.workspace) ?? 'sequence',
+      soundTab: SOUND_TABS.find((w) => w === v.soundTab) ?? 'synth',
+      soundLane: v.soundLane === true,
       uiScale: snapScale(v.uiScale),
       editMode: v.editMode === 'advanced' ? 'advanced' : 'basic',
       midi: { ...d.midi, ...(v.midi ?? {}) },

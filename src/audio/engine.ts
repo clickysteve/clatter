@@ -109,6 +109,16 @@ export interface HitEvent {
   locks?: number[];
   /** a specific sample for this hit */
   sample?: string;
+  /** play this LXR trigger (0-6) instead of the track's (per-step voice) */
+  trig?: number;
+  /**
+   * Step sound: LXR parameter values for this hit, flat [param, value, ...]. They are set just
+   * before the trigger and returned to the kit's values at the next trigger of the same voice
+   * (the voice is monophonic, so a new hit replaces the old one; see docs/STEP_SOUND.md).
+   */
+  sp?: number[];
+  /** step sound: sample-layer settings for this hit */
+  smp?: Partial<EngineTrack>;
   /** a monotonically increasing id, for ordering only */
   seq?: number;
 }
@@ -233,6 +243,11 @@ export class ClatterEngine {
   private synthChoke = new Int8Array(LXR_VOICES);
   /** synth triggers delayed by a HYBRID alignment (negative offset) */
   private delayedTriggers: { frame: number; fn: () => void }[] = [];
+  /** the kit's value of every LXR parameter (what a step's locks return to) */
+  private base: Uint8Array;
+  /** per LXR voice: the parameters the last hit locked; and how many voices hold each */
+  private locked: number[][] = Array.from({ length: LXR_VOICES }, () => []);
+  private lockCount: Uint8Array;
 
   private filters: TrackFilter[] = [];
   private trackBufL: Float32Array[] = [];
@@ -265,6 +280,9 @@ export class ClatterEngine {
 
   constructor(lxr: LxrEngine, trackCount: number, seed = 1) {
     this.lxr = lxr;
+    this.base = new Uint8Array(lxr.paramCount);
+    this.lockCount = new Uint8Array(lxr.paramCount);
+    for (let p = 0; p < lxr.paramCount; p++) this.base[p] = lxr.getParam(p);
     for (let i = 0; i < trackCount; i++) {
       this.tracks.push(silentTrack());
       this.filters.push(new TrackFilter());
@@ -299,8 +317,42 @@ export class ClatterEngine {
     return this.samples.has(id);
   }
 
+  /** Set a kit parameter. A parameter a sounding step has locked takes the value at the voice's next hit. */
   setParam(p: number, v: number): void {
+    if (p > 0 && p < this.base.length) {
+      this.base[p] = Math.max(0, Math.min(127, v | 0));
+      if (this.lockCount[p]) return;
+    }
     this.lxr.setParam(p, v);
+  }
+
+  /**
+   * Make the LXR voice `lv` carry exactly the parameters `sp` ([param, value, ...]) for the hit
+   * about to be triggered: what its previous hit locked and this one does not goes back to the
+   * kit's value; what this hit locks is set. The values go through the firmware's own
+   * parameter handler (LxrEngine.setParam), so they mean what they mean on the hardware.
+   */
+  private applyLocks(lv: number, sp: number[] | undefined): void {
+    const prev = this.locked[lv]!;
+    if (!prev.length && !sp?.length) return;
+    const next: number[] = [];
+    if (sp) for (let i = 0; i + 1 < sp.length; i += 2) next.push(sp[i]! | 0);
+    for (const p of prev) this.lockCount[p]!--;
+    for (const p of prev) if (!next.includes(p) && !this.lockCount[p]) this.lxr.setParam(p, this.base[p]!);
+    if (sp) {
+      for (let i = 0; i + 1 < sp.length; i += 2) {
+        const p = sp[i]! | 0;
+        if (p <= 0 || p >= this.base.length) continue;
+        this.lockCount[p]!++;
+        this.lxr.setParam(p, Math.max(0, Math.min(127, sp[i + 1]! | 0)));
+      }
+    }
+    this.locked[lv] = next.filter((p) => p > 0 && p < this.base.length);
+  }
+
+  /** Every voice back to the kit's parameters (panic, stop). */
+  releaseLocks(): void {
+    for (let lv = 0; lv < LXR_VOICES; lv++) this.applyLocks(lv, undefined);
   }
 
   setModTarget(kind: 0 | 1, voice: number, param: number): void {
@@ -342,6 +394,7 @@ export class ClatterEngine {
     this.delayedTriggers = [];
     for (const v of this.voices) v.fading = true;
     this.synthTarget.fill(0);
+    this.releaseLocks();
   }
 
   // ------------------------------------------------------------------ hits
@@ -385,7 +438,8 @@ export class ClatterEngine {
     return this.samples.get(id)!;
   }
 
-  private startSample(ti: number, t: EngineTrack, h: HitEvent, delayFrames: number): void {
+  private startSample(ti: number, track: EngineTrack, h: HitEvent, delayFrames: number): void {
+    const t = h.smp ? { ...track, ...h.smp } : track;
     const s = this.pickSample(t, ti, h);
     if (!s || !s.channels.length) return;
     const len = s.channels[0]!.length;
@@ -423,8 +477,9 @@ export class ClatterEngine {
   }
 
   private startSynth(ti: number, t: EngineTrack, h: HitEvent): void {
-    const trig = Math.max(0, Math.min(6, t.trigger | 0));
+    const trig = Math.max(0, Math.min(6, (h.trig ?? t.trigger) | 0));
     const lv = trig >= 5 ? 5 : trig;
+    this.applyLocks(lv, h.sp);
     this.voiceOwner[lv] = ti;
     this.synthGain[lv] = 1;
     this.synthTarget[lv] = 1;

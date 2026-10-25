@@ -228,6 +228,17 @@ export function realize(input: RealizeInput, cycle: number): Realization {
     }
   }
 
+  // step sounds: each event carries the sound of the source step it plays
+  const sounds = p.sounds;
+  if (sounds) {
+    for (const e of final) {
+      if (e.origin >= 0) {
+        const ss = sounds[e.track]?.[e.origin];
+        if (ss) e.snd = ss;
+      }
+    }
+  }
+
   // 6. swing (on the sixteenth grid; triplet grids are not swung)
   if (input.swing > 50 && p.res % 2 === 0) for (const e of final) e.tick = swingTick(e.tick, input.swing);
   for (const e of final) e.tick = clamp(e.tick, 0, cycleTicks - 1e-6);

@@ -1,206 +1,216 @@
 /**
- * SOUND: what makes the sound. Track sources (SYNTH, SAMPLE, HYBRID), the LXR synth editor
- * (the firmware's own parameters), the sample library and the selected track's sample, the
- * mixer, and the kit (generate, mutate, lock, evolve), FX bus and master.
+ * SOUND: what makes the sound. A track sidebar that is always there (name, voice, source, mute
+ * and solo) and five contextual tabs for the selected track:
+ *
+ *   SYNTH       source, variations A-D, the LXR voice's parameters
+ *   SAMPLE      the sample layer (of the base sound, or of the variation being edited)
+ *   MODULATION  LFO and velocity, the variations and step sounds at a glance, the sound generators
+ *   MIXER       every track's fader, pan, filter, mute, solo and FX send
+ *   KIT & FX    generate and mutate the kit, voice locks, the FX bus, kit files
+ *
+ * The page does not scroll: each tab scrolls inside its own pane when it needs to. Switching tabs
+ * only shows and hides panes, so nothing is lost; the open tab is remembered.
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import { CHAIN_PRESETS, matchChainPreset, repairChain } from '@slopfactory/core/engines';
 import type { App } from '../../app/app';
-import { ROLE_LABEL, type SamplePick, type SourceMode } from '../../model/types';
-import { FX_PARAM_LABELS, FX_PARAMS, formatValue, GROUPS, modTargets, PAR, targetLabel, TRIGGERS, VOICE_PARAMS, VOICES, type ParamDef } from '../../sound/lxrParams';
-import { importSamples } from '../menu';
+import { SOUND_TABS, type SoundTab } from '../../app/prefs';
+import { SLOT_NAMES, VARIATION_SLOTS, type SamplePick } from '../../model/types';
+import { FX_PARAM_LABELS, FX_PARAMS, GROUPS, PAR, TRIGGERS, VOICE_PARAMS, VOICES } from '../../sound/lxrParams';
+import { importSamples, openFile } from '../menu';
 import { button, ctl, download, group, h, num, Panel, range, select, vfader, win } from '../widgets';
-import { pctRange, subscribe, type View } from './patternView';
+import { subscribe, type View } from './patternView';
+import { editingText, editVoice, generativeCard, paramCtl, slotBar, sourceStrip, variationTools, viewVoice } from './soundControls';
 import { cpx, font } from '../scale';
 
-const MODES: { value: SourceMode; label: string }[] = [
-  { value: 'synth', label: 'SYNTH' },
-  { value: 'sample', label: 'SAMPLE' },
-  { value: 'hybrid', label: 'HYBRID' },
-];
+const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', mixer: 'MIXER', kit: 'KIT & FX' };
+const TAB_TITLE: Record<SoundTab, string> = {
+  synth: 'The selected track’s source, variations and LXR voice parameters',
+  sample: 'The sample layer of the base sound or of the variation being edited',
+  modulation: 'LFO and velocity, variations and step sounds at a glance, the sound generators',
+  mixer: 'Every track: fader, pan, filter, mute, solo, FX send',
+  kit: 'Generate and mutate the kit, lock voices, the FX bus, kit files',
+};
+const MODE_TAG = { synth: 'SYN', sample: 'SMP', hybrid: 'HYB' } as const;
+/** the groups the MODULATION tab shows (the SYNTH tab has the rest) */
+const MOD_GROUPS: readonly string[] = ['LFO', 'VELOCITY'];
+
+type SampleKey = 'tune' | 'fine' | 'gain' | 'pan' | 'reverse';
 
 export function soundView(app: App, screen: HTMLElement): View {
-  const root = h('div', 'view', screen);
+  const root = h('div', 'view sound-view', screen);
   root.dataset.view = 'sound';
-  const top = h('div', 'sound-top', root);
-  const bottom = h('div', 'sound-bottom', root);
   const t = () => app.track;
-  /** The voice shown in the synth editor: the selected track's, or the last one chosen. */
-  let voice = 0;
   const trackMeters: HTMLDivElement[] = [];
+  const sideMeters: HTMLDivElement[] = [];
   const voiceMeters: HTMLDivElement[] = [];
-  const editVoice = () => {
-    const v = app.voiceOf(t());
-    if (v >= 0) voice = v;
-    return voice;
-  };
+  let masterMeters: HTMLDivElement[] = [];
 
-  // ---------------------------------------------------------------- TRACKS
-  const lw = win(top, { title: 'TRACKS', area: 'sound', id: 'tracks' });
-  lw.el.classList.add('sa-tracks');
+  // ================================================================ the track sidebar (always there)
+  const lw = win(root, { title: 'TRACKS', area: 'sound', id: 'tracks' });
+  lw.el.classList.add('sound-side');
   const lp = new Panel();
-  const lb = lw.body;
-  lb.classList.add('col');
-  const list = h('div', 'list', lb);
+  lw.body.classList.add('col', 'sidebody');
+  const list = h('div', 'sidelist', lw.body);
   const buildList = () => {
     list.innerHTML = '';
+    sideMeters.length = 0;
     for (const tr of app.project.tracks) {
-      const li = h('div', 'li', list);
+      const x = () => app.project.tracks.find((y) => y.id === tr.id) ?? tr;
+      const li = h('div', 'sidetrack', list);
       li.dataset.track = tr.id;
-      const nm = h('div', 'grow', li);
-      const src = h('div', 'tiny', li);
-      li.dataset.mode = '';
       li.addEventListener('click', () => app.selectTrack(tr.id));
       li.addEventListener('dblclick', () => void app.audition(tr.id));
+      const top = h('div', 'row', li);
+      const nm = h('div', 'grow sname', top);
+      const mode = h('div', 'tiny modetag', top);
+      const bot = h('div', 'row', li);
+      const src = h('div', 'tiny grow', bot);
+      const ms = h('div', 'row msbtns', bot);
+      const stop = (e: Event) => e.stopPropagation();
+      ms.addEventListener('click', stop);
+      ms.addEventListener('dblclick', stop);
+      button(lp, ms, 'M', () => app.setTrackMix(tr.id, { mute: !x().mix.mute }), { cls: 'small', on: () => x().mix.mute, title: 'Mute' });
+      button(lp, ms, 'S', () => app.setTrackMix(tr.id, { solo: !x().mix.solo }), { cls: 'small', on: () => x().mix.solo, title: 'Solo' });
+      const met = h('div', 'meter h sidemeter', li);
+      sideMeters.push(h('div', 'lvl', met));
       lp.add(() => {
-        const x = app.project.tracks.find((y) => y.id === tr.id);
-        if (!x) return;
-        li.classList.toggle('on', app.ui.track === x.id);
-        nm.textContent = x.name;
-        const smp = x.sound.samples.map((id) => app.library.get(id)?.name ?? '?').join(', ');
-        src.textContent = x.sound.mode === 'synth' ? TRIGGERS[x.sound.trigger]! : x.sound.mode === 'sample' ? smp.slice(0, 18) || 'NO SAMPLE' : `${TRIGGERS[x.sound.trigger]} + ${smp.slice(0, 10)}`;
-        src.title = x.sound.mode.toUpperCase();
+        const s = x();
+        li.classList.toggle('on', app.ui.track === s.id);
+        nm.textContent = s.name;
+        mode.textContent = MODE_TAG[s.sound.mode];
+        mode.title = s.sound.mode.toUpperCase();
+        const names = s.sound.samples.map((id) => app.library.get(id)?.name ?? '?').join(', ');
+        const nv = s.sound.variations?.filter(Boolean).length ?? 0;
+        src.textContent = (s.sound.mode === 'sample' ? names.slice(0, 12) || 'NO SAMPLE' : TRIGGERS[s.sound.trigger]!) + (nv ? ` · ${nv}V` : '');
       });
     }
   };
   buildList();
-  const sg = group(lb, 'SOURCE');
-  sg.classList.add('col');
-  const nr = h('div', 'row', sg);
-  const name = h('input', 'num grow', nr) as HTMLInputElement;
-  name.style.minWidth = '0';
-  name.maxLength = 10;
-  name.title = 'Track name';
-  name.addEventListener('change', () => app.setTrackName(t().id, name.value));
-  name.addEventListener('keydown', (e) => e.stopPropagation());
-  lp.add(() => {
-    if (document.activeElement !== name) name.value = t().name;
-  });
-  button(lp, nr, '▶ HEAR', () => void app.audition(t().id), { title: 'Hear it' });
-  const roleLbl = h('div', 'hint', sg);
-  lp.add(() => (roleLbl.textContent = 'ROLE: ' + ROLE_LABEL[t().role]));
-  const mr = h('div', 'seg fluid', sg);
-  for (const m of MODES) button(lp, mr, m.label, () => app.setTrackSound(t().id, { mode: m.value }, 'SOURCE'), { on: () => t().sound.mode === m.value, title: m.value === 'hybrid' ? 'The LXR voice and the sample together, aligned' : m.value === 'synth' ? 'The LXR voice' : 'Samples only' }).dataset.test = 'mode-' + m.value;
-  const trc = ctl(sg, 'LXR VOICE', 'Which LXR trigger plays this track (two tracks on one voice share it, as on the hardware)');
-  select(lp, trc.slot, { options: () => TRIGGERS.map((n, i) => ({ value: i, label: n })), get: () => t().sound.trigger, set: (v) => app.setTrackSound(t().id, { trigger: v }, 'LXR VOICE') });
-  const noteC = ctl(sg, 'NOTE', 'Synth note: 60 plays the voice at its programmed pitch');
-  range(lp, noteC.slot, { get: () => t().sound.note, set: (v) => app.setTrackSound(t().id, { note: v }, 'NOTE'), min: 24, max: 96, def: 60, bip: true, format: (v) => (v - 60 > 0 ? '+' : '') + (v - 60), begin: () => app.beginDrag('NOTE'), end: () => app.endDrag() });
-  pctRange(lp, sg, app, 'SYNTH LVL', () => t().sound.synthLevel, (v) => app.setTrackSound(t().id, { synthLevel: v }, 'SYNTH LEVEL'), 'HYBRID: level of the synth layer', 0.8);
-  pctRange(lp, sg, app, 'SAMPLE LVL', () => t().sound.sampleLevel, (v) => app.setTrackSound(t().id, { sampleLevel: v }, 'SAMPLE LEVEL'), 'HYBRID: level of the sample layer', 0.8);
-  const off = ctl(sg, 'ALIGN', 'HYBRID: positive delays the sample, negative delays the synth (ms)');
-  range(lp, off.slot, { get: () => t().sound.offsetMs, set: (v) => app.setTrackSound(t().id, { offsetMs: v }, 'ALIGN'), min: -30, max: 30, def: 0, bip: true, format: (v) => (v > 0 ? '+' : '') + v + 'MS', begin: () => app.beginDrag('ALIGN'), end: () => app.endDrag() });
-  const ch = ctl(sg, 'CHOKE', 'Tracks in the same choke group cut each other (0 = none)');
-  num(lp, ch.slot, { get: () => t().sound.choke, set: (v) => app.setTrackSound(t().id, { choke: v }, 'CHOKE'), min: 0, max: 4, format: (v) => (v ? String(v) : 'OFF') });
-  // the six LXR voices
-  const vg = group(lb, 'LXR VOICES');
-  vg.classList.add('col');
-  VOICES.forEach((vn, v) => {
-    const r = h('div', 'row', vg);
-    button(lp, r, vn, () => {
-      voice = v;
-      const owner = app.project.tracks.find((x) => app.voiceOf(x) === v);
-      if (owner) app.selectTrack(owner.id);
-      else lp.refresh();
-      synth.refresh();
-    }, { cls: 'grow', on: () => editVoice() === v, title: 'Edit this voice' });
-    const m = h('div', 'meter h', r);
-    Object.assign(m.style, { width: cpx(56), height: cpx(10), flex: 'none' });
-    const lvl = h('div', 'lvl', m);
-    voiceMeters.push(lvl);
-    button(lp, r, 'L', () => app.lockVoice(v), { cls: 'small', on: () => !!app.project.soundLocks.voices[v], title: 'Lock: GENERATE KIT, MUTATE KIT and EVOLVE leave this voice alone' });
-    button(lp, r, 'MUT', () => void app.mutateKit(0.4, [v]), { cls: 'small', title: 'Mutate this voice', disabled: () => app.ui.busy });
-  });
-  subscribe(app, ['tracks', 'selection', 'kit', 'library', 'project', 'status'], () => lp.refresh());
+  subscribe(app, ['tracks', 'selection', 'kit', 'library', 'project', 'mix', 'status'], () => lp.refresh());
   app.on('project', buildList);
 
-  // ---------------------------------------------------------------- SYNTH EDITOR
-  const ew = win(top, { title: 'SYNTH', area: 'sound', id: 'synth' });
-  ew.el.classList.add('sa-synth');
-  const synth = new Panel();
-  const et = ew.tools;
-  /** the title-bar tools outlive the editor's rebuilds */
-  const ep = new Panel();
-  button(ep, et, 'BASIC', () => app.setEditMode('basic'), { cls: 'small', on: () => app.ui.editMode === 'basic', title: 'The parameters that matter most' });
-  button(ep, et, 'ADVANCED', () => app.setEditMode('advanced'), { cls: 'small', on: () => app.ui.editMode === 'advanced', title: 'Every parameter of the voice' });
-  button(ep, et, 'LOCK VOICE', () => app.lockVoice(editVoice()), { cls: 'small', on: () => !!app.project.soundLocks.voices[editVoice()] });
-  button(ep, et, 'MUTATE VOICE', () => void app.mutateKit(0.4, [editVoice()]), { cls: 'small', disabled: () => app.ui.busy });
-  const eb = ew.body;
-  const cols = h('div', 'synthcols', eb);
-  const paramCtl = (parent: HTMLElement, p: ParamDef, panel: Panel, labelOf?: () => string) => {
-    const locked = () => app.project.soundLocks.params.includes(p.id);
-    const c = ctl(parent, p.label, `${p.help}${p.kind === 'target' ? '' : ' (ALT-click: lock against kit generation)'}`);
-    c.row.dataset.param = String(p.id);
-    if (labelOf) panel.add(() => (c.name.textContent = labelOf()));
-    const lk = h('span', 'lock', c.name);
-    panel.add(() => (lk.textContent = locked() ? '◆' : ''));
-    if (p.kind === 'menu') {
-      select(panel, c.slot, { options: () => (p.options ?? []).map((o, i) => ({ value: i, label: o })), get: () => app.project.kit.synth.params[p.id] ?? 0, set: (v) => app.setParam(p.id, v, p.label) });
-      c.name.addEventListener('click', (e) => e.altKey && app.lockParam(p.id));
-    } else if (p.kind === 'target') {
-      const v = p.voice ?? 0;
-      const lfo = p.id === PAR.TARGET_LFO1 + v;
-      select(panel, c.slot, {
-        options: () => [{ value: 0, label: 'NONE' }, ...modTargets(v).map((x) => ({ value: x.id, label: targetLabel(x.id) }))],
-        get: () => (lfo ? app.project.kit.synth.lfoTarget[v] : app.project.kit.synth.velTarget[v]) ?? 0,
-        set: (x) => app.setModTarget(lfo ? 0 : 1, v, x),
-      });
-    } else {
-      range(panel, c.slot, {
-        get: () => app.project.kit.synth.params[p.id] ?? 0,
-        set: (v) => app.setParam(p.id, v, p.label),
-        min: 0,
-        max: p.max,
-        bip: p.kind === 'bipolar',
-        def: p.kind === 'bipolar' ? 63 : undefined,
-        parse: p.kind === 'bipolar' ? (n) => n + 63 : undefined,
-        format: (v) => formatValue(p, v),
-        locked,
-        onAlt: () => app.lockParam(p.id),
-        begin: () => app.beginDrag(p.label),
-        end: () => app.endDrag(),
-      });
+  // ================================================================ the main column: tabs, panes, status
+  const main = h('div', 'sound-main', root);
+  const bar = h('div', 'wsbar', main);
+  bar.setAttribute('role', 'tablist');
+  const info = h('div', 'wsinfo', bar);
+  const panesEl = h('div', 'sndpanes', main);
+  const status = h('div', 'sndstatus', main);
+  const tp = new Panel();
+  const tabEls = {} as Record<SoundTab, HTMLElement>;
+  const panes = {} as Record<SoundTab, HTMLElement>;
+  for (const [i, id] of SOUND_TABS.entries()) {
+    const tab = h('div', 'wstab', bar, TAB_LABEL[id]);
+    tab.setAttribute('role', 'tab');
+    tab.tabIndex = 0;
+    tab.title = TAB_TITLE[id];
+    tab.dataset.test = 'sound-tab-' + id;
+    tab.addEventListener('click', () => app.setSoundTab(id));
+    tab.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        app.setSoundTab(id);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const to = SOUND_TABS[(i + (e.key === 'ArrowRight' ? 1 : SOUND_TABS.length - 1)) % SOUND_TABS.length]!;
+        app.setSoundTab(to);
+        tabEls[to].focus();
+      }
+    });
+    tabEls[id] = tab;
+    const pane = h('div', 'sndpane sndpane-' + id, panesEl);
+    pane.setAttribute('role', 'tabpanel');
+    pane.dataset.test = 'sound-pane-' + id;
+    panes[id] = pane;
+  }
+  bar.insertBefore(info, null);
+  tp.add(() => {
+    for (const id of SOUND_TABS) {
+      const on = app.ui.soundTab === id;
+      tabEls[id].classList.toggle('on', on);
+      tabEls[id].setAttribute('aria-selected', String(on));
+      panes[id].classList.toggle('show', on);
     }
-  };
+    const x = t();
+    info.textContent = `${x.name} · ${x.sound.mode.toUpperCase()} · ${app.ui.slot === null ? 'BASE SOUND' : 'VARIATION ' + SLOT_NAMES[app.ui.slot]}`;
+  });
+  subscribe(app, ['view', 'selection', 'tracks', 'kit'], () => tp.refresh());
+
+  const stp = new Panel();
+  stp.add(() => {
+    const used = Object.keys(app.pattern.sounds?.[t().id] ?? {}).length;
+    status.textContent = `${editingText(app)} · ${used} STEP SOUND${used === 1 ? '' : 'S'} IN THIS PATTERN`;
+  });
+  subscribe(app, ['kit', 'tracks', 'selection', 'pattern', 'project'], () => stp.refresh());
+
+  // ---------------------------------------------------------------- SYNTH
+  const sy = new Panel();
+  const syp = panes.synth;
+  const tools = h('div', 'col sndtop', syp);
+  sourceStrip(app, tools, sy);
+  slotBar(app, h('div', 'row wrap', tools), sy);
+  variationTools(app, tools, sy);
+  const chips = h('div', 'row wrap voicechips', tools);
+  VOICES.forEach((vn, v) => {
+    const c = button(sy, chips, vn, () => {
+      viewVoice(v);
+      const owner = app.project.tracks.find((x) => app.voiceOf(x) === v);
+      if (owner) app.selectTrack(owner.id);
+      else {
+        buildSynth(true);
+        sy.refresh();
+      }
+    }, { cls: 'small chip', on: () => editVoice(app) === v, title: 'Edit this voice' });
+    voiceMeters.push(h('div', 'lvl', h('div', 'meter h chipmeter', c)));
+  });
+  const sb = h('div', 'row wrap', tools);
+  button(sy, sb, 'BASIC', () => app.setEditMode('basic'), { cls: 'small', on: () => app.ui.editMode === 'basic', title: 'The parameters that matter most' });
+  button(sy, sb, 'ADVANCED', () => app.setEditMode('advanced'), { cls: 'small', on: () => app.ui.editMode === 'advanced', title: 'Every parameter of the voice' });
+  button(sy, sb, 'LOCK VOICE', () => app.lockVoice(editVoice(app)), { cls: 'small', on: () => !!app.project.soundLocks.voices[editVoice(app)], title: 'GENERATE KIT, MUTATE KIT and EVOLVE leave this voice alone' });
+  button(sy, sb, 'MUTATE VOICE', () => void app.mutateKit(0.4, [editVoice(app)]), { cls: 'small', disabled: () => app.ui.busy, title: 'Controlled changes to this voice of the kit' });
+  const syinfo = h('div', 'tiny grow', sb);
+  const cols = h('div', 'synthcols sndscroll', syp);
   let shown = '';
-  const buildSynth = () => {
-    ep.refresh();
-    const v = editVoice();
+  const buildSynth = (force = false) => {
+    const v = editVoice(app);
     const key = `${v}:${app.ui.editMode}`;
-    if (key === shown) return synth.refresh();
+    if (key === shown && !force) return sy.refresh();
     shown = key;
-    synth.clear();
     cols.innerHTML = '';
     const basic = app.ui.editMode === 'basic';
-    const params = VOICE_PARAMS[v]!.filter((p) => !basic || p.basic);
+    const params = VOICE_PARAMS[v]!.filter((p) => (!basic || p.basic) && !MOD_GROUPS.includes(p.group));
     for (const g of GROUPS) {
       const ps = params.filter((p) => p.group === g);
       if (!ps.length) continue;
       const box = group(cols, g);
       box.classList.add('col', 'synthgroup');
-      for (const p of ps) paramCtl(box, p, synth);
+      for (const p of ps) paramCtl(app, box, p, sy);
     }
-    if (basic) {
-      h('div', 'hint', cols, 'ADVANCED shows every parameter. Alt-click a slider to lock it against kit generation ◆.');
-    }
-    synth.add(() => {
-      const owners = app.project.tracks.filter((x) => app.voiceOf(x) === v).map((x) => x.name);
-      ew.setTitle(`SYNTH · ${VOICES[v]}`);
-      ew.info.textContent = owners.length ? owners.join(', ') : 'NO TRACK PLAYS THIS VOICE';
-    });
+    h('div', 'hint', cols, (basic ? 'ADVANCED shows every parameter. ' : '') + 'LFO and VELOCITY are in MODULATION. Alt-click a name to lock it against kit generation ◆. A ◇ marks a value the open variation overrides.');
+    sy.refresh();
   };
+  sy.add(() => {
+    const v = editVoice(app);
+    const owners = app.project.tracks.filter((x) => app.voiceOf(x) === v).map((x) => x.name);
+    syinfo.textContent = `${VOICES[v]} · ${owners.length ? owners.join(', ') : 'NO TRACK PLAYS THIS VOICE'}`;
+  });
   buildSynth();
-  subscribe(app, ['kit', 'tracks', 'selection', 'view', 'project'], buildSynth);
-  app.on('status', () => (synth.refresh(), ep.refresh()));
+  subscribe(app, ['kit', 'tracks', 'selection', 'view', 'project'], () => buildSynth());
+  app.on('status', () => sy.refresh());
 
   // ---------------------------------------------------------------- SAMPLE
-  const smw = win(top, { title: 'SAMPLE', area: 'sound', id: 'sample' });
-  smw.el.classList.add('sa-sample');
   const sp = new Panel();
-  const sbody = h('div', 'sample-body', smw.body);
-  const sb = h('div', 'col', sbody);
+  const sbody = h('div', 'sample-body sndscroll', panes.sample);
+  const sb1 = h('div', 'col', sbody);
   const sb2 = h('div', 'col', sbody);
-  const wave = h('div', 'wave', sb);
+  const note = h('div', 'hint', sb1);
+  sp.add(() => {
+    const sl = app.ui.slot;
+    note.textContent = t().sound.mode === 'synth' ? 'THIS IS A SYNTH TRACK: CHOOSE SAMPLE OR HYBRID IN THE SYNTH TAB TO PLAY SAMPLES.' : sl === null ? 'EDITING THE BASE SAMPLE SETTINGS OF THIS TRACK.' : `EDITING VARIATION ${SLOT_NAMES[sl]}: A ◇ MARKS A SETTING THAT OVERRIDES THE TRACK’S (CLICK ITS NAME TO FOLLOW THE TRACK AGAIN).`;
+  });
+  const wave = h('div', 'wave', sb1);
   const wc = h('canvas', '', wave);
   wave.title = 'Drag: region start (left half) or end (right half)';
   const current = () => app.library.get(t().sound.samples[0] ?? '');
@@ -274,21 +284,31 @@ export function soundView(app: App, screen: HTMLElement): View {
   wave.addEventListener('pointercancel', waveUp);
   wave.addEventListener('dblclick', () => app.setTrackSound(t().id, { start: 0, end: 1 }, 'REGION'));
   sp.add(drawWave);
-  const sinfo = h('div', 'report', sb);
+  const sinfo = h('div', 'report', sb1);
   sp.add(() => {
     const s = current();
     sinfo.textContent = s ? `${s.name} · ${s.duration.toFixed(2)} S · ${s.rate} HZ · ${s.channels.length > 1 ? 'STEREO' : 'MONO'}${s.bundled ? ' · BUNDLED' : ''}` : '';
   });
-  const tune = ctl(sb, 'TUNE', 'Sample pitch in semitones');
-  range(sp, tune.slot, { get: () => t().sound.tune, set: (v) => app.setTrackSound(t().id, { tune: v }, 'TUNE'), min: -24, max: 24, def: 0, bip: true, format: (v) => (v > 0 ? '+' : '') + v, begin: () => app.beginDrag('TUNE'), end: () => app.endDrag() });
-  const fine = ctl(sb, 'FINE', 'Cents');
-  range(sp, fine.slot, { get: () => t().sound.fine, set: (v) => app.setTrackSound(t().id, { fine: v }, 'FINE'), min: -100, max: 100, def: 0, bip: true, format: (v) => (v > 0 ? '+' : '') + v + 'C', begin: () => app.beginDrag('FINE'), end: () => app.endDrag() });
-  const gain = ctl(sb, 'GAIN', 'Sample gain before the mixer');
-  range(sp, gain.slot, { get: () => Math.round(t().sound.gain * 100), set: (v) => app.setTrackSound(t().id, { gain: v / 100 }, 'GAIN'), min: 0, max: 200, def: 100, format: (v) => v + '%', begin: () => app.beginDrag('GAIN'), end: () => app.endDrag() });
-  const pan = ctl(sb, 'PAN', 'Sample pan before the mixer');
-  range(sp, pan.slot, { get: () => Math.round(t().sound.pan * 100), set: (v) => app.setTrackSound(t().id, { pan: v / 100 }, 'SAMPLE PAN'), min: -100, max: 100, def: 0, bip: true, begin: () => app.beginDrag('SAMPLE PAN'), end: () => app.endDrag() });
-  const pr = h('div', 'row wrap', sb);
-  button(sp, pr, 'REVERSE', () => app.setTrackSound(t().id, { reverse: !t().sound.reverse }, 'REVERSE'), { on: () => t().sound.reverse });
+  /** a sample setting of the sound being edited (a variation overrides the track's) */
+  const sampleRange = (label: string, key: SampleKey, title: string, o: { min: number; max: number; scale?: number; def: number; bip?: boolean; format?: (v: number) => string }) => {
+    const c = ctl(sb1, label, title);
+    const k = o.scale ?? 1;
+    const mark = h('span', 'lock', c.name);
+    sp.add(() => {
+      const over = app.sampleOverridden(key);
+      mark.textContent = over ? '◇' : '';
+      c.row.classList.toggle('overridden', over);
+    });
+    c.name.addEventListener('click', () => app.sampleOverridden(key) && app.setEditedSample({ [key]: t().sound[key] }, label));
+    range(sp, c.slot, { get: () => Math.round((app.sampleValue(key) as number) * k), set: (v) => app.setEditedSample({ [key]: v / k }, label), min: o.min, max: o.max, def: o.def, bip: o.bip, format: o.format, begin: () => app.beginDrag(label), end: () => app.endDrag(), title });
+  };
+  const sgn = (v: number) => (v > 0 ? '+' : '') + v;
+  sampleRange('TUNE', 'tune', 'Sample pitch in semitones', { min: -24, max: 24, def: 0, bip: true, format: sgn });
+  sampleRange('FINE', 'fine', 'Cents', { min: -100, max: 100, def: 0, bip: true, format: (v) => sgn(v) + 'C' });
+  sampleRange('GAIN', 'gain', 'Sample gain before the mixer', { min: 0, max: 200, scale: 100, def: 100, format: (v) => v + '%' });
+  sampleRange('PAN', 'pan', 'Sample pan before the mixer', { min: -100, max: 100, scale: 100, def: 0, bip: true });
+  const pr = h('div', 'row wrap', sb1);
+  button(sp, pr, 'REVERSE', () => app.setEditedSample({ reverse: !app.sampleValue('reverse') }, 'REVERSE'), { on: () => !!app.sampleValue('reverse') });
   h('div', 'lbl', pr, 'PICK');
   select(sp, pr, {
     options: () => (['first', 'cycle', 'random', 'velocity'] as SamplePick[]).map((v) => ({ value: v, label: v.toUpperCase() })),
@@ -307,8 +327,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   h('div', 'hint', sb2, 'ON THIS TRACK');
   const onTrack = h('div', 'list', sb2);
   h('div', 'hint', sb2, 'LIBRARY · CLICK: ASSIGN · SHIFT-CLICK: ADD · ▶ HEAR');
-  const lib = h('div', 'list', sb2);
-  lib.style.maxHeight = cpx(300);
+  const lib = h('div', 'list liblist', sb2);
   const libRow = h('div', 'row', sb2);
   button(sp, libRow, 'IMPORT…', () => void importSamples(app, t().id), { cls: 'grow', title: 'Import WAV, AIFF, MP3, OGG, FLAC: assigned to this track' }).dataset.test = 'import';
   const filter = h('div', 'hint', libRow);
@@ -344,21 +363,93 @@ export function soundView(app: App, screen: HTMLElement): View {
     }
   };
   buildLib();
-  subscribe(app, ['tracks', 'selection', 'library', 'project'], () => {
+  subscribe(app, ['tracks', 'selection', 'library', 'project', 'kit'], () => {
     buildLib();
     sp.refresh();
   });
   window.addEventListener('clatter-palette', drawWave);
 
+  // ---------------------------------------------------------------- MODULATION
+  const mo = new Panel();
+  const mbody = h('div', 'modgrid sndscroll', panes.modulation);
+  const mcol1 = h('div', 'col', mbody);
+  const mcol2 = h('div', 'col', mbody);
+  const mcol3 = h('div', 'col', mbody);
+  h('div', 'hint', mcol1, 'THE MODULATION OF THE VOICE BEING EDITED (VARIATIONS CAN OVERRIDE THE AMOUNTS, NOT THE TARGETS).');
+  const modBox = h('div', 'col', mcol1);
+  let modShown = '';
+  const buildMod = () => {
+    const v = editVoice(app);
+    if (modShown === String(v)) return mo.refresh();
+    modShown = String(v);
+    modBox.innerHTML = '';
+    for (const g of MOD_GROUPS) {
+      const ps = VOICE_PARAMS[v]!.filter((p) => p.group === g);
+      if (!ps.length) continue;
+      const box = group(modBox, `${g} · ${VOICES[v]}`);
+      box.classList.add('col');
+      for (const p of ps) paramCtl(app, box, p, mo);
+    }
+    mo.refresh();
+  };
+  // the four variations of the selected track
+  const vg = group(mcol2, 'VARIATIONS OF THIS TRACK');
+  vg.classList.add('col');
+  const vlist = h('div', 'list', vg);
+  const vrows: HTMLDivElement[] = [];
+  for (let i = 0; i < VARIATION_SLOTS; i++) {
+    const li = h('div', 'li', vlist);
+    li.dataset.test = 'var-row-' + SLOT_NAMES[i];
+    li.addEventListener('click', () => {
+      app.setSlot(i);
+      app.setSoundTab('synth');
+    });
+    li.title = 'Edit this variation in the SYNTH tab';
+    vrows.push(li);
+  }
+  mo.add(() => {
+    const tr = t();
+    vrows.forEach((li, i) => {
+      const v = tr.sound.variations?.[i];
+      const uses = Object.values(app.pattern.sounds?.[tr.id] ?? {}).filter((s) => s.v === i || s.alt?.v === i).length;
+      const n = v ? Object.keys(v.params).length + Object.keys(v.sample ?? {}).length : 0;
+      li.textContent = `${SLOT_NAMES[i]} · ${v ? (v.name || (v.gen ? 'GENERATED' : 'BY HAND')) + (v.lock ? ' ◆' : '') + ` · ${n} OVERRIDE${n === 1 ? '' : 'S'}` : 'EMPTY'} · ${uses} STEP${uses === 1 ? '' : 'S'}`;
+      li.classList.toggle('on', app.ui.slot === i);
+    });
+  });
+  // the step sounds of the selected track in this pattern
+  const stg = group(mcol2, 'STEP SOUNDS IN THIS PATTERN');
+  stg.classList.add('col');
+  const slist = h('div', 'list steplist', stg);
+  mo.add(() => {
+    slist.innerHTML = '';
+    const tr = t();
+    const entries = Object.entries(app.pattern.sounds?.[tr.id] ?? {}).sort((a, b) => Number(a[0]) - Number(b[0]));
+    if (!entries.length) h('div', 'li', slist, 'NONE: SELECT A STEP AND USE STEP SOUND IN THE PATTERN VIEW, OR GENERATE BELOW');
+    for (const [k] of entries) {
+      const li = h('div', 'li', slist, `STEP ${Number(k) + 1} · ${app.describeStepSound(tr.id, Number(k))}`);
+      li.addEventListener('click', () => {
+        app.selectTrack(tr.id);
+        app.setCursor({ track: tr.id, step: Number(k) });
+        app.setView('pattern');
+        app.setWorkspace('sound');
+      });
+    }
+  });
+  const gg = group(mcol3, 'GENERATE');
+  gg.classList.add('col');
+  generativeCard(app, gg, mo);
+  buildMod();
+  subscribe(app, ['kit', 'tracks', 'selection', 'pattern', 'project', 'gen'], () => {
+    buildMod();
+    mo.refresh();
+  });
+
   // ---------------------------------------------------------------- MIXER
-  const mw = win(bottom, { title: 'MIXER', area: 'sound', id: 'mixer' });
-  mw.el.classList.add('sb-mixer');
-  const mp = new Panel();
-  const mb = mw.body;
-  mb.classList.add('mixer');
-  mb.style.padding = cpx(10);
+  const mx = new Panel();
+  const mb = h('div', 'mixer sndscroll', panes.mixer);
   const buildMixer = () => {
-    mp.clear();
+    mx.clear();
     mb.innerHTML = '';
     trackMeters.length = 0;
     app.project.tracks.forEach((tr) => {
@@ -367,31 +458,30 @@ export function soundView(app: App, screen: HTMLElement): View {
       const nm = h('div', 'sname', s, tr.name);
       nm.addEventListener('click', () => app.selectTrack(tr.id));
       nm.addEventListener('dblclick', () => void app.audition(tr.id));
-      mp.add(() => {
+      mx.add(() => {
         s.classList.toggle('sel', app.ui.track === tr.id);
         nm.textContent = x().name;
       });
       const fr = h('div', 'row', s);
       fr.style.gap = cpx(6);
       fr.style.alignItems = 'stretch';
-      vfader(mp, fr, { get: () => x().mix.volume, set: (v) => app.setTrackMix(tr.id, { volume: v }, 'VOLUME'), begin: () => app.beginDrag('VOLUME'), end: () => app.endDrag(), height: 150, def: 0.8, title: 'Volume (0.8 = 0 dB, double-click)' });
+      vfader(mx, fr, { get: () => x().mix.volume, set: (v) => app.setTrackMix(tr.id, { volume: v }, 'VOLUME'), begin: () => app.beginDrag('VOLUME'), end: () => app.endDrag(), height: 120, def: 0.8, title: 'Volume (0.8 = 0 dB, double-click)' });
       const met = h('div', 'meter', fr);
       met.style.width = cpx(10);
-      const lvl = h('div', 'lvl', met);
-      trackMeters.push(lvl);
+      trackMeters.push(h('div', 'lvl', met));
       const db = h('div', 'hint', s);
-      mp.add(() => {
+      mx.add(() => {
         const v = x().mix.volume;
         const d = v <= 0 ? -Infinity : v <= 0.8 ? -60 + (v / 0.8) * 60 : ((v - 0.8) / 0.2) * 15;
         db.textContent = Number.isFinite(d) ? (d > 0 ? '+' : '') + d.toFixed(1) : '-∞';
       });
-      range(mp, s, { get: () => Math.round(x().mix.pan * 100), set: (v) => app.setTrackMix(tr.id, { pan: v / 100 }, 'PAN'), min: -100, max: 100, def: 0, bip: true, format: (v) => (v === 0 ? 'C' : v < 0 ? 'L' + -v : 'R' + v), begin: () => app.beginDrag('PAN'), end: () => app.endDrag(), title: 'Pan' });
-      range(mp, s, { get: () => Math.round(x().mix.filter * 100), set: (v) => app.setTrackMix(tr.id, { filter: v / 100 }, 'FILTER'), min: -100, max: 100, def: 0, bip: true, format: (v) => (v === 0 ? 'FLT' : v < 0 ? 'LP' : 'HP'), begin: () => app.beginDrag('FILTER'), end: () => app.endDrag(), title: 'One-knob filter: left low-pass, right high-pass' });
+      range(mx, s, { get: () => Math.round(x().mix.pan * 100), set: (v) => app.setTrackMix(tr.id, { pan: v / 100 }, 'PAN'), min: -100, max: 100, def: 0, bip: true, format: (v) => (v === 0 ? 'C' : v < 0 ? 'L' + -v : 'R' + v), begin: () => app.beginDrag('PAN'), end: () => app.endDrag(), title: 'Pan' });
+      range(mx, s, { get: () => Math.round(x().mix.filter * 100), set: (v) => app.setTrackMix(tr.id, { filter: v / 100 }, 'FILTER'), min: -100, max: 100, def: 0, bip: true, format: (v) => (v === 0 ? 'FLT' : v < 0 ? 'LP' : 'HP'), begin: () => app.beginDrag('FILTER'), end: () => app.endDrag(), title: 'One-knob filter: left low-pass, right high-pass' });
       const ms = h('div', 'row', s);
       ms.style.gap = cpx(3);
-      button(mp, ms, 'M', () => app.setTrackMix(tr.id, { mute: !x().mix.mute }), { cls: 'small', on: () => x().mix.mute, title: 'Mute' });
-      button(mp, ms, 'S', () => app.setTrackMix(tr.id, { solo: !x().mix.solo }), { cls: 'small', on: () => x().mix.solo, title: 'Solo' });
-      button(mp, ms, 'FX', () => app.setTrackMix(tr.id, { route: x().mix.route === 'fx' ? 'main' : 'fx' }, 'ROUTE'), { cls: 'small', on: () => x().mix.route === 'fx', title: 'Route through the LXR FX bus (instead of straight to the master)' });
+      button(mx, ms, 'M', () => app.setTrackMix(tr.id, { mute: !x().mix.mute }), { cls: 'small', on: () => x().mix.mute, title: 'Mute' });
+      button(mx, ms, 'S', () => app.setTrackMix(tr.id, { solo: !x().mix.solo }), { cls: 'small', on: () => x().mix.solo, title: 'Solo' });
+      button(mx, ms, 'FX', () => app.setTrackMix(tr.id, { route: x().mix.route === 'fx' ? 'main' : 'fx' }, 'ROUTE'), { cls: 'small', on: () => x().mix.route === 'fx', title: 'Route through the LXR FX bus (instead of straight to the master)' });
     });
     const s = h('div', 'strip', mb);
     s.style.marginLeft = 'auto';
@@ -399,54 +489,68 @@ export function soundView(app: App, screen: HTMLElement): View {
     const fr = h('div', 'row', s);
     fr.style.gap = cpx(6);
     fr.style.alignItems = 'stretch';
-    vfader(mp, fr, { get: () => app.project.master.volume, set: (v) => app.setMaster({ volume: v }, 'MASTER VOLUME'), begin: () => app.beginDrag('MASTER VOLUME'), end: () => app.endDrag(), height: 150, def: 0.8, title: 'Master volume' });
+    vfader(mx, fr, { get: () => app.project.master.volume, set: (v) => app.setMaster({ volume: v }, 'MASTER VOLUME'), begin: () => app.beginDrag('MASTER VOLUME'), end: () => app.endDrag(), height: 120, def: 0.8, title: 'Master volume' });
     const mL = h('div', 'meter', fr);
     const mR = h('div', 'meter', fr);
     for (const m of [mL, mR]) m.style.width = cpx(10);
     masterMeters = [h('div', 'lvl', mL), h('div', 'lvl', mR)];
-    button(mp, s, 'CLIP', () => app.setMaster({ clip: !app.project.master.clip }, 'SOFT CLIP'), { cls: 'small', on: () => app.project.master.clip, title: 'Soft clipper on the master' });
-    select(mp, s, {
+    button(mx, s, 'CLIP', () => app.setMaster({ clip: !app.project.master.clip }, 'SOFT CLIP'), { cls: 'small', on: () => app.project.master.clip, title: 'Soft clipper on the master' });
+    select(mx, s, {
       options: () => [{ value: '', label: 'NO OUT FX' }, ...CHAIN_PRESETS.map((p) => ({ value: p.key, label: p.label }))],
       get: () => matchChainPreset(repairChain(app.project.master.chain)) ?? '',
       set: (k) => app.setMaster({ chain: k ? (CHAIN_PRESETS.find((p) => p.key === k)?.config ?? null) : null }, 'OUTPUT CHAIN'),
       title: 'Slop Factory output processing on the master (Core engines)',
     });
   };
-  let masterMeters: HTMLDivElement[] = [];
   buildMixer();
   app.on('project', buildMixer);
-  subscribe(app, ['mix', 'tracks', 'selection', 'master'], () => mp.refresh());
+  subscribe(app, ['mix', 'tracks', 'selection', 'master'], () => mx.refresh());
 
-  // ---------------------------------------------------------------- KIT, FX
-  const kw = win(bottom, { title: 'KIT AND FX', area: 'sound', id: 'kit' });
-  kw.el.classList.add('sb-kit');
+  // ---------------------------------------------------------------- KIT AND FX
   const kp = new Panel();
-  const kb = kw.body;
-  kb.classList.add('col');
-  const kr = h('div', 'row wrap', kb);
+  const kbody = h('div', 'kitgrid sndscroll', panes.kit);
+  const kleft = h('div', 'col', kbody);
+  const kright = h('div', 'col', kbody);
+  const kr = h('div', 'row wrap', kleft);
+  let mutAmt = 0.3;
   button(kp, kr, 'GENERATE KIT', () => void app.generateKit(), { cls: 'med grow', disabled: () => app.ui.busy, title: 'A new set of synthesised drums designed for the style (K). Locked voices and parameters stay.' }).dataset.test = 'generate-kit';
   button(kp, kr, 'MUTATE KIT', () => void app.mutateKit(mutAmt), { cls: 'med grow', disabled: () => app.ui.busy, title: 'Controlled changes to every unlocked voice (⇧K)' });
-  let mutAmt = 0.3;
   num(kp, kr, { get: () => Math.round(mutAmt * 100), set: (v) => ((mutAmt = v / 100), kp.refresh()), min: 5, max: 100, format: (v) => v + '%', title: 'How far MUTATE goes' });
-  const kn = h('div', 'report', kb);
+  const kn = h('div', 'report', kleft);
   kp.add(() => (kn.textContent = `${app.project.kit.name} · SEED ${app.project.kit.seed}${app.ui.busy ? ' · CHECKING THE KIT IN THE ENGINE…' : ''} · ${app.project.soundLocks.params.length} PARAMS LOCKED`));
-  const fxg = group(kb, 'LXR FX BUS');
-  const fxc = h('div', 'synthcols', fxg);
-  fxc.style.columnWidth = cpx(280);
+  const kf = h('div', 'row wrap', kleft);
+  button(kp, kf, 'EXPORT KIT', () => {
+    const f = app.kitFile();
+    download(f.name, f.data, f.type);
+  }, { cls: 'grow', title: 'Save the kit (.clatterkit.zip)' });
+  button(kp, kf, 'LOAD KIT…', () => void openFile(app, '.zip'), { cls: 'grow', title: 'Load a kit, project or bundle' });
+  const vg2 = group(kleft, 'VOICES · LOCK AND MUTATE');
+  vg2.classList.add('col');
+  VOICES.forEach((vn, v) => {
+    const r = h('div', 'row', vg2);
+    button(kp, r, vn, () => {
+      viewVoice(v);
+      const owner = app.project.tracks.find((x) => app.voiceOf(x) === v);
+      if (owner) app.selectTrack(owner.id);
+      app.setSoundTab('synth');
+    }, { cls: 'grow', title: 'Edit this voice in the SYNTH tab' });
+    button(kp, r, 'L', () => app.lockVoice(v), { cls: 'small', on: () => !!app.project.soundLocks.voices[v], title: 'Lock: GENERATE KIT, MUTATE KIT and EVOLVE leave this voice alone' });
+    button(kp, r, 'MUT', () => void app.mutateKit(0.4, [v]), { cls: 'small', title: 'Mutate this voice', disabled: () => app.ui.busy });
+  });
+  const fxg = group(kright, 'LXR FX BUS');
+  fxg.classList.add('col');
   const fxType = () => app.project.kit.synth.params[PAR.FX_TYPE] ?? 0;
   for (const p of FX_PARAMS) {
-    const wrap = h('div', '', fxc);
-    wrap.style.marginBottom = cpx(6);
-    wrap.style.breakInside = 'avoid';
+    const wrap = h('div', '', fxg);
     const isP = p.id >= PAR.FX_P1 && p.id <= PAR.FX_P4;
-    paramCtl(wrap, p, kp, isP ? () => FX_PARAM_LABELS[fxType()]?.[p.id - PAR.FX_P1] ?? p.label : undefined);
+    paramCtl(app, wrap, p, kp, { base: true, labelOf: isP ? () => FX_PARAM_LABELS[fxType()]?.[p.id - PAR.FX_P1] ?? p.label : undefined });
     const only: Record<number, number> = { [PAR.FX_DIST_TYPE]: 1, [PAR.FX_WAVE]: 2, [PAR.FX_RATIO]: 3, [PAR.FX_DELAY_TYPE]: 4 };
     if (only[p.id] !== undefined) kp.add(() => (wrap.style.display = fxType() === only[p.id] ? '' : 'none'));
   }
-  h('div', 'hint', kb, 'Tracks with FX on in the mixer play through the bus.');
+  h('div', 'hint', kright, 'Tracks with FX on in the mixer play through the bus. The FX bus belongs to the kit: variations do not change it.');
   subscribe(app, ['kit', 'status', 'project'], () => kp.refresh());
 
-  const all = [lp, ep, synth, sp, mp, kp];
+  const all = [lp, tp, stp, sy, sp, mo, mx, kp];
   return {
     root,
     frame: () => {
@@ -454,6 +558,7 @@ export function soundView(app: App, screen: HTMLElement): View {
       if (!m) return;
       const db = (x: number) => Math.max(0, Math.min(1, 1 + (20 * Math.log10(Math.max(1e-6, x))) / 48));
       for (let i = 0; i < trackMeters.length; i++) trackMeters[i]!.style.height = db(m.tracks[i] ?? 0) * 100 + '%';
+      for (let i = 0; i < sideMeters.length; i++) sideMeters[i]!.style.width = db(m.tracks[i] ?? 0) * 100 + '%';
       for (let v = 0; v < voiceMeters.length; v++) voiceMeters[v]!.style.width = db(m.voices[v] ?? 0) * 100 + '%';
       if (masterMeters[0]) masterMeters[0].style.height = db(m.masterL) * 100 + '%';
       if (masterMeters[1]) masterMeters[1].style.height = db(m.masterR) * 100 + '%';
@@ -461,8 +566,9 @@ export function soundView(app: App, screen: HTMLElement): View {
     show: (on) => {
       root.classList.toggle('hidden', !on);
       if (on) {
-        shown = '';
-        buildSynth();
+        buildSynth(true);
+        modShown = '';
+        buildMod();
         buildLib();
         for (const p of all) p.refresh();
       }

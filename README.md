@@ -34,8 +34,9 @@ Open the site (or run it locally, below) in a current Chrome, Edge, Firefox or S
 every key. Projects autosave in the browser; FILE saves them as files.
 
 Views: **PATTERN** (the grid and its step editor; generator, transformation toolbar, track and
-edit panels under it; **? KEY** explains the grid), **SOUND** (tracks and
-sources, LXR synth editor, samples, mixer, kit and FX bus), **PERFORM** (pads, patterns,
+edit panels under it; **? KEY** explains the grid), **SOUND** (a track sidebar
+and SYNTH, SAMPLE, MODULATION, MIXER and KIT & FX tabs; variations A-D per track), the **STEP SOUND**
+tab of PATTERN (per-step variations, parameter locks, conditions, voice switching, generators), **PERFORM** (pads, patterns,
 snapshots, mutes, macros). Factory presets: MACHINE ROOM, BROKEN CLOCK, METALLIC WEATHER, DUSTY
 BREAKS, DIGITAL DETRITUS, INDUSTRIAL ESTATE, WRONG ANSWERS, AFTER HOURS.
 
@@ -72,6 +73,8 @@ paths are relative, the same build also works at `https://clickysteve.github.io/
 
 - [docs/LXR_PORT.md](docs/LXR_PORT.md): what was taken from the LXR firmware, what changed, how
   it is built and checked, and how it differs from the hardware.
+- [docs/STEP_SOUND.md](docs/STEP_SOUND.md): variations, step sounds, locks and conditions on the
+  LXR engine: inheritance, the musical clock, generators, limits (voices, MIDI).
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the three systems, the engine, timing, state,
   files and tests.
 

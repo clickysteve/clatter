@@ -45,6 +45,89 @@ export interface Hit {
 
 export type Grid = (Hit | null)[];
 
+/** Sound variation slots per track: A, B, C, D. */
+export const VARIATION_SLOTS = 4;
+export const SLOT_NAMES = ['A', 'B', 'C', 'D'] as const;
+
+/**
+ * When a sound change applies. Evaluated on the musical clock: `cycle` is the number of passes
+ * of a pattern since the transport started (0 on the first), never a UI counter.
+ *
+ *   always  every time          prob   n % of the time (seeded, so exports repeat)
+ *   every   the Nth pass        first  the first pass of each cycle of N
+ *   last    the last pass of each cycle of N
+ *   alt     every second pass   fill   while a FILL is active (momentary FILL or a generated fill)
+ */
+export type SoundCond =
+  | { k: 'always' }
+  | { k: 'prob'; p: number }
+  | { k: 'every'; n: number }
+  | { k: 'first'; n: number }
+  | { k: 'last'; n: number }
+  | { k: 'alt' }
+  | { k: 'fill' };
+export type SoundCondKind = SoundCond['k'];
+
+/** Sample-layer settings a variation or a step can change (the track's own where absent). */
+export interface SampleOverrides {
+  samples?: string[];
+  tune?: number;
+  fine?: number;
+  gain?: number;
+  pan?: number;
+  reverse?: boolean;
+  start?: number;
+  end?: number;
+}
+
+/**
+ * A sound variation of one track: a sparse set of LXR parameter values over the kit (absent
+ * parameters follow the kit) and sample-layer overrides. Slot A-D.
+ */
+export interface Variation {
+  name: string;
+  /** PAR_* number → 0-127 */
+  params: Record<number, number>;
+  sample?: SampleOverrides;
+  /** made by a generator and not edited by hand since (generators may replace it) */
+  gen?: boolean;
+  /** protected from the sound generators */
+  lock?: boolean;
+}
+
+/**
+ * A rule changing one parameter of a step's sound when its condition holds.
+ *   set     the value `a`            add     the kit/variation value plus `a` (± 127)
+ *   range   a random value in a..b   alt     `a` on even passes, `b` on odd ones
+ *   evolve  the value plus a glide from `a` to `b` over `n` passes and back again (bounded, returns home)
+ */
+export interface ParamRule {
+  p: number;
+  op: 'set' | 'add' | 'range' | 'alt' | 'evolve';
+  a: number;
+  b: number;
+  n?: number;
+  cond: SoundCond;
+}
+
+/**
+ * What one step sounds like, as sparse overrides on its track's sound. Inheritance:
+ *   KIT → TRACK SOUND → VARIATION → STEP LOCKS → CONDITIONAL RULES
+ */
+export interface StepSound {
+  /** variation slot 0-3 (absent: the track's base sound) */
+  v?: number;
+  /** a different variation (or the base sound, null) while a condition holds */
+  alt?: { cond: SoundCond; v: number | null };
+  /** play another LXR trigger (0-6) instead of the track's */
+  voice?: number;
+  /** fixed parameter values: PAR_* → 0-127 */
+  locks?: Record<number, number>;
+  rules?: ParamRule[];
+  /** made by a generator and not touched by hand since (generators may replace it) */
+  gen?: boolean;
+}
+
 /** Track roles: what a track is for musically (generation and default sounds). */
 export const ROLES = ['kick', 'snare', 'clap', 'chat', 'ohat', 'ltom', 'htom', 'cymbal', 'perc', 'fx'] as const;
 export type Role = (typeof ROLES)[number];
@@ -93,6 +176,10 @@ export interface TrackSound {
   offsetMs: number;
   /** choke group 0 (none) - 4 */
   choke: number;
+  /** sound variations A-D (null = empty slot); absent in projects older than 0.2 */
+  variations?: (Variation | null)[];
+  /** protect this track's variations from the sound generators */
+  soundLock?: boolean;
 }
 
 export interface TrackMix {
@@ -165,6 +252,8 @@ export interface Pattern {
   settings: GenSettings;
   /** how many VARIATIONs / MUTATEs led here (display) */
   generation: number;
+  /** step sounds: track → step → StepSound (sparse; absent in projects older than 0.2) */
+  sounds?: Record<string, Record<number, StepSound>>;
 }
 
 /** CHOP: the pattern cut into slices and rearranged (after The Breakery's CHOP). */
@@ -243,6 +332,12 @@ export interface SoundLocks {
   params: number[];
 }
 
+/** TIMBRE: how much sound variation the sound generators introduce (0-1), and their seed. */
+export interface TimbreSettings {
+  amount: number;
+  seed: number;
+}
+
 export type EvolveTarget = 'off' | 'rhythm' | 'sound' | 'both';
 
 export interface EvolveSettings {
@@ -285,7 +380,7 @@ export interface MasterSettings {
 
 export interface Project {
   format: 'clatter-project';
-  version: 1;
+  version: 1 | 2;
   name: string;
   tempo: number;
   /** swing 50-75 % */
@@ -301,6 +396,8 @@ export interface Project {
   gen: GenSettings;
   destruction: DestructionSettings;
   evolve: EvolveSettings;
+  /** the sound generators' amount and seed */
+  timbre: TimbreSettings;
   quantize: Quantize;
   master: MasterSettings;
   snapshots: (Snapshot | null)[];

@@ -14,6 +14,7 @@
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import type { Hit, Pattern, Resolution, Track } from '../model/types';
+import { describeCond, describeStepSound } from '../sound/stepSound';
 import type { EventKind, PerfEvent } from '../rhythm/events';
 import { stepsPerBar } from '../rhythm/generate';
 import { cellOrigin, sourceGrid, type CellOrigin } from '../rhythm/pattern';
@@ -78,9 +79,27 @@ export interface CellView {
   evolved: boolean;
   /** beyond a polymeter track's own length */
   outside: boolean;
+  /** this step has a sound of its own (variation, condition, voice, locks, rules) */
+  snd: CellSound | null;
 }
 
-const EMPTY: CellView = { state: 'empty', hit: null, origin: 'empty', vel: 0, strokes: 0, base: null, prob: 100, flam: false, added: false, why: null, kinds: [], destroyed: false, evolved: false, outside: false };
+/** What the grid shows of a step's sound. */
+export interface CellSound {
+  /** variation letter A-D, or null (the base sound, or only locks / rules) */
+  letter: string | null;
+  /** a different sound under a condition, or conditional rules */
+  cond: boolean;
+  /** it triggers another LXR voice */
+  voice: boolean;
+  /** it carries locks or rules */
+  edits: boolean;
+  /** the condition in a few characters ("50%", "EVERY 2"), or empty */
+  condText: string;
+  /** the words for the tooltip */
+  text: string;
+}
+
+const EMPTY: CellView = { state: 'empty', hit: null, origin: 'empty', vel: 0, strokes: 0, base: null, prob: 100, flam: false, added: false, why: null, kinds: [], destroyed: false, evolved: false, outside: false, snd: null };
 
 /**
  * The cells of one track. `real` is the realisation being displayed (null: nothing is known about
@@ -131,15 +150,19 @@ export function trackCells(p: Pattern, t: Track, real: Realization | null): Cell
       strokes = main.length;
       vel = sounds ? Math.max(...main.map((e) => e.vel)) : (hit?.vel ?? 0);
     }
+    const ss = p.sounds?.[t.id]?.[s];
+    const snd: CellSound | null = ss
+      ? { letter: ss.v !== undefined ? String.fromCharCode(65 + ss.v) : null, cond: !!ss.alt || !!ss.rules?.some((r) => r.cond.k !== 'always'), voice: ss.voice !== undefined && ss.voice !== t.sound.trigger, edits: !!ss.locks || !!ss.rules, condText: ss.alt ? describeCond(ss.alt.cond) : ss.rules?.some((r) => r.cond.k !== 'always') ? describeCond(ss.rules.find((r) => r.cond.k !== 'always')!.cond) : '', text: describeStepSound(t.sound, ss) }
+      : null;
     const kinds = [...new Set(main.map((e) => e.kind))];
     const destroyed = main.some((e) => e.destroyed) || (f & CELL_DESTROYED) !== 0;
     if (sounds) {
-      out.push({ state: 'hit', hit, origin, vel, strokes, base, prob, flam: flam || (!!hit?.flam && poly), added: !hit, why: null, kinds, destroyed, evolved, outside: false });
+      out.push({ state: 'hit', hit, origin, vel, strokes, base, prob, flam: flam || (!!hit?.flam && poly), added: !hit, why: null, kinds, destroyed, evolved, outside: false, snd });
     } else if (hit) {
       const why: SilentWhy = f & CELL_SUPPRESSED ? (prob < 100 || t.play.chance < 100 ? 'chance' : 'density') : evolved ? 'evolved' : 'moved';
-      out.push({ state: 'silent', hit, origin, vel, strokes: 0, base, prob, flam: false, added: false, why, kinds: [], destroyed: false, evolved, outside: false });
+      out.push({ state: 'silent', hit, origin, vel, strokes: 0, base, prob, flam: false, added: false, why, kinds: [], destroyed: false, evolved, outside: false, snd });
     } else {
-      out.push({ ...EMPTY, origin, evolved, base });
+      out.push({ ...EMPTY, origin, evolved, base, snd });
     }
   }
   return out;
@@ -191,6 +214,7 @@ export function describeCell(name: string, step: number, v: CellView, m: GridMet
   if (v.destroyed) fx.push('DESTROY');
   if (v.evolved) fx.push('EVOLVE');
   if (fx.length) lines.push(`Transformation: ${[...new Set(fx)].join(', ')}`);
+  if (v.snd) lines.push(`Step sound: ${v.snd.text}`);
   return { head: `${name} · STEP ${step + 1}`, lines };
 }
 
@@ -210,7 +234,8 @@ export function summaryLine(name: string, step: number, v: CellView, m: GridMetr
   const pos = position(step, m);
   const where = `${name} · STEP ${step + 1} (BAR ${pos.bar} BEAT ${pos.beat})`;
   if (v.outside) return `${where} · OUTSIDE THIS TRACK'S LOOP`;
-  if (v.state === 'hit') return `${where} · SOUNDS · VELOCITY ${v.vel}${v.hit ? ` · CHANCE ${v.prob}%` : ''}${v.strokes > 1 ? ` · ${v.strokes} STROKES` : ''} · ${sourceLabel(v)}`;
-  if (v.state === 'silent') return `${where} · WRITTEN, SILENT THIS PASS (${v.why === 'chance' ? 'CHANCE' : v.why === 'density' ? 'DENSITY' : v.why === 'evolved' ? 'EVOLVE' : 'MOVED OR SKIPPED'}) · VELOCITY ${v.vel} · ${sourceLabel(v)}`;
+  const snd = v.snd ? ` · SOUND: ${v.snd.text}` : '';
+  if (v.state === 'hit') return `${where} · SOUNDS · VELOCITY ${v.vel}${v.hit ? ` · CHANCE ${v.prob}%` : ''}${v.strokes > 1 ? ` · ${v.strokes} STROKES` : ''} · ${sourceLabel(v)}${snd}`;
+  if (v.state === 'silent') return `${where} · WRITTEN, SILENT THIS PASS (${v.why === 'chance' ? 'CHANCE' : v.why === 'density' ? 'DENSITY' : v.why === 'evolved' ? 'EVOLVE' : 'MOVED OR SKIPPED'}) · VELOCITY ${v.vel} · ${sourceLabel(v)}${snd}`;
   return `${where} · EMPTY${v.origin === 'deleted' ? ' (A GENERATED HIT WAS DELETED)' : ''}`;
 }

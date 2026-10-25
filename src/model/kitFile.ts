@@ -8,7 +8,7 @@
  */
 import { createZip, readZip } from '@slopfactory/core/export';
 import type { StoredSample } from '@slopfactory/core/storage';
-import type { Kit, Project, SynthKit, TrackSound } from './types';
+import { clone, type Kit, type Project, type SynthKit, type TrackSound } from './types';
 import { repairKit } from './project';
 
 export const KIT_FORMAT = 'clatter-kit';
@@ -27,7 +27,7 @@ interface KitJson {
 
 export function kitOf(p: Project): Kit {
   const sounds: Record<string, TrackSound> = {};
-  for (const t of p.tracks) if (!(t.role in sounds)) sounds[t.role] = { ...t.sound, samples: [...t.sound.samples] };
+  for (const t of p.tracks) if (!(t.role in sounds)) sounds[t.role] = clone(t.sound);
   return { name: p.kit.name, seed: p.kit.seed, synth: p.kit.synth, sounds };
 }
 

@@ -13,6 +13,9 @@
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 
+import type { ChannelFx, OutputFx } from '../audio/mixfx';
+import type { ModPatch, TrackMod } from '../mod/types';
+
 /** Ticks per quarter note (musical time unit; 24 per sixteenth). */
 export const PPQ = 96;
 export const MAX_STEPS = 64;
@@ -89,6 +92,8 @@ export interface Variation {
   /** PAR_* number → 0-127 */
   params: Record<number, number>;
   sample?: SampleOverrides;
+  /** sparse override of the track's base modulation (absent: the variation modulates as the base does) */
+  mod?: ModPatch;
   /** made by a generator and not edited by hand since (generators may replace it) */
   gen?: boolean;
   /** protected from the sound generators */
@@ -176,6 +181,8 @@ export interface TrackSound {
   offsetMs: number;
   /** choke group 0 (none) - 4 */
   choke: number;
+  /** the track's modulation: sources and routes (absent: none). Variations override it sparsely (Variation.mod). */
+  mod?: TrackMod;
   /** sound variations A-D (null = empty slot); absent in projects older than 0.2 */
   variations?: (Variation | null)[];
   /** protect this track's variations from the sound generators */
@@ -192,6 +199,10 @@ export interface TrackMix {
   route: 'main' | 'fx';
   /** one-knob filter: -1 low-pass .. 0 off .. 1 high-pass */
   filter: number;
+  /** send to the LXR FX bus 0-1 (with route MAIN the dry signal also plays; absent in older projects: 0) */
+  send?: number;
+  /** channel processing: transient shaper, EQ, saturation, soft clip, bit reduction (absent: none) */
+  fx?: ChannelFx;
 }
 
 /** Per-track performance controls (DOWNBEAT-style realisation). */
@@ -376,11 +387,15 @@ export interface MasterSettings {
   clip: boolean;
   /** Slop Factory Core output chain (plain JSON ChainConfig) */
   chain: unknown;
+  /** bus processing, stereo width and the limiter (absent in older projects: none) */
+  out?: OutputFx;
 }
 
 export interface Project {
   format: 'clatter-project';
-  version: 1 | 2;
+  version: 1 | 2 | 3;
+  /** the four performance macros 0-1 (absent: 0) */
+  macros?: number[];
   name: string;
   tempo: number;
   /** swing 50-75 % */

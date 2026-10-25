@@ -21,6 +21,10 @@
 import { ChainStream, coreEngines, emptyChain, type ChainConfig } from '@slopfactory/core/engines';
 import { LxrEngine, LXR_VOICES } from './lxr/lxr';
 import { PAR } from '../sound/lxrParamIds';
+import { DEST_INDEX, DESTS, parOf } from '../mod/registry';
+import { ModRuntime } from '../mod/runtime';
+import type { TrackMod } from '../mod/types';
+import { BusProcessor, ChannelProcessor, MasterProcessor, defaultChannelFx, legacyOutputFx, type ChannelFx, type OutputFx } from './mixfx';
 
 export const ENGINE_RATE = 44100;
 export const BLOCK = 64;
@@ -66,6 +70,15 @@ export interface EngineTrack {
   audible: boolean;
   route: 'main' | 'fx';
   filter: number;
+  /** send to the LXR FX bus while the track also plays to the main bus (0-1) */
+  send: number;
+  /** channel processing (absent: none) */
+  fx?: ChannelFx;
+  /**
+   * The track's modulation: index 0 is the base sound's, 1-4 are variations A-D (null: the
+   * variation uses the base's). Sent whole; the engine keeps source state across edits.
+   */
+  mods?: (TrackMod | null)[];
 }
 
 export const silentTrack = (): EngineTrack => ({
@@ -90,6 +103,7 @@ export const silentTrack = (): EngineTrack => ({
   audible: true,
   route: 'main',
   filter: 0,
+  send: 0,
 });
 
 /** A hit: one sequencer event for one track. */
@@ -119,6 +133,11 @@ export interface HitEvent {
   sp?: number[];
   /** step sound: sample-layer settings for this hit */
   smp?: Partial<EngineTrack>;
+  /** modulation of the sound that plays: 0 = base, 1-4 = variation A-D */
+  mv?: number;
+  /** seconds since the bar line / since the pattern start (aligns BAR and PATTERN retriggers) */
+  tb?: number;
+  tp?: number;
   /** a monotonically increasing id, for ordering only */
   seq?: number;
 }
@@ -210,6 +229,13 @@ interface SampleVoice {
   choke: number;
   /** frames of fade-in left (a start inside a sample, or a reversed sample) */
   attack: number;
+  /** playback rate before modulation, gain before pan and modulation, and pan */
+  rate: number;
+  dir: 1 | -1;
+  gain: number;
+  pan: number;
+  curL: number;
+  curR: number;
 }
 
 export interface EngineMeters {
@@ -221,6 +247,11 @@ export interface EngineMeters {
   clipped: boolean;
   /** engine frame */
   frame: number;
+  /** largest gain reduction since the last read (dB, positive): the bus compressor and the limiter */
+  busReduction: number;
+  limitReduction: number;
+  /** the watched track's modulation (see watchMod) */
+  mod?: { track: number; out: Float32Array; pos: Float32Array; routes: Float32Array; dest: Float32Array };
 }
 
 export class ClatterEngine {
@@ -248,6 +279,39 @@ export class ClatterEngine {
   /** per LXR voice: the parameters the last hit locked; and how many voices hold each */
   private locked: number[][] = Array.from({ length: LXR_VOICES }, () => []);
   private lockCount: Uint8Array;
+
+  // --- modulation (src/mod): one runtime per track that has any
+  private rt: (ModRuntime | null)[] = [];
+  private modCfg: (TrackMod | null)[][] = [];
+  private modKey: string[] = [];
+  /** the configuration slot a track's runtime runs: 0 base, 1-4 variation A-D */
+  private modSlot: Int8Array;
+  /** per LXR voice: the parameters modulation wrote, so they can be restored */
+  private modOwned: number[][] = Array.from({ length: LXR_VOICES }, () => []);
+  /** the last value modulation wrote to each parameter (-1: none) */
+  private modLast: Int16Array;
+  /** the value a step lock holds a parameter at while locked */
+  private lockVal: Uint8Array;
+  macros = new Float32Array(4);
+  private tPitch: Float32Array;
+  private tGain: Float32Array;
+  private tSmpPan: Float32Array;
+  private tBlendSynth: Float32Array;
+  private tBlendSmp: Float32Array;
+  private tVol: Float32Array;
+  private tMixPan: Float32Array;
+  private tFilter: Float32Array;
+  private tSend: Float32Array;
+  private tStart: Float32Array;
+  private tMod: Uint8Array;
+  private watch = -1;
+  private bpm = 120;
+
+  // --- output processing (src/audio/mixfx.ts)
+  private chan: ChannelProcessor[] = [];
+  private bus = new BusProcessor();
+  private master = new MasterProcessor();
+  private output: OutputFx = legacyOutputFx();
 
   private filters: TrackFilter[] = [];
   private trackBufL: Float32Array[] = [];
@@ -282,10 +346,21 @@ export class ClatterEngine {
     this.lxr = lxr;
     this.base = new Uint8Array(lxr.paramCount);
     this.lockCount = new Uint8Array(lxr.paramCount);
+    this.lockVal = new Uint8Array(lxr.paramCount);
+    this.modLast = new Int16Array(lxr.paramCount).fill(-1);
+    this.modSlot = new Int8Array(trackCount);
+    const f = (v = 0) => new Float32Array(trackCount).fill(v);
+    this.tPitch = f(); this.tGain = f(1); this.tSmpPan = f(); this.tBlendSynth = f(1); this.tBlendSmp = f(1);
+    this.tVol = f(); this.tMixPan = f(); this.tFilter = f(); this.tSend = f(); this.tStart = f();
+    this.tMod = new Uint8Array(trackCount);
     for (let p = 0; p < lxr.paramCount; p++) this.base[p] = lxr.getParam(p);
     for (let i = 0; i < trackCount; i++) {
       this.tracks.push(silentTrack());
       this.filters.push(new TrackFilter());
+      this.rt.push(null);
+      this.modCfg.push([]);
+      this.modKey.push('');
+      this.chan.push(new ChannelProcessor());
       this.trackBufL.push(new Float32Array(BLOCK));
       this.trackBufR.push(new Float32Array(BLOCK));
     }
@@ -301,8 +376,77 @@ export class ClatterEngine {
   setTrack(i: number, t: Partial<EngineTrack>): void {
     const cur = this.tracks[i];
     if (!cur) return;
-    Object.assign(cur, t);
+    const { mods, ...rest } = t;
+    Object.assign(cur, rest);
     this.filters[i]!.set(cur.filter);
+    this.chan[i]!.set(cur.fx ?? defaultChannelFx());
+    if (mods !== undefined) this.setMods(i, mods);
+  }
+
+  /** Install a track's modulation. Source state survives an edit; a track that loses all modulation is restored. */
+  private setMods(i: number, mods: (TrackMod | null)[] | undefined): void {
+    const key = JSON.stringify(mods ?? null);
+    if (key === this.modKey[i]) return;
+    this.modKey[i] = key;
+    const list = mods ?? [];
+    this.modCfg[i] = list;
+    const any = list.some((m) => m && (m.routes.length || Object.keys(m.sources).length));
+    let rt = this.rt[i];
+    if (!any) {
+      if (rt) this.dropMods(i);
+      return;
+    }
+    if (!rt) {
+      rt = new ModRuntime(this.rngState + i);
+      rt.setBpm(this.bpm);
+      this.rt[i] = rt;
+    }
+    this.useSlot(i, this.modSlot[i]!, true);
+  }
+
+  /** Select which configuration (base or a variation) a track's runtime runs. */
+  private useSlot(i: number, slot: number, force = false): void {
+    const rt = this.rt[i];
+    if (!rt) return;
+    const list = this.modCfg[i]!;
+    const eff = list[slot] ? slot : 0;
+    if (eff === this.modSlot[i] && !force) return;
+    const sameSlot = eff === this.modSlot[i];
+    this.modSlot[i] = eff;
+    for (let lv = 0; lv < LXR_VOICES; lv++) if (this.voiceOwner[lv] === i) this.releaseMods(lv);
+    rt.setConfig(list[eff] ?? null, sameSlot);
+    this.tMod[i] = rt.hasRoutes ? 1 : 0;
+    this.pullTrackMods(i);
+    if (!rt.hasRoutes) this.resetTrackMods(i);
+  }
+
+  private dropMods(i: number): void {
+    for (let lv = 0; lv < LXR_VOICES; lv++) if (this.voiceOwner[lv] === i) this.releaseMods(lv);
+    this.rt[i] = null;
+    this.tMod[i] = 0;
+    this.modSlot[i] = 0;
+    this.resetTrackMods(i);
+  }
+
+  private resetTrackMods(i: number): void {
+    this.tPitch[i] = 0; this.tGain[i] = 1; this.tSmpPan[i] = 0; this.tBlendSynth[i] = 1; this.tBlendSmp[i] = 1;
+    this.tVol[i] = 0; this.tMixPan[i] = 0; this.tFilter[i] = 0; this.tSend[i] = 0; this.tStart[i] = 0;
+  }
+
+  /** The performance macros (0-1). */
+  setMacros(values: ArrayLike<number>): void {
+    for (let i = 0; i < 4; i++) this.macros[i] = Math.max(0, Math.min(1, values[i] ?? 0));
+  }
+
+  /** Output processing: bus, width, limiter. */
+  setOutput(o: OutputFx): void {
+    this.output = o;
+    this.bus.set(o.bus);
+  }
+
+  /** Report the modulation of one track in the meters (-1: none). The UI sets it only while the editor is visible. */
+  watchMod(track: number): void {
+    this.watch = track;
   }
 
   setSample(id: string, s: EngineSample | null): void {
@@ -321,9 +465,63 @@ export class ClatterEngine {
   setParam(p: number, v: number): void {
     if (p > 0 && p < this.base.length) {
       this.base[p] = Math.max(0, Math.min(127, v | 0));
+      this.modLast[p] = -1;
       if (this.lockCount[p]) return;
     }
     this.lxr.setParam(p, v);
+  }
+
+  /** The value a parameter holds before modulation: a sounding step's lock, else the kit's. */
+  private effBase(p: number): number {
+    return this.lockCount[p] ? this.lockVal[p]! : this.base[p]!;
+  }
+
+  /** Write the LXR destinations of a track's modulation onto the voice it owns. */
+  private applyLxrMods(ti: number, lv: number, continuousOnly: boolean): void {
+    const rt = this.rt[ti]!;
+    const owned = this.modOwned[lv]!;
+    for (const di of rt.active) {
+      const d = DESTS[di]!;
+      if (d.kind !== 'lxr' || (continuousOnly && d.rate === 'trigger')) continue;
+      const p = parOf(d.id, lv);
+      if (p === undefined) continue;
+      const v = Math.max(0, Math.min(127, Math.round(this.effBase(p) + rt.dest[di]! * d.span)));
+      if (v === this.modLast[p]) continue;
+      this.modLast[p] = v;
+      this.lxr.setParam(p, v);
+      if (!owned.includes(p)) owned.push(p);
+    }
+  }
+
+  /** Give a voice back its own values (a different track takes it, the modulation changes or stops). */
+  private releaseMods(lv: number): void {
+    const owned = this.modOwned[lv]!;
+    if (!owned.length) return;
+    for (const p of owned) {
+      this.lxr.setParam(p, this.effBase(p));
+      this.modLast[p] = -1;
+    }
+    owned.length = 0;
+  }
+
+  /** Sample, hybrid and track destinations from the runtime's sums. */
+  private pullTrackMods(ti: number): void {
+    const rt = this.rt[ti];
+    if (!rt || !this.tMod[ti]) return;
+    const d = rt.dest;
+    const at = (id: string) => d[DEST_INDEX.get(id)!]!;
+    const span = (id: string) => DESTS[DEST_INDEX.get(id)!]!.span;
+    this.tPitch[ti] = at('smp.pitch') * span('smp.pitch');
+    this.tGain[ti] = Math.max(0, 1 + at('smp.gain') * span('smp.gain'));
+    this.tSmpPan[ti] = at('smp.pan');
+    const b = at('hyb.blend');
+    this.tBlendSynth[ti] = 1 - Math.max(0, b);
+    this.tBlendSmp[ti] = 1 + Math.min(0, b);
+    this.tStart[ti] = at('smp.start') * span('smp.start');
+    this.tVol[ti] = at('trk.volume') * span('trk.volume');
+    this.tMixPan[ti] = at('trk.pan');
+    this.tFilter[ti] = at('trk.filter');
+    this.tSend[ti] = at('trk.send');
   }
 
   /**
@@ -338,13 +536,19 @@ export class ClatterEngine {
     const next: number[] = [];
     if (sp) for (let i = 0; i + 1 < sp.length; i += 2) next.push(sp[i]! | 0);
     for (const p of prev) this.lockCount[p]!--;
-    for (const p of prev) if (!next.includes(p) && !this.lockCount[p]) this.lxr.setParam(p, this.base[p]!);
+    for (const p of prev) if (!next.includes(p) && !this.lockCount[p]) {
+      this.modLast[p] = -1;
+      this.lxr.setParam(p, this.base[p]!);
+    }
     if (sp) {
       for (let i = 0; i + 1 < sp.length; i += 2) {
         const p = sp[i]! | 0;
         if (p <= 0 || p >= this.base.length) continue;
         this.lockCount[p]!++;
-        this.lxr.setParam(p, Math.max(0, Math.min(127, sp[i + 1]! | 0)));
+        const val = Math.max(0, Math.min(127, sp[i + 1]! | 0));
+        this.lockVal[p] = val;
+        this.modLast[p] = -1;
+        this.lxr.setParam(p, val);
       }
     }
     this.locked[lv] = next.filter((p) => p > 0 && p < this.base.length);
@@ -352,7 +556,10 @@ export class ClatterEngine {
 
   /** Every voice back to the kit's parameters (panic, stop). */
   releaseLocks(): void {
-    for (let lv = 0; lv < LXR_VOICES; lv++) this.applyLocks(lv, undefined);
+    for (let lv = 0; lv < LXR_VOICES; lv++) {
+      this.releaseMods(lv);
+      this.applyLocks(lv, undefined);
+    }
   }
 
   setModTarget(kind: 0 | 1, voice: number, param: number): void {
@@ -360,7 +567,9 @@ export class ClatterEngine {
   }
 
   setBpm(bpm: number): void {
+    this.bpm = bpm;
     this.lxr.setBpm(bpm);
+    for (const r of this.rt) r?.setBpm(bpm);
   }
 
   setMaster(volume: number, clip: boolean, chain?: ChainConfig): void {
@@ -443,14 +652,18 @@ export class ClatterEngine {
     const s = this.pickSample(t, ti, h);
     if (!s || !s.channels.length) return;
     const len = s.channels[0]!.length;
-    const lo = Math.max(0, Math.min(len - 1, Math.floor(t.start * len)));
-    const hi = Math.max(lo + 1, Math.min(len, Math.ceil(t.end * len)));
+    const region0 = Math.max(0, Math.min(len - 1, Math.floor(t.start * len)));
+    const hi = Math.max(region0 + 1, Math.min(len, Math.ceil(t.end * len)));
+    // modulation of the start position moves the start into the region (read at the trigger)
+    const lo = this.tMod[ti] && this.tStart[ti] ? Math.max(0, Math.min(hi - 1, Math.floor(region0 + (hi - region0) * Math.max(0, Math.min(0.95, this.tStart[ti]!))))) : region0;
     const semis = t.tune + t.fine / 100 + h.pitch;
     const rate = (s.rate / ENGINE_RATE) * Math.pow(2, semis / 12);
     const reverse = t.reverse !== !!h.reverse;
     const vel = Math.max(1, Math.min(127, h.vel)) / 127;
     const g = Math.pow(vel, 1.3) * t.gain * SAMPLE_HEADROOM * (t.mode === 'hybrid' ? t.sampleLevel : 1);
-    const [pl, pr] = panGains(t.pan);
+    const mp = this.tMod[ti] ? this.tSmpPan[ti]! : 0;
+    const mg = this.tMod[ti] ? this.tGain[ti]! * (t.mode === 'hybrid' ? this.tBlendSmp[ti]! : 1) : 1;
+    const [pl, pr] = panGains(t.pan + mp);
     if (this.voices.length >= MAX_SAMPLE_VOICES) {
       // steal the oldest
       let oldest = 0;
@@ -464,8 +677,14 @@ export class ClatterEngine {
       step: reverse ? -rate : rate,
       lo,
       hi,
-      gainL: g * pl,
-      gainR: g * pr,
+      gainL: g * mg * pl,
+      gainR: g * mg * pr,
+      rate,
+      dir: reverse ? -1 : 1,
+      gain: g,
+      pan: t.pan,
+      curL: g * mg * pl,
+      curR: g * mg * pr,
       delay: delayFrames,
       gateLeft: h.gate && h.gate > 0 ? h.gate + delayFrames : Infinity,
       fade: 1,
@@ -479,8 +698,12 @@ export class ClatterEngine {
   private startSynth(ti: number, t: EngineTrack, h: HitEvent): void {
     const trig = Math.max(0, Math.min(6, (h.trig ?? t.trigger) | 0));
     const lv = trig >= 5 ? 5 : trig;
+    // whoever played this voice last gives it back its own values before the new owner's
+    // step locks and modulation apply (the voice is monophonic: one owner at a time)
+    this.releaseMods(lv);
     this.applyLocks(lv, h.sp);
     this.voiceOwner[lv] = ti;
+    if (this.tMod[ti]) this.applyLxrMods(ti, lv, false);
     this.synthGain[lv] = 1;
     this.synthTarget[lv] = 1;
     this.synthGate[lv] = h.gate && h.gate > 0 ? h.gate : Infinity;
@@ -498,6 +721,14 @@ export class ClatterEngine {
     if (!t) return;
     const within = Math.max(0, h.frame - blockStart);
     this.chokeGroup(t.choke, ti);
+    const rt = this.rt[ti];
+    if (rt) {
+      this.useSlot(ti, h.mv ?? 0);
+      if (this.tMod[ti]) {
+        rt.trigger(h.vel, { barSec: h.tb, patSec: h.tp }, this.macros);
+        this.pullTrackMods(ti);
+      }
+    }
     if (t.mode === 'synth') {
       this.startSynth(ti, t, h);
     } else if (t.mode === 'sample') {
@@ -591,7 +822,7 @@ export class ClatterEngine {
       let g = this.synthGain[lv]!;
       let target = this.synthTarget[lv]!;
       let gate = this.synthGate[lv]!;
-      const level = this.synthLevel[lv]!;
+      const level = this.synthLevel[lv]! * (t.mode === 'hybrid' && this.tMod[owner] ? this.tBlendSynth[owner]! : 1);
       for (let i = 0; i < BLOCK; i++) {
         if (gate !== Infinity) {
           gate--;
@@ -631,9 +862,15 @@ export class ClatterEngine {
       const t = this.tracks[ti]!;
       const bl = this.trackBufL[ti]!;
       const br = this.trackBufR[ti]!;
+      const tm = this.tMod[ti]!;
+      if (tm && this.tFilter[ti]) this.filters[ti]!.set(Math.max(-1, Math.min(1, t.filter + this.tFilter[ti]!)));
+      else if (tm) this.filters[ti]!.set(t.filter);
       this.filters[ti]!.process(bl, br, BLOCK);
-      const g = t.audible ? faderGain(t.volume) : 0;
-      const [pl, pr] = panGains(t.mixPan);
+      const ch = this.chan[ti]!;
+      if (ch.active) ch.process(bl, br, BLOCK);
+      const g = t.audible ? faderGain(Math.max(0, Math.min(1, t.volume + (tm ? this.tVol[ti]! : 0)))) : 0;
+      const [pl, pr] = panGains(t.mixPan + (tm ? this.tMixPan[ti]! : 0));
+      const sendLvl = t.route === 'fx' ? 0 : Math.max(0, Math.min(1, t.send + (tm ? this.tSend[ti]! : 0)));
       const tl = g * pl;
       const tr = g * pr;
       let gl = this.smoothGL[ti]!;
@@ -642,6 +879,8 @@ export class ClatterEngine {
       const toFx = t.route === 'fx';
       const dL = toFx ? this.fxSumL : mL;
       const dR = toFx ? this.fxSumR : mR;
+      const fL = this.fxSumL;
+      const fR = this.fxSumR;
       for (let i = 0; i < BLOCK; i++) {
         gl += (tl - gl) * 0.01;
         gr += (tr - gr) * 0.01;
@@ -651,13 +890,17 @@ export class ClatterEngine {
         br[i] = r;
         dL[i]! += l;
         dR[i]! += r;
+        if (sendLvl > 0) {
+          fL[i]! += l * sendLvl;
+          fR[i]! += r * sendLvl;
+        }
         const a = Math.max(Math.abs(l), Math.abs(r));
         if (a > peak) peak = a;
       }
       this.smoothGL[ti] = gl;
       this.smoothGR[ti] = gr;
       this.meterTracks[ti] = peak;
-      if (toFx && (gl > 1e-5 || gr > 1e-5)) anyFx = true;
+      if ((toFx || sendLvl > 0) && (gl > 1e-5 || gr > 1e-5)) anyFx = true;
       if (this.stemSink) this.stemSink(ti, bl, br, BLOCK);
     }
 
@@ -684,29 +927,49 @@ export class ClatterEngine {
       this.fxUsed = this.fxTail > 0;
     }
 
-    // master
+    // bus processing, then the master: output chain, gain, width, soft clip, limiter
+    if (this.bus.active) this.bus.process(mL, mR, BLOCK);
     if (this.chainOn) this.chain.process(mL, mR, BLOCK);
     const mg = this.masterGain;
     let pl = this.meterL;
     let pr = this.meterR;
     for (let i = 0; i < BLOCK; i++) {
-      let l = mL[i]! * mg;
-      let r = mR[i]! * mg;
+      const l = mL[i]! * mg;
+      const r = mR[i]! * mg;
       const al = Math.abs(l);
       const ar = Math.abs(r);
       if (al > 1 || ar > 1) this.clipped = true;
       if (al > pl) pl = al;
       if (ar > pr) pr = ar;
-      if (this.masterClip) {
-        l = softClip(l);
-        r = softClip(r);
-      }
       outL[i] = l;
       outR[i] = r;
     }
     this.meterL = pl;
     this.meterR = pr;
+    const o = this.output;
+    this.master.width(outL, outR, BLOCK, o.width);
+    if (this.masterClip) {
+      for (let i = 0; i < BLOCK; i++) {
+        outL[i] = softClip(outL[i]!);
+        outR[i] = softClip(outR[i]!);
+      }
+    }
+    if (o.limiter.on) this.master.limit(outL, outR, BLOCK, o.limiter.ceiling, o.limiter.release);
+    this.postBlockMods();
     this.frame = end;
+  }
+
+  /** After a block: advance every track's modulation one control step and write what changed. */
+  private postBlockMods(): void {
+    const dt = BLOCK / ENGINE_RATE;
+    for (let ti = 0; ti < this.rt.length; ti++) {
+      const rt = this.rt[ti];
+      if (!rt) continue;
+      rt.advance(dt, this.macros);
+      if (!this.tMod[ti]) continue;
+      for (let lv = 0; lv < LXR_VOICES; lv++) if (this.voiceOwner[lv] === ti && this.tracks[ti]!.mode !== 'sample') this.applyLxrMods(ti, lv, true);
+      this.pullTrackMods(ti);
+    }
   }
 
   /** Render one sample voice into its track's buffer; false when it has finished. */
@@ -719,6 +982,21 @@ export class ClatterEngine {
     const c1 = ch[1] ?? c0;
     const fadeStep = 1 / FADE_FRAMES;
     let i = 0;
+    let dL = 0;
+    let dR = 0;
+    let tgtL = 0;
+    let tgtR = 0;
+    if (this.tMod[v.track]) {
+      // modulated pitch, gain and pan: the gains ramp across the block so they never step
+      v.step = v.dir * v.rate * Math.pow(2, this.tPitch[v.track]! / 12);
+      const tr = this.tracks[v.track]!;
+      const mg = this.tGain[v.track]! * (tr.mode === 'hybrid' ? this.tBlendSmp[v.track]! : 1);
+      const [pl, pr] = panGains(v.pan + this.tSmpPan[v.track]!);
+      dL = (v.gain * mg * pl - v.curL) / BLOCK;
+      dR = (v.gain * mg * pr - v.curR) / BLOCK;
+      tgtL = v.gain * mg * pl;
+      tgtR = v.gain * mg * pr;
+    }
     if (v.delay > 0) {
       const d = Math.min(BLOCK, v.delay);
       v.delay -= d;
@@ -748,9 +1026,20 @@ export class ClatterEngine {
         g *= 1 - v.attack / ATTACK_FRAMES;
         v.attack--;
       }
-      bl[i]! += (x0 + (x1 - x0) * f) * v.gainL * g;
-      br[i]! += (y0 + (y1 - y0) * f) * v.gainR * g;
+      if (dL !== 0 || dR !== 0) {
+        v.curL += dL;
+        v.curR += dR;
+        bl[i]! += (x0 + (x1 - x0) * f) * v.curL * g;
+        br[i]! += (y0 + (y1 - y0) * f) * v.curR * g;
+      } else {
+        bl[i]! += (x0 + (x1 - x0) * f) * v.gainL * g;
+        br[i]! += (y0 + (y1 - y0) * f) * v.gainR * g;
+      }
       v.pos += v.step;
+    }
+    if (dL !== 0 || dR !== 0) {
+      v.curL = tgtL;
+      v.curR = tgtR;
     }
     v.age++;
     return true;
@@ -758,7 +1047,11 @@ export class ClatterEngine {
 
   /** Meters since the last call (peaks reset). */
   takeMeters(): EngineMeters {
-    const m: EngineMeters = { tracks: this.meterTracks.slice(), masterL: this.meterL, masterR: this.meterR, clipped: this.clipped, frame: this.frame };
+    const m: EngineMeters = { tracks: this.meterTracks.slice(), masterL: this.meterL, masterR: this.meterR, clipped: this.clipped, frame: this.frame, busReduction: this.bus.reduction, limitReduction: this.master.reduction };
+    this.bus.reduction = 0;
+    this.master.reduction = 0;
+    const w = this.watch >= 0 ? this.rt[this.watch] : null;
+    if (w) m.mod = { track: this.watch, out: w.out.slice(), pos: w.pos.slice(), routes: w.routeVal.slice(0, 32), dest: w.dest.slice() };
     this.meterTracks.fill(0);
     this.meterL = 0;
     this.meterR = 0;

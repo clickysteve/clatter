@@ -208,6 +208,8 @@ export class App {
       setModTarget: (kind, voice, param) => host.send({ type: 'modTarget', kind, voice, param }),
       setBpm: (bpm) => host.send({ type: 'bpm', bpm }),
       setMaster: (volume, clip, chain) => host.send({ type: 'master', volume, clip, chain }),
+      setMacros: (values) => host.send({ type: 'macros', values }),
+      setOutput: (out) => host.send({ type: 'output', out }),
       setSample: (id, s) => {
         if (this.sentSamples.has(id)) return;
         this.sentSamples.add(id);

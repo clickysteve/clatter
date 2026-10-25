@@ -50,6 +50,8 @@ export function directTarget(e: ClatterEngine, frameOfTime: (t: number) => numbe
     setBpm: (b) => e.setBpm(b),
     setMaster: (vol, clip, chain: ChainConfig) => e.setMaster(vol, clip, chain),
     setSample: (id, s: EngineSample) => e.setSample(id, s),
+    setMacros: (v) => e.setMacros(v),
+    setOutput: (o) => e.setOutput(o),
   };
 }
 

@@ -79,6 +79,15 @@ class ClatterProcessor extends AudioWorkletProcessor {
       case 'bpm':
         e.setBpm(m.bpm);
         break;
+      case 'macros':
+        e.setMacros(m.values);
+        break;
+      case 'output':
+        e.setOutput(m.out);
+        break;
+      case 'modWatch':
+        e.watchMod(m.track);
+        break;
       case 'master':
         e.setMaster(m.volume, m.clip, m.chain === undefined ? undefined : repairChain(m.chain));
         break;
@@ -122,7 +131,7 @@ class ClatterProcessor extends AudioWorkletProcessor {
     if (out[1]) out[1].set(this.R.subarray(0, n));
     if (++this.quanta % 8 === 0) {
       const m = e.takeMeters();
-      this.port.postMessage({ type: 'meters', tracks: m.tracks, masterL: m.masterL, masterR: m.masterR, clipped: m.clipped, time: currentTime + n / sampleRate, voices: e.lxr.peaks.slice() });
+      this.port.postMessage({ type: 'meters', tracks: m.tracks, masterL: m.masterL, masterR: m.masterR, clipped: m.clipped, time: currentTime + n / sampleRate, voices: e.lxr.peaks.slice(), busReduction: m.busReduction, limitReduction: m.limitReduction, mod: m.mod });
     }
     void currentFrame;
     return true;

@@ -22,11 +22,14 @@ import { STYLES, styleById } from '../../rhythm/styles';
 import { gridKeyDialog } from '../dialogs';
 import { PatternGrid, type Cell } from '../grid';
 import { summaryLine } from '../gridModel';
+import { describeTrig } from '../../rhythm/trigger';
 import { openPopover } from '../popover';
 import { onScale, sz } from '../scale';
 import { button, ctl, group, h, num, Panel, range, select, win } from '../widgets';
 import { stepEditor } from './stepEditor';
 import { stepSoundEditor } from './stepSoundEditor';
+import { triggerEditor } from './triggerEditor';
+import { wildcardPane } from './wildcardPane';
 
 export interface View {
   root: HTMLDivElement;
@@ -58,9 +61,11 @@ export function subscribe(app: App, topics: Topic[], fn: () => void): void {
 /** The workspace under the grid: a share of the window's height, within these limits (unscaled pixels). */
 const WORKSPACE = { min: 168, max: 300, share: 0.28 };
 
-const WS_LABEL: Record<Workspace, string> = { sequence: 'SEQUENCE', generate: 'GENERATE', transform: 'TRANSFORM', track: 'TRACK', sound: 'STEP SOUND' };
+const WS_LABEL: Record<Workspace, string> = { sequence: 'SEQUENCE', trigger: 'TRIGGER', generate: 'GENERATE', transform: 'TRANSFORM', wildcard: 'WILDCARD', track: 'TRACK', sound: 'STEP SOUND' };
 const WS_TITLE: Record<Workspace, string> = {
   sequence: 'The step being edited, and the tools for the selection',
+  trigger: 'Whether the selected step plays: a share of the passes, every Nth, first or last, odd or even, fill, the step before',
+  wildcard: 'WILDCARD: a bounded, seeded re-imagining of the whole instrument, tempo included',
   generate: 'Generate, vary and mutate the pattern',
   transform: 'CHOP, ROLLS, DESTROY and WILDCARD',
   track: 'The selected track: source, performance, loop length, MIDI',
@@ -244,6 +249,30 @@ export function patternView(app: App, screen: HTMLElement): View {
   });
   window.addEventListener('clatter-palette', () => grid.draw());
 
+  // ---------------------------------------------------------------- TRIGGER
+  const trp = new Panel();
+  triggerEditor(app, panes.trigger, trp);
+  infos.trigger = () => {
+    const c = app.cursorCell();
+    const t = c ? app.project.tracks.find((x) => x.id === c.track) : null;
+    if (!t || !c) return 'NO STEP SELECTED';
+    const tc = app.stepTrig(c.track, c.step);
+    return `${t.name} · STEP ${c.step + 1} · ${tc ? describeTrig(tc) : 'PLAYS EVERY PASS'}`;
+  };
+  subscribe(app, ['selection', 'pattern', 'tracks', 'project', 'transport'], () => {
+    trp.refresh();
+    wp.refresh();
+  });
+
+  // ---------------------------------------------------------------- WILDCARD
+  const wcp = new Panel();
+  wildcardPane(app, panes.wildcard, wcp);
+  infos.wildcard = () => `${app.prefs.wildcard.intensity}% · ${app.prefs.wildcard.scope.toUpperCase()} · SEED ${app.prefs.wildcard.seed}`;
+  subscribe(app, ['transport', 'pattern', 'history', 'project', 'selection'], () => {
+    wcp.refresh();
+    wp.refresh();
+  });
+
   // ---------------------------------------------------------------- STEP SOUND
   const np = new Panel();
   stepSoundEditor(app, panes.sound, np);
@@ -358,7 +387,7 @@ export function patternView(app: App, screen: HTMLElement): View {
   tab('chop', 'CHOP', 'C', () => app.toggleChop());
   tab('rolls', 'ROLLS', 'L', () => app.toggleRolls());
   tab('destroy', 'DESTROY', 'D', () => app.toggleDestroy());
-  const wb = button(dp, tabs, 'WILDCARD', () => void app.wildcard(), { cls: 'med', title: 'One bounded, seeded re-imagining of style, density, transformations, swing and (sometimes) the kit. One undo step (W). Undo takes it back.' });
+  const wb = button(dp, tabs, 'WILDCARD', () => app.wildcard(), { cls: 'med', title: 'Re-imagine the instrument with the settings of the WILDCARD tab (intensity, scope, seed). One undo step (W). Undo takes it back.' });
   wb.dataset.test = 'wildcard';
   const panelFor = (k: XKey, title: string, key: string, toggle: () => void, again: () => void, againLabel: string) => {
     const p = h('div', 'xpanel', xbody);

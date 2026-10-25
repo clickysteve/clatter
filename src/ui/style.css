@@ -1219,6 +1219,34 @@ input.mtext:focus {
   letter-spacing: 1px;
 }
 
+/* ------------------------------------------------------------ notices */
+#toasts {
+  position: fixed;
+  right: calc(16 * var(--px));
+  bottom: calc(16 * var(--px));
+  z-index: 31000;
+  display: flex;
+  flex-direction: column;
+  gap: calc(8 * var(--px));
+  align-items: flex-end;
+  max-width: min(calc(520 * var(--px)), calc(100vw - 32 * var(--px)));
+}
+.toast {
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--u) solid var(--ink);
+  box-shadow: calc(4 * var(--px)) calc(4 * var(--px)) 0 var(--ink);
+  padding: calc(8 * var(--px)) calc(12 * var(--px));
+  letter-spacing: 1px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.toast.error {
+  background: var(--ink);
+  color: var(--paper);
+  outline: var(--u) solid var(--paper);
+}
+
 /* ------------------------------------------------------------ dialogs */
 .veil {
   position: fixed;
@@ -1856,6 +1884,16 @@ html[data-view='pattern'] #main {
 }
 :root.lt-1300 #transport .cluster {
   gap: calc(4 * var(--px));
+}
+:root.lt-1300 #transport .cluster.end .btn {
+  padding: 0 calc(5 * var(--px));
+}
+/* EXPORT sits beside UNDO: the quantise label makes room for it (the select keeps its title) */
+:root.lt-1300 #transport .qlbl {
+  display: none;
+}
+:root.lt-1300 #transport .msel {
+  min-width: calc(64 * var(--px));
 }
 .btn.grow {
   overflow: hidden;

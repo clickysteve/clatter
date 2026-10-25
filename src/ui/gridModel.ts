@@ -18,7 +18,8 @@ import { describeCond, describeStepSound } from '../sound/stepSound';
 import type { EventKind, PerfEvent } from '../rhythm/events';
 import { stepsPerBar } from '../rhythm/generate';
 import { cellOrigin, sourceGrid, type CellOrigin } from '../rhythm/pattern';
-import { CELL_DESTROYED, CELL_EVOLVED, CELL_MOVED, CELL_SUPPRESSED, type Realization } from '../rhythm/realize';
+import { describeTrig } from '../rhythm/trigger';
+import { CELL_CONDITION, CELL_DESTROYED, CELL_EVOLVED, CELL_MOVED, CELL_SUPPRESSED, type Realization } from '../rhythm/realize';
 
 /** The musical structure of the steps, from the pattern's own resolution (CLATTER's bars are in 4). */
 export interface GridMetrics {
@@ -51,7 +52,7 @@ export function position(step: number, m: GridMetrics): { bar: number; beat: num
 }
 
 export type CellState = 'empty' | 'hit' | 'silent';
-export type SilentWhy = 'chance' | 'density' | 'moved' | 'evolved';
+export type SilentWhy = 'chance' | 'density' | 'moved' | 'evolved' | 'condition';
 
 export interface CellView {
   state: CellState;
@@ -81,6 +82,8 @@ export interface CellView {
   outside: boolean;
   /** this step has a sound of its own (variation, condition, voice, locks, rules) */
   snd: CellSound | null;
+  /** the step's trigger condition in words when it is not ALWAYS (the grid marks the step) */
+  trig: string | null;
 }
 
 /** What the grid shows of a step's sound. */
@@ -99,7 +102,7 @@ export interface CellSound {
   text: string;
 }
 
-const EMPTY: CellView = { state: 'empty', hit: null, origin: 'empty', vel: 0, strokes: 0, base: null, prob: 100, flam: false, added: false, why: null, kinds: [], destroyed: false, evolved: false, outside: false, snd: null };
+const EMPTY: CellView = { state: 'empty', hit: null, origin: 'empty', vel: 0, strokes: 0, base: null, prob: 100, flam: false, added: false, why: null, kinds: [], destroyed: false, evolved: false, outside: false, snd: null, trig: null };
 
 /**
  * The cells of one track. `real` is the realisation being displayed (null: nothing is known about
@@ -154,15 +157,17 @@ export function trackCells(p: Pattern, t: Track, real: Realization | null): Cell
     const snd: CellSound | null = ss
       ? { letter: ss.v !== undefined ? String.fromCharCode(65 + ss.v) : null, cond: !!ss.alt || !!ss.rules?.some((r) => r.cond.k !== 'always'), voice: ss.voice !== undefined && ss.voice !== t.sound.trigger, edits: !!ss.locks || !!ss.rules, condText: ss.alt ? describeCond(ss.alt.cond) : ss.rules?.some((r) => r.cond.k !== 'always') ? describeCond(ss.rules.find((r) => r.cond.k !== 'always')!.cond) : '', text: describeStepSound(t.sound, ss) }
       : null;
+    const tc = p.trig?.[t.id]?.[s];
+    const trig = tc && tc.k !== 'always' ? describeTrig(tc) : null;
     const kinds = [...new Set(main.map((e) => e.kind))];
     const destroyed = main.some((e) => e.destroyed) || (f & CELL_DESTROYED) !== 0;
     if (sounds) {
-      out.push({ state: 'hit', hit, origin, vel, strokes, base, prob, flam: flam || (!!hit?.flam && poly), added: !hit, why: null, kinds, destroyed, evolved, outside: false, snd });
+      out.push({ state: 'hit', hit, origin, vel, strokes, base, prob, flam: flam || (!!hit?.flam && poly), added: !hit, why: null, kinds, destroyed, evolved, outside: false, snd, trig });
     } else if (hit) {
-      const why: SilentWhy = f & CELL_SUPPRESSED ? (prob < 100 || t.play.chance < 100 ? 'chance' : 'density') : evolved ? 'evolved' : 'moved';
-      out.push({ state: 'silent', hit, origin, vel, strokes: 0, base, prob, flam: false, added: false, why, kinds: [], destroyed: false, evolved, outside: false, snd });
+      const why: SilentWhy = f & CELL_CONDITION ? 'condition' : f & CELL_SUPPRESSED ? (prob < 100 || t.play.chance < 100 ? 'chance' : 'density') : evolved ? 'evolved' : 'moved';
+      out.push({ state: 'silent', hit, origin, vel, strokes: 0, base, prob, flam: false, added: false, why, kinds: [], destroyed: false, evolved, outside: false, snd, trig });
     } else {
-      out.push({ ...EMPTY, origin, evolved, base, snd });
+      out.push({ ...EMPTY, origin, evolved, base, snd, trig });
     }
   }
   return out;
@@ -200,7 +205,7 @@ export function describeCell(name: string, step: number, v: CellView, m: GridMet
       lines.push(`Chance ${v.prob}%${v.hit.note ? ` · pitch ${v.hit.note > 0 ? '+' : ''}${v.hit.note}` : ''}${v.hit.ratchet && v.hit.ratchet > 1 ? ` · ratchet ×${v.hit.ratchet}` : ''}${v.hit.flam ? ' · flam' : ''}`);
     }
   } else if (v.state === 'silent') {
-    const why = v.why === 'chance' ? `its chance is ${v.prob < 100 ? v.prob + '%' : 'scaled by the track'} and it stayed silent this pass` : v.why === 'density' ? 'the track’s DENSITY dropped it this pass' : v.why === 'evolved' ? 'EVOLVE removed it in this generation' : 'CHOP moved it away or DESTROY skipped it this pass';
+    const why = v.why === 'condition' ? `its trigger condition (${v.trig ?? 'a condition'}) did not hold this pass` : v.why === 'chance' ? `its chance is ${v.prob < 100 ? v.prob + '%' : 'scaled by the track'} and it stayed silent this pass` : v.why === 'density' ? 'the track’s DENSITY dropped it this pass' : v.why === 'evolved' ? 'EVOLVE removed it in this generation' : 'CHOP moved it away or DESTROY skipped it this pass';
     lines.push(`**Written but silent this pass: ${why}.`);
     lines.push(`Velocity ${v.vel} · chance ${v.prob}%`);
   } else {
@@ -214,6 +219,7 @@ export function describeCell(name: string, step: number, v: CellView, m: GridMet
   if (v.destroyed) fx.push('DESTROY');
   if (v.evolved) fx.push('EVOLVE');
   if (fx.length) lines.push(`Transformation: ${[...new Set(fx)].join(', ')}`);
+  if (v.trig) lines.push(`Trigger condition: ${v.trig}`);
   if (v.snd) lines.push(`Step sound: ${v.snd.text}`);
   return { head: `${name} · STEP ${step + 1}`, lines };
 }
@@ -234,8 +240,8 @@ export function summaryLine(name: string, step: number, v: CellView, m: GridMetr
   const pos = position(step, m);
   const where = `${name} · STEP ${step + 1} (BAR ${pos.bar} BEAT ${pos.beat})`;
   if (v.outside) return `${where} · OUTSIDE THIS TRACK'S LOOP`;
-  const snd = v.snd ? ` · SOUND: ${v.snd.text}` : '';
+  const snd = (v.trig ? ` · PLAYS: ${v.trig}` : '') + (v.snd ? ` · SOUND: ${v.snd.text}` : '');
   if (v.state === 'hit') return `${where} · SOUNDS · VELOCITY ${v.vel}${v.hit ? ` · CHANCE ${v.prob}%` : ''}${v.strokes > 1 ? ` · ${v.strokes} STROKES` : ''} · ${sourceLabel(v)}${snd}`;
-  if (v.state === 'silent') return `${where} · WRITTEN, SILENT THIS PASS (${v.why === 'chance' ? 'CHANCE' : v.why === 'density' ? 'DENSITY' : v.why === 'evolved' ? 'EVOLVE' : 'MOVED OR SKIPPED'}) · VELOCITY ${v.vel} · ${sourceLabel(v)}${snd}`;
+  if (v.state === 'silent') return `${where} · WRITTEN, SILENT THIS PASS (${v.why === 'condition' ? 'CONDITION' : v.why === 'chance' ? 'CHANCE' : v.why === 'density' ? 'DENSITY' : v.why === 'evolved' ? 'EVOLVE' : 'MOVED OR SKIPPED'}) · VELOCITY ${v.vel} · ${sourceLabel(v)}${snd}`;
   return `${where} · EMPTY${v.origin === 'deleted' ? ' (A GENERATED HIT WAS DELETED)' : ''}`;
 }

@@ -10,7 +10,8 @@ import { PALETTE_CONFIG, palettes } from './palette';
 import type { Hit } from '../model/types';
 import { drawCell } from './grid';
 import type { CellView } from './gridModel';
-import { download, h, num, Panel } from './widgets';
+import { EXPORT_LABEL, type ExportKind } from '../app/exportJob';
+import { h, num, Panel, select } from './widgets';
 import { cpx, sz } from './scale';
 
 const SOURCE_URL = 'https://github.com/clickysteve/clatter';
@@ -158,7 +159,7 @@ export function gridKeyDialog(): void {
   const paper = cs.getPropertyValue('--paper').trim() || '#fff';
   const colors = { ink, paper, activity: cs.getPropertyValue('--activity').trim() || ink, selection: cs.getPropertyValue('--selection').trim() || ink };
   const hit = (vel: number, prob = 100): Hit => ({ vel, prob });
-  const base: CellView = { state: 'hit', hit: hit(100), origin: 'gen', vel: 100, strokes: 1, base: null, prob: 100, flam: false, added: false, why: null, kinds: ['source'], destroyed: false, evolved: false, outside: false, snd: null };
+  const base: CellView = { state: 'hit', hit: hit(100), origin: 'gen', vel: 100, strokes: 1, base: null, prob: 100, flam: false, added: false, why: null, kinds: ['source'], destroyed: false, evolved: false, outside: false, snd: null, trig: null };
   const empty: CellView = { ...base, state: 'empty', hit: null, vel: 0, strokes: 0, kinds: [] };
   const items: [CellView, boolean, string, string][] = [
     [{ ...base, vel: 110 }, false, 'A hit that sounds', 'A solid block. The grid shows what actually plays in the cycle on show, so you can read the rhythm straight off it. The taller the block, the harder the hit (velocity).'],
@@ -169,6 +170,8 @@ export function gridKeyDialog(): void {
     [{ ...base, state: 'silent', hit: hit(100, 50), prob: 50, why: 'chance', vel: 100 }, false, 'Written, but silent this pass', 'An outlined block: the hit is in your pattern but did not play in the cycle on show (its chance, the track’s density, or CHOP or DESTROY moving or skipping it). Clicking removes it.'],
     [empty, false, 'An empty step', 'Nothing sounds, and nothing is written. Clicking adds a hit (the pointer shows a faint preview of it).'],
     [{ ...base, origin: 'edit' }, true, 'SHOW ORIGINAL: a hand edit', 'With SHOW ORIGINAL on, a small flag in the corner marks a hit you wrote by hand.'],
+    [{ ...base, trig: 'EVERY 4 ON 4' }, false, 'A step with a trigger condition', 'A small corner mark at the bottom left: the step only plays when its condition holds (a share of the passes, every Nth, first or last, odd or even, fill, previous step). Hover it, or open the TRIGGER tab, to read it.'],
+    [{ ...base, state: 'silent', why: 'condition', trig: 'ODD CYCLES' }, false, 'A conditional step that is silent this pass', 'An outlined block with the corner mark: its condition did not hold on the pass on show (PASS on the TRIGGER tab, or the pass playing now).'],
     [{ ...base, snd: { letter: 'B', cond: false, voice: false, edits: false, condText: '', text: '' } }, false, 'A step with its own sound', 'A small plate at the top right names the variation (A to D) the step plays instead of the track’s base sound.'],
     [{ ...base, snd: { letter: 'C', cond: true, voice: false, edits: true, condText: '', text: '' } }, false, 'A conditional sound, with locks', 'A “?” after the letter means a condition decides (a share of the passes, every Nth, first or last, alternate, fill). The corner triangle means the step has parameter locks or rules. Hover the step to read them.'],
     [{ ...base, snd: { letter: null, cond: false, voice: true, edits: false, condText: '', text: '' } }, false, 'A step that triggers another voice', 'A “>” means the step plays another LXR voice than its track’s.'],
@@ -207,36 +210,58 @@ export function gridKeyDialog(): void {
   buttons(box, [['OK', closeDialog, true]]);
 }
 
-export function exportDialog(app: App, what: 'master' | 'stems' | 'midi'): void {
-  const box = dialog(what === 'master' ? 'EXPORT MASTER WAV' : what === 'stems' ? 'EXPORT STEMS' : 'EXPORT MIDI FILE', 520);
+export function exportDialog(app: App, what: ExportKind = 'master'): void {
+  const box = dialog('EXPORT', 520);
   const panel = new Panel();
-  const p = h('p', '', box, what === 'midi' ? 'The performance (what plays, after CHOP, ROLLS, DESTROY and evolution) as a Standard MIDI File, one track per CLATTER track.' : 'Rendered offline through the same engine as playback (44.1 kHz, 16-bit). Seeded: the same project gives the same file.');
-  void p;
+  let kind: ExportKind = what;
+  const frow = h('div', 'row wrap', box);
+  frow.style.margin = '0 0 6px';
+  h('div', 'lbl', frow, 'FORMAT');
+  select<ExportKind>(panel, frow, {
+    options: () => (['master', 'stems', 'midi'] as const).map((k) => ({ value: k, label: EXPORT_LABEL[k] })),
+    get: () => kind,
+    set: (k) => {
+      kind = k;
+      panel.refresh();
+    },
+    title: 'Master WAV, one WAV per track in a ZIP, or a Standard MIDI File',
+  }).dataset.test = 'export-format';
+  const about = h('p', '', box, '');
+  panel.add(() => {
+    about.textContent = kind === 'midi' ? 'The performance (what plays, after conditions, CHOP, ROLLS, DESTROY and evolution) as a Standard MIDI File, one track per CLATTER track, with the tempo map.' : 'Rendered offline through the same engine as playback (44.1 kHz, 16-bit), cycle by cycle: conditional triggers, tempo changes and every transformation are evaluated exactly as they are when playing. Seeded: the same project gives the same file.';
+  });
   const row = h('div', 'row wrap', box);
   row.style.margin = '6px 0 10px';
   h('div', 'lbl', row, 'BARS');
-  num(panel, row, { get: () => app.prefs.exportBars, set: (v) => (app.prefs.exportBars = v), min: 1, max: 256 });
-  if (what !== 'midi') {
-    h('div', 'lbl', row, 'TAIL (SECONDS)');
-    num(panel, row, { get: () => app.prefs.exportTail, set: (v) => (app.prefs.exportTail = v), min: 0, max: 20 });
-  }
+  num(panel, row, { get: () => app.prefs.exportBars, set: (v) => (app.prefs.exportBars = v), min: 1, max: 256 }).dataset.test = 'export-bars';
+  const tailLbl = h('div', 'lbl', row, 'TAIL (SECONDS)');
+  const tailNum = num(panel, row, { get: () => app.prefs.exportTail, set: (v) => (app.prefs.exportTail = v), min: 0, max: 20 });
+  tailNum.dataset.test = 'export-tail';
+  panel.add(() => {
+    tailLbl.style.display = tailNum.style.display = kind === 'midi' ? 'none' : '';
+  });
   const status = h('div', 'report', box, '');
-  const go = async () => {
-    try {
-      status.textContent = 'RENDERING…';
-      const prog = (f: number) => (status.textContent = `RENDERING ${Math.round(f * 100)}%`);
-      const f = what === 'master' ? await app.exportMaster(app.prefs.exportBars, app.prefs.exportTail, prog) : what === 'stems' ? await app.exportStems(app.prefs.exportBars, app.prefs.exportTail, prog) : app.exportMidiFile(app.prefs.exportBars);
-      download(f.name, f.data, f.type);
-      status.textContent = `SAVED ${f.name}`;
-      app.say(`EXPORTED ${f.name}`);
-    } catch (err) {
-      status.textContent = `FAILED: ${err instanceof Error ? err.message : String(err)}`;
+  status.dataset.test = 'export-status';
+  panel.add(() => {
+    if (app.exporter.busy) status.textContent = 'AN EXPORT IS ALREADY RUNNING';
+  });
+  let pressed = false;
+  const go = () => {
+    if (pressed) return;
+    const r = app.startExport(kind, app.prefs.exportBars, app.prefs.exportTail);
+    if (!r.started) {
+      status.textContent = r.error ?? 'EXPORT DID NOT START';
+      return;
     }
+    // started: the render carries on in the background and the file arrives as a download
+    pressed = true;
+    closeDialog();
   };
   buttons(box, [
     ['CANCEL', closeDialog],
-    ['EXPORT', () => void go(), true],
+    ['EXPORT', go, true],
   ]);
+  panel.refresh();
 }
 
 export function paletteDialog(): void {

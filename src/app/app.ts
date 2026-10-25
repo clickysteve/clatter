@@ -27,11 +27,14 @@ import { clamp, clone, MAX_PATTERNS, VARIATION_SLOTS, MAX_STEPS, stepTicks, type
 import { MidiController } from '../midi/controller';
 import { generate, stepsPerBar } from '../rhythm/generate';
 import { mutate, summariseOps } from '../rhythm/mutate';
-import { clearTrack, commitEdits, copyRegion, editCount, newPattern, pasteRegion, setHit, setLength, setResolution, setSounds, setStepSound, shiftTrack, soundCount, sourceGrid, stepSoundAt, type Clip } from '../rhythm/pattern';
+import { clearTrack, commitEdits, copyRegion, editCount, newPattern, pasteRegion, setHit, setLength, setResolution, setSounds, setStepSound, setStepTrig, setTrigs, trigAt, shiftTrack, soundCount, sourceGrid, stepSoundAt, type Clip } from '../rhythm/pattern';
 import { hash32, randomSeed, Rng } from '../rhythm/rng';
 import { styleById } from '../rhythm/styles';
 import type { Realization } from '../rhythm/realize';
-import { wildcard } from '../destruction/wildcard';
+import { applyWildcard, repairWild, SCOPE_LABEL, type WildSettings } from '../destruction/wildcardProject';
+import type { TrigCond } from '../model/types';
+import { bpmAt, tempoActive, type TempoAuto } from '../transport/tempo';
+import { ExportRunner, type ExportFile, type ExportKind } from './exportJob';
 import { describeChop } from '../destruction/chop';
 import { describeRolls } from '../destruction/rolls';
 import { describeDestroy } from '../destruction/destroy';
@@ -53,7 +56,7 @@ import { setScale } from '../ui/scale';
 import { Scheduler, startTicker } from '../transport/scheduler';
 import { PAR } from '../sound/lxrParamIds';
 
-export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod';
+export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod' | 'notice';
 
 export interface Selection {
   /** track indices (inclusive) */
@@ -84,6 +87,8 @@ export interface UiState {
   record: boolean;
   /** a kit operation is running */
   busy: boolean;
+  /** the latest message the user must see (export finished or failed) */
+  notice: { id: number; text: string; level: 'info' | 'error' } | null;
   /** the velocity new hits get */
   paintVel: number;
   /** the step being looked at or edited (a click, a right-click or the arrow keys on the grid) */
@@ -114,6 +119,10 @@ export class App {
   readonly history: History<DocState>;
   readonly sequence: Sequence;
   readonly scheduler: Scheduler;
+  /** background export (one at a time) */
+  readonly exporter: ExportRunner;
+  /** hands a finished export to the user (the browser download; set by the page) */
+  deliver: (file: ExportFile) => void = () => undefined;
   kits: KitService | null = null;
   /** the synth kit, sample set and full kit libraries (after boot) */
   kitm: KitManager | null = null;
@@ -154,6 +163,7 @@ export class App {
       sourceOnly: false,
       record: false,
       busy: false,
+      notice: null,
       paintVel: 100,
       cursor: null,
       showOriginal: false,
@@ -199,6 +209,8 @@ export class App {
       clock: (times) => this.midi.clock(times.map((t) => this.host.perfTimeOf(t))),
       onBar: (bar, time) => this.onBar(bar, time),
       onCycle: () => this.emit(['transport']),
+      tempo: (tick) => (tempoActive(this.project.tempoAuto) ? bpmAt(this.project.tempo, this.project.tempoAuto, tick) : null),
+      onTempo: (bpm) => this.live.setBpm(bpm),
       startDelay: 0.08,
     });
     this.midi = new MidiController(
@@ -215,6 +227,13 @@ export class App {
       },
       this.prefs.midi,
     );
+    this.exporter = new ExportRunner({
+      render: (kind, bars, tail, onProgress) => (kind === 'master' ? this.exportMaster(bars, tail, onProgress) : kind === 'stems' ? this.exportStems(bars, tail, onProgress) : this.exportMidiFile(bars)),
+      deliver: (f) => this.deliver(f),
+      notify: (text, level) => this.notify(text, level),
+      status: (t) => this.say(t),
+    });
+    this.exporter.onChange = () => this.emit(['transport']);
     const host = this.host;
     this.live = {
       setTrack: (i, t) => host.send({ type: 'track', index: i, track: t }),
@@ -259,6 +278,18 @@ export class App {
     this.emit(['status']);
   }
 
+  /** A message the user must see: the status line, and a notice the page shows until it is dismissed. */
+  notify(text: string, level: 'info' | 'error' = 'info'): void {
+    this.ui.notice = { id: (this.ui.notice?.id ?? 0) + 1, text, level };
+    this.ui.status = text;
+    this.emit(['status', 'notice']);
+  }
+
+  /** EXPORT: validate, start, and return at once; the render continues in the background. */
+  startExport(kind: ExportKind, bars: unknown, tail: unknown): ReturnType<ExportRunner['start']> {
+    return this.exporter.start(kind, bars, tail);
+  }
+
   // ------------------------------------------------------------------ start-up
   /** Load the engine, the bundled samples and the last session. */
   async boot(base = './'): Promise<void> {
@@ -300,6 +331,8 @@ export class App {
     this.evolveHome = null;
     configureEngine(this.live, this.project, this.library);
     this.scheduler.setTempo(this.project.tempo);
+    this.scheduler.retempo();
+    this.live.setBpm(this.effectiveBpm());
     this.touch(['project', 'pattern', 'tracks', 'kit', 'mix', 'gen', 'destruction', 'transport', 'snapshots', 'master', 'history']);
   }
 
@@ -393,7 +426,8 @@ export class App {
       const pos = this.playhead();
       if (pos) return this.sequence.realization(pos.cycle, pos.pattern);
     }
-    return this.sequence.realization(0, this.pattern.id);
+    // stopped: the pass chosen on the TRIGGER tab (1 = the first), as if the pattern had just been repeated that often
+    return this.sequence.realization(Math.max(0, this.ui.previewPass - 1), this.pattern.id, true);
   }
 
   /** Where the music is now (what is heard): pattern, cycle and fractional step. */
@@ -420,6 +454,7 @@ export class App {
     this.sequence.reset();
     this.sequence.bump();
     this.scheduler.setTempo(this.project.tempo);
+    this.live.setBpm(bpmAt(this.project.tempo, this.project.tempoAuto, 0));
     const t0 = this.host.now + 0.1;
     this.scheduler.start(t0);
     this.midi.start(this.host.perfTimeOf(t0));
@@ -442,6 +477,7 @@ export class App {
     this.host.send({ type: 'cancel', time: this.host.now });
     this.midi.stop();
     this.ui.playing = false;
+    this.live.setBpm(this.effectiveBpm());
     this.ui.queued = null;
     this.say('STOPPED');
     this.emit(['transport']);
@@ -480,13 +516,37 @@ export class App {
     const apply = () => {
       this.project.tempo = b;
       this.scheduler.setTempo(b);
-      this.live.setBpm(b);
+      this.live.setBpm(this.effectiveBpm());
     };
     if (undoable) this.change('TEMPO', apply, ['transport']);
     else {
       apply();
       this.emit(['transport']);
     }
+  }
+
+  /** The tempo in force now: the BPM, times the tempo curve while it plays. */
+  effectiveBpm(): number {
+    return this.ui.playing && this.scheduler.running ? this.scheduler.currentBpm : bpmAt(this.project.tempo, this.project.tempoAuto, 0);
+  }
+
+  /** Replace the tempo curve (undefined removes it). One undo step. */
+  setTempoAuto(auto: TempoAuto | undefined, label = 'TEMPO CURVE'): void {
+    this.change(
+      label,
+      () => {
+        if (auto) this.project.tempoAuto = auto;
+        else delete this.project.tempoAuto;
+        this.scheduler.retempo();
+        this.live.setBpm(this.effectiveBpm());
+      },
+      ['transport'],
+    );
+  }
+
+  toggleTempoAuto(): void {
+    const a = this.project.tempoAuto;
+    if (a) this.setTempoAuto({ ...a, on: !a.on }, a.on ? 'TEMPO CURVE OFF' : 'TEMPO CURVE ON');
   }
 
   setSwing(swing: number): void {
@@ -852,27 +912,49 @@ export class App {
     this.setDestruction((d) => ((d.destroy.on = true), d.destroy.take++), 'RE-DESTROY', quantise);
   }
 
-  /** WILDCARD: one bounded, seeded re-imagining (one undo step). */
-  async wildcard(quantise = false): Promise<void> {
-    const seed = randomSeed();
-    const w = wildcard(this.project.gen, this.project.destruction, this.project.swing, seed);
-    let kit: SynthKit | null = null;
-    if (w.kitMutation > 0) kit = await this.checkedKit(mutateKit(this.project.kit.synth, { ...this.kitOpts(seed), amount: w.kitMutation }), seed);
+  /**
+   * WILDCARD: one seeded re-imagining of the instrument within the chosen scope and intensity
+   * (src/destruction/wildcardProject.ts). One undo step: the history takes the whole project
+   * first, tempo included. Without FIXED SEED each press draws a new seed; the seed used is
+   * kept in the settings (and recorded in the project) so the result can be made again.
+   */
+  wildcard(quantise = false): void {
+    const w = this.prefs.wildcard;
+    const settings: WildSettings = { seed: w.fixed ? w.seed : randomSeed(), intensity: w.intensity, scope: w.scope, cats: [...w.cats] };
+    if (!w.fixed) {
+      w.seed = settings.seed;
+      savePrefs(this.prefs);
+    }
     const fn = () => {
-      this.project.gen = w.gen;
-      this.project.destruction = w.destruction;
-      this.project.swing = w.swing;
-      if (w.regenerate) {
-        const p = this.pattern;
-        p.seed = seed;
-        p.settings = { ...w.gen };
-        p.gen = generate(this.project.tracks, w.gen, seed, { steps: p.steps, res: p.res }, p.gen);
-      }
-      if (kit) this.applyKitChange(kit);
-      this.say(`WILDCARD: ${w.report.join(' · ')}`);
+      const r = applyWildcard(this.project, settings, { track: this.ui.track, pool: this.library.list().map((x) => ({ id: x.id, role: x.role })) });
+      this.project.wildcard = { ...settings, cats: [...settings.cats] };
+      this.evolveHome = null;
+      // the engine follows: kit, strips, tempo and the output chain
+      configureEngine(this.live, this.project, this.library);
+      this.scheduler.setTempo(this.project.tempo);
+      this.scheduler.retempo();
+      this.live.setBpm(this.effectiveBpm());
+      this.say(`WILDCARD ${settings.intensity}% ${SCOPE_LABEL[settings.scope]} · SEED ${settings.seed} · ${r.report.join(' · ')}`);
     };
-    if (quantise) this.quantised('WILDCARD', fn, ['pattern', 'gen', 'destruction', 'kit', 'transport']);
-    else this.change('WILDCARD', fn, ['pattern', 'gen', 'destruction', 'kit', 'transport']);
+    const topics: Topic[] = ['pattern', 'gen', 'destruction', 'kit', 'transport', 'tracks', 'mix', 'master', 'mod'];
+    if (quantise) this.quantised('WILDCARD', fn, topics);
+    else this.change('WILDCARD', fn, topics);
+    this.emit(['project']);
+  }
+
+  /** Undo the last WILDCARD (if it is the last thing done) and try another seed. */
+  wildcardAgain(): void {
+    if (this.history.undoLabel === 'WILDCARD') this.history.undo();
+    this.wildcard();
+  }
+
+  /** Change the WILDCARD settings (not part of the project's undo history). */
+  setWildcard(patch: Partial<Prefs['wildcard']>): void {
+    const w = this.prefs.wildcard;
+    Object.assign(w, patch);
+    Object.assign(w, { ...repairWild(w), fixed: w.fixed });
+    savePrefs(this.prefs);
+    this.emit(['transport']);
   }
 
   /** What the transformation layers did in the cycle shown. */
@@ -936,7 +1018,7 @@ export class App {
         p.tempo = s.tempo;
         p.swing = s.swing;
         this.scheduler.setTempo(p.tempo);
-        this.live.setBpm(p.tempo);
+        this.live.setBpm(this.effectiveBpm());
         this.live.setParams(kitDiff(before, p.kit.synth));
         for (let v = 0; v < 6; v++) {
           this.live.setModTarget(0, v, p.kit.synth.lfoTarget[v] ?? 0);
@@ -1613,6 +1695,40 @@ export class App {
     this.change('COPY VARIATION', () => (this.ensureVariations(d)[toSlot] = { name: src.name, params, ...(src.sample ? { sample: clone(src.sample) } : {}) }), ['tracks', 'kit']);
     this.say(`VARIATION ${String.fromCharCode(65 + slot)} COPIED TO ${d.name}`);
     return true;
+  }
+
+  // ------------------------------------------------------------------ TRIGGER CONDITIONS
+  stepTrig(trackId: string, step: number): TrigCond | undefined {
+    return trigAt(this.pattern, trackId, step);
+  }
+
+  /** The steps the TRIGGER editor acts on: the selected region's hits, or the cursor step. */
+  trigTargets(): { track: string; step: number }[] {
+    return this.soundTargets();
+  }
+
+  /** Set (undefined or ALWAYS: clear) the condition of the target steps. One undo step. */
+  setStepTrigger(c: TrigCond | undefined, label = 'TRIGGER CONDITION', targets = this.trigTargets()): void {
+    if (!targets.length) return;
+    this.change(
+      label,
+      () => {
+        for (const x of targets) setStepTrig(this.pattern, x.track, x.step, c ? { ...c } : undefined);
+      },
+      ['pattern'],
+    );
+  }
+
+  /** Clear every condition of the track (or of the whole pattern). */
+  clearTriggers(allTracks = false): void {
+    const ids = allTracks ? this.project.tracks.map((t) => t.id) : [this.ui.track];
+    this.change('CLEAR CONDITIONS', () => ids.forEach((id) => setTrigs(this.pattern, id, {})), ['pattern']);
+  }
+
+  /** The pass of the pattern the grid shows while stopped (1 = the first). */
+  setPreviewPass(n: number): void {
+    this.ui.previewPass = Math.max(1, Math.min(64, Math.round(n)));
+    this.emit(['pattern', 'selection']);
   }
 
   // ------------------------------------------------------------------ STEP SOUND

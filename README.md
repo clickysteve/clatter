@@ -75,6 +75,8 @@ paths are relative, the same build also works at `https://clickysteve.github.io/
   it is built and checked, and how it differs from the hardware.
 - [docs/STEP_SOUND.md](docs/STEP_SOUND.md): variations, step sounds, locks and conditions on the
   LXR engine: inheritance, the musical clock, generators, limits (voices, MIDI).
+- [docs/CONDITIONS.md](docs/CONDITIONS.md): conditional triggers and the pass counter.
+- [docs/WILDCARD.md](docs/WILDCARD.md): the global WILDCARD, scopes, seeds, tempo curves and guard rails.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the three systems, the engine, timing, state,
   files and tests.
 

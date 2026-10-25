@@ -572,6 +572,25 @@ export function download(name: string, data: Uint8Array, type: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
+/** A message that stays until it is dismissed (errors) or for a few seconds (information). */
+export function toast(text: string, level: 'info' | 'error'): void {
+  let host = document.getElementById('toasts');
+  if (!host) {
+    host = h('div', '', document.body);
+    host.id = 'toasts';
+    host.setAttribute('role', 'status');
+    host.setAttribute('aria-live', 'polite');
+  }
+  const t = h('div', 'toast ' + level, host, text);
+  t.dataset.test = 'toast-' + level;
+  if (level === 'error') t.setAttribute('role', 'alert');
+  const close = () => t.remove();
+  t.addEventListener('click', close);
+  t.title = 'Click to dismiss';
+  if (level === 'info') setTimeout(close, 5000);
+  while (host.children.length > 4) host.firstElementChild?.remove();
+}
+
 /** Ask the browser for files. */
 export function chooseFiles(accept: string, multiple = false): Promise<File[]> {
   return new Promise((resolve) => {

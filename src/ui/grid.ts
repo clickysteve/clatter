@@ -111,6 +111,28 @@ function drawSoundMark(g: CanvasRenderingContext2D, x: number, y: number, w: num
 }
 
 /**
+ * A step whose trigger condition is not ALWAYS: a small right-angle mark in the bottom-left corner
+ * (paper halo, ink body), so it reads over a hit block and on an empty cell alike. The words
+ * (EVERY 4, 50%, FILL ONLY) are in the tooltip, the footer and the TRIGGER tab.
+ */
+function drawTrigMark(g: CanvasRenderingContext2D, x: number, y: number, h: number, c: GridColors): void {
+  const bottom = y + h - 1;
+  const left = x + 1;
+  g.fillStyle = c.paper;
+  g.beginPath();
+  g.moveTo(left, bottom - 11);
+  g.lineTo(left + 11, bottom);
+  g.lineTo(left, bottom);
+  g.fill();
+  g.fillStyle = c.ink;
+  g.beginPath();
+  g.moveTo(left + 1, bottom - 8);
+  g.lineTo(left + 8, bottom - 1);
+  g.lineTo(left + 1, bottom - 1);
+  g.fill();
+}
+
+/**
  * One cell: the hit as it sounds. (x, y) is the cell's top-left corner, w × h its size.
  * Shared by the grid and the grid key.
  */
@@ -165,6 +187,7 @@ export function drawCell(g: CanvasRenderingContext2D, x: number, y: number, w: n
     g.fillRect(x0, y + 3, Math.max(2, Math.round((full * v.prob) / 100)), 3);
   }
   if (v.snd && v.state !== 'empty') drawSoundMark(g, x, y, w, v.snd, c);
+  if (v.trig && v.state !== 'empty') drawTrigMark(g, x, y, h, c);
   if (showOriginal) {
     if (v.origin === 'edit' && v.hit) {
       // a hand edit: a corner flag

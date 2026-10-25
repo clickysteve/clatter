@@ -31,6 +31,7 @@ describe('render', () => {
     const lib = await bundledLibrary();
     const p = await presetProject('metallic-weather', lib);
     p.master.clip = false;
+    if (p.master.out) p.master.out.limiter.on = false;
     p.master.volume = 0.8;
     const r = await renderProject(lxrModule(), p, lib, { bars: 2, tail: 0.5, stems: true });
     const fxIds = new Set(p.tracks.filter((t) => t.mix.route === 'fx').map((t) => t.id));

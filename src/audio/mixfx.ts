@@ -365,3 +365,57 @@ export class MasterProcessor {
     this.g = 1;
   }
 }
+
+// ---------------------------------------------------------------------------- repair
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
+const num = (v: unknown, d: number, lo: number, hi: number): number => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, lo, hi) : d);
+const bool = (v: unknown, d: boolean): boolean => (typeof v === 'boolean' ? v : d);
+
+/** Channel processing from a file; absent or all-off gives undefined (nothing is stored for an untouched channel). */
+export function repairChannelFx(v: unknown): ChannelFx | undefined {
+  if (!isObj(v)) return undefined;
+  const d = defaultChannelFx();
+  const t = isObj(v.trans) ? v.trans : {};
+  const e = isObj(v.eq) ? v.eq : {};
+  const s = isObj(v.sat) ? v.sat : {};
+  const c = isObj(v.clip) ? v.clip : {};
+  const b = isObj(v.crush) ? v.crush : {};
+  const out: ChannelFx = {
+    trans: { on: bool(t.on, false), attack: num(t.attack, d.trans.attack, -1, 1), sustain: num(t.sustain, d.trans.sustain, -1, 1) },
+    eq: { on: bool(e.on, false), low: num(e.low, 0, -15, 15), mid: num(e.mid, 0, -15, 15), high: num(e.high, 0, -15, 15) },
+    sat: { on: bool(s.on, false), drive: num(s.drive, d.sat.drive, 0, 1), mix: num(s.mix, d.sat.mix, 0, 1) },
+    clip: { on: bool(c.on, false), thresh: num(c.thresh, d.clip.thresh, 0.05, 1) },
+    crush: { on: bool(b.on, false), bits: Math.round(num(b.bits, d.crush.bits, 2, 16)), rate: num(b.rate, d.crush.rate, 0, 1) },
+  };
+  return out;
+}
+
+export function repairOutputFx(v: unknown): OutputFx | undefined {
+  if (!isObj(v)) return undefined;
+  const d = defaultOutputFx();
+  const bus = isObj(v.bus) ? v.bus : {};
+  const f = isObj(bus.filter) ? bus.filter : {};
+  const di = isObj(bus.dist) ? bus.dist : {};
+  const co = isObj(bus.comp) ? bus.comp : {};
+  const st = isObj(bus.stereo) ? bus.stereo : {};
+  const li = isObj(v.limiter) ? v.limiter : {};
+  return {
+    bus: {
+      filter: { on: bool(f.on, false), hp: num(f.hp, d.bus.filter.hp, 20, 2000), lp: num(f.lp, d.bus.filter.lp, 500, 20000) },
+      dist: { on: bool(di.on, false), type: di.type === 'fold' || di.type === 'clip' ? di.type : 'tube', drive: num(di.drive, d.bus.dist.drive, 0, 1), mix: num(di.mix, d.bus.dist.mix, 0, 1) },
+      comp: {
+        on: bool(co.on, false),
+        thresh: num(co.thresh, d.bus.comp.thresh, -40, 0),
+        ratio: num(co.ratio, d.bus.comp.ratio, 1, 20),
+        attack: num(co.attack, d.bus.comp.attack, 0.1, 100),
+        release: num(co.release, d.bus.comp.release, 5, 1000),
+        makeup: num(co.makeup, d.bus.comp.makeup, 0, 18),
+        mix: num(co.mix, 1, 0, 1),
+      },
+      stereo: { on: bool(st.on, false), width: num(st.width, d.bus.stereo.width, 0, 2) },
+    },
+    width: num(v.width, 1, 0, 2),
+    limiter: { on: bool(li.on, false), ceiling: num(li.ceiling, d.limiter.ceiling, -12, 0), release: num(li.release, d.limiter.release, 5, 1000) },
+  };
+}

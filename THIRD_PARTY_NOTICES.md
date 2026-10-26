@@ -35,6 +35,10 @@ headers of the files concerned.
   per-hit draws, never destroying hand edits), the layered non-destructive pipeline, and the
   GitHub Pages workflow pattern. CLATTER's implementations (`src/destruction/`) are its own,
   written for events instead of audio.
+- Adapted code: `src/midi/clock.ts` (`PulseEstimator`, the least-squares tempo estimate from
+  24 PPQN clock, and the Start/Stop/Continue/Song Position handling of `ExternalClock`), from The
+  Breakery's `src/midi/clockIn.ts` (itself after DOWNBEAT's pulse estimator); CLATTER adds a
+  tempo-following phase lock and freewheeling on clock loss.
 
 ## Slop Factory Core
 

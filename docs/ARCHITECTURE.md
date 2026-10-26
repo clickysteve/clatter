@@ -37,7 +37,7 @@ pattern can play any kit.
 | `src/destruction/` | CHOP, ROLLS, DESTROY, WILDCARD. |
 | `src/sound/` | LXR parameter tables, the kit designer (generate, mutate, evolve), the kit check (in a Worker). |
 | `src/transport/` | The look-ahead scheduler and its Worker ticker. |
-| `src/midi/` | Web MIDI, messages, Standard MIDI Files (after DOWNBEAT), the controller (ports, clock in/out, notes in/out, panic). |
+| `src/midi/` | Web MIDI, messages, Standard MIDI Files (after DOWNBEAT); settings (per browser and per project), input mapping and Learn, per-track note routing, clock in (after The Breakery, with a phase lock) and out, MIDI CC out from modulation, the controller. See [MIDI.md](MIDI.md). |
 | `src/export/` | The MIDI file of the performance. |
 | `src/app/` | The application: every action on the project, history, the sequence, sound configuration, preferences. |
 | `src/ui/` | The interface (real-pixel layout, one interface scale in `scale.ts`, see [UI_REDESIGN.md](UI_REDESIGN.md)): widgets, the pattern grid (`grid.ts`, with `gridModel.ts` deciding what each cell shows), views, menus, dialogs, tooltips, keys, palettes. |
@@ -76,10 +76,14 @@ than audio.
   SAMPLE (one or several samples, chosen per hit by order, cycle, chance, velocity or a per-hit
   choice) or HYBRID (both, with their own levels and an alignment offset). Choke groups cut
   tracks against each other.
-- **The kit designer** (`kitgen.ts`) writes LXR parameter values from archetypes (kick, tom,
-  perc, zap, snare, clap, hat, cymbal) and the style's flavour. **The kit check**
-  (`kitcheck.ts`, in a Worker with its own engine instance) triggers every voice, measures it,
-  redesigns inaudible voices and level-matches the rest before the kit is used. MUTATE moves
+- **The kit designer** (`kitgen.ts`, `profiles.ts`) designs each LXR voice from an instrument
+  PROFILE (ten drum roles, each written for the DRUM, SNARE and METAL voice models), leaned by a
+  CHARACTER and relaxed continuously by WILDNESS; the earlier archetype designer (archetypes and
+  the style's flavour) still builds the factory presets, EVOLVE and WILDCARD's kit mutation, so
+  their seeds keep their sound. **The kit check** (`kitcheck.ts`, in a Worker with a fresh
+  engine instance per check) renders every voice, analyses it (`analysis.ts`), judges it against
+  its profile (`judge.ts`) and keeps the best of a few candidates, redesigns inaudible voices and
+  level-matches the rest before the kit is used. See [KIT_GENERATION.md](KIT_GENERATION.md). MUTATE moves
   unlocked parameters a bounded amount; EVOLVE drifts the kit while playing, deterministically,
   never further than a limit from where it started, and KIT HOME returns.
 - **Locks.** Voices and individual parameters can be locked against generation, mutation and
@@ -133,14 +137,21 @@ IndexedDB (Slop Factory Core's storage).
 
 CLATTER uses Core (MIT, pinned to a commit in `package.json`) for palettes and the palette
 editor, sample decoding and waveform peaks, sample storage and project bundles, WAV and ZIP
-writing, the output engine chain on the master, and the MIDI port and clock-follower
-interfaces. Nothing from the LXR firmware is in Core, and CLATTER does not change Core.
+writing, the output engine chain on the master, and the MIDI interfaces (`MidiOutputPort`,
+`ClockFollower`, the `LearnMapping` source shape), which CLATTER implements. Core's MIDI module
+is interfaces only by design (its roadmap moves code into Core once applications converge), so
+CLATTER's MIDI and kit generation stay in CLATTER. Nothing from the LXR firmware is in Core, and CLATTER does not change Core.
 
 ## Tests
 
 - `test/dsp.test.ts`: the compiled LXR engine (see LXR_PORT.md).
 - `test/engine.test.ts`: tracks, samples, HYBRID levels and alignment, choke, routing, timing.
 - `test/kitgen.test.ts`: kit generation, mutation, evolution, locks, audibility and levels.
+- `test/kitprofiles.test.ts`: profiles, CHARACTER and WILDNESS, measured in the engine (kicks,
+  snares, hats, toms), mutation, locks, seeds, records, compatibility.
+- `test/midi.test.ts`: MIDI settings and persistence, input, Learn, routing, notes, panic, clock
+  in and out, transport, external clock precedence, CC out. `e2e/midi.spec.ts`: the same in a
+  browser against a virtual Web MIDI device, and the KITS generation controls.
 - `test/rhythm.test.ts`: generation, determinism, styles, mutation, editing, realisation.
 - `test/destruction.test.ts`: CHOP, ROLLS, DESTROY, WILDCARD.
 - `test/scheduler.test.ts`: look-ahead, tempo changes, boundaries, MIDI clock.

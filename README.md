@@ -12,14 +12,18 @@ CLATTER is a Slop Factory drum workstation built from three systems that stay in
 - **SOUND**: the drum voices, envelopes, filters, modulation, decimation and FX bus of the
   **Erica Synths LXR-02**'s open-source firmware, compiled to WebAssembly and running in an
   AudioWorklet. Every track is SYNTH, SAMPLE or HYBRID (an LXR voice and a sample together,
-  aligned). GENERATE KIT designs a kit for the style and checks every voice in the engine;
-  MUTATE KIT, MUTATE VOICE, LOCK VOICE / PARAMETER and EVOLVE change it in controlled ways.
+  aligned). GENERATE KIT designs each voice as its instrument (kick, snare, hats, toms…) with a
+  CHARACTER (CLASSIC, ANALOG, DIGITAL, INDUSTRIAL, MINIMAL, EXPERIMENTAL) and a WILDNESS, and
+  checks in the engine that it sounds like one; MUTATE KIT, NEW VOICE, LOCK VOICE / PARAMETER
+  and EVOLVE change it in controlled ways (`docs/KIT_GENERATION.md`).
 - **DESTRUCTION**: CHOP, ROLLS, DESTROY and WILDCARD (after The Breakery) transform each cycle
   of what plays, seeded and non-destructive: switch them off and the written pattern returns.
 
 And: a mixer with meters, FX routing and Slop Factory output processing; a PERFORM view with
-quantised pads, fills, mutes, macros and snapshots; Web MIDI (notes and clock in and out,
-recording, panic); export of the master, stems, a MIDI file, every drum hit and the kit; project
+quantised pads, fills, mutes, macros and snapshots; Web MIDI (a MIDI settings window: input
+from any or all devices with a learnable note map and velocity sensitivity, per-track INTERNAL /
+MIDI / BOTH routing to sequence external drum machines, clock and transport out, following an
+external clock, MIDI CC out from the modulation, recording, panic; `docs/MIDI.md`); export of the master, stems, a MIDI file, every drum hit and the kit; project
 files, bundles with samples, sample sets (import a folder or ZIP of drum samples, save, load, export), synth kits and full kits (`docs/SAMPLE_SETS.md`), undo for everything, eight factory presets, and the
 Slop Factory's 1-bit look with its palettes (Classic, Dark, Colour, your own).
 
@@ -76,6 +80,10 @@ paths are relative, the same build also works at `https://clickysteve.github.io/
 - [docs/STEP_SOUND.md](docs/STEP_SOUND.md): variations, step sounds, locks and conditions on the
   LXR engine: inheritance, the musical clock, generators, limits (voices, MIDI).
 - [docs/CONDITIONS.md](docs/CONDITIONS.md): conditional triggers and the pass counter.
+- [docs/MIDI.md](docs/MIDI.md): the MIDI window, input mapping and Learn, routing tracks to
+  external instruments, clock and transport in and out, MIDI CC out, what is saved where.
+- [docs/KIT_GENERATION.md](docs/KIT_GENERATION.md): instrument profiles, CHARACTER, WILDNESS,
+  the engine check that judges each sound, mutation, seeds.
 - [docs/WILDCARD.md](docs/WILDCARD.md): the global WILDCARD, scopes, seeds, tempo curves and guard rails.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the three systems, the engine, timing, state,
   files and tests.

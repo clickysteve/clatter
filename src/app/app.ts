@@ -1418,7 +1418,9 @@ export class App {
     const seed = randomSeed();
     const g = { ...this.kitGen };
     const a = amount ?? 0.12 + 0.75 * g.wildness;
-    const kit = await this.checkedKit(mutateKit(this.project.kit.synth, { ...this.profileOpts(seed, voices), amount: a }), seed, voices, g.wildness < 0.35);
+    // levels and audibility only: recognition could replace a voice with a fresh design, and a
+    // mutation must stay relative to the kit it started from
+    const kit = await this.checkedKit(mutateKit(this.project.kit.synth, { ...this.profileOpts(seed, voices), amount: a }), seed, voices);
     const label = voices && voices.length === 1 ? 'MUTATE VOICE' : 'MUTATE KIT';
     const fn = () => {
       this.applyKitChange(kit);

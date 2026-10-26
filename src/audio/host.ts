@@ -128,6 +128,17 @@ export class AudioHost {
     return (c.outputLatency || 0) + (c.baseLatency || 0);
   }
 
+  /** AudioContext time for a performance.now() time (incoming MIDI clock). */
+  audioTimeOf(ms: number): number {
+    const c = this.ctx;
+    if (!c) return ms / 1000;
+    const ts = c.getOutputTimestamp?.();
+    if (ts && ts.contextTime !== undefined && ts.performanceTime !== undefined && ts.performanceTime > 0) {
+      return ts.contextTime + (ms - ts.performanceTime) / 1000;
+    }
+    return c.currentTime + (ms - performance.now()) / 1000;
+  }
+
   /** performance.now() milliseconds for an AudioContext time (MIDI timestamps). */
   perfTimeOf(time: number): number {
     const c = this.ctx;

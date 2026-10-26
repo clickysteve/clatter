@@ -7,7 +7,7 @@
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import { defaultMix, defaultPlay, defaultProject, defaultSound, defaultTracks, emptySynthKit } from './defaults';
-import { clamp, MAX_PATTERNS, MAX_STEPS, MAX_TRACKS, RESOLUTIONS, ROLES, ROLL_SPEEDS, SNAPSHOTS, VARIATION_SLOTS, type Grid, type Hit, type Pattern, type Project, type Resolution, type Role, type SynthKit, type Track } from './types';
+import { clamp, MAX_PATTERNS, MAX_STEPS, MAX_TRACKS, RESOLUTIONS, ROLES, ROLL_SPEEDS, SNAPSHOTS, TRACK_OUTS, VARIATION_SLOTS, type TrackOut, type Grid, type Hit, type Pattern, type Project, type Resolution, type Role, type SynthKit, type Track } from './types';
 import { defaultGen } from '../rhythm/generate';
 import { STYLES } from '../rhythm/styles';
 import { defaultChop } from '../destruction/chop';
@@ -20,6 +20,8 @@ import { repairTrig } from '../rhythm/trigger';
 import { repairWild } from '../destruction/wildcardProject';
 import { repairTempoAuto } from '../transport/tempo';
 import { repairChannelFx, repairOutputFx } from '../audio/mixfx';
+import { repairCcSlots } from '../midi/settings';
+import { repairKitGen, repairKitGenRecord } from '../sound/profiles';
 
 export const PROJECT_FORMAT = 'clatter-project';
 export const PROJECT_EXT = '.clatter.json';
@@ -201,7 +203,12 @@ function repairTrack(v: unknown, i: number, def: Track | undefined): Track {
       ...(repairChannelFx(m.fx) ? { fx: repairChannelFx(m.fx) } : {}),
     },
     play: { ...defaultPlay(), density: num(pl.density, 100, 0, 100), fill: num(pl.fill, 0, 0, 100), humanize: num(pl.humanize, 0, 0, 100), chance: num(pl.chance, 100, 0, 100), length: int(pl.length, 0, 0, MAX_STEPS) },
-    midi: { channel: int(midi.channel, d.midi.channel, 1, 16), note: int(midi.note, d.midi.note, 0, 127) },
+    midi: {
+      channel: int(midi.channel, d.midi.channel, 1, 16),
+      note: int(midi.note, d.midi.note, 0, 127),
+      ...(TRACK_OUTS.includes(midi.out as TrackOut) ? { out: midi.out as TrackOut } : {}),
+      ...(int(midi.len, 0, 0, 4000) > 0 ? { len: int(midi.len, 0, 0, 4000) } : {}),
+    },
     lock: bool(o.lock, false),
   };
 }
@@ -252,7 +259,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
     swing: num(v.swing, 50, 50, 75),
     seed: int(v.seed, 1, 0, 0xffffffff),
     tracks,
-    kit: { name: str(kit.name, 'KIT', 24), seed: int(kit.seed, 0, 0, 0xffffffff), synth: repairKit(kit.synth, initKit) },
+    kit: { name: str(kit.name, 'KIT', 24), seed: int(kit.seed, 0, 0, 0xffffffff), synth: repairKit(kit.synth, initKit), ...(repairKitGenRecord(kit.gen) ? { gen: repairKitGenRecord(kit.gen) } : {}) },
     ...(str(v.sampleSet, '', 24) ? { sampleSet: str(v.sampleSet, '', 24) } : {}),
     soundLocks: {
       voices: [0, 1, 2, 3, 4, 5].map((i) => bool((locks.voices as unknown[] | undefined)?.[i], false)),
@@ -301,6 +308,8 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
     timbre: { amount: num(isObj(v.timbre) ? v.timbre.amount : undefined, 0.5, 0, 1), seed: int(isObj(v.timbre) ? v.timbre.seed : undefined, 1, 0, 0xffffffff) },
     quantize: oneOf(v.quantize, ['step', 'beat', 'bar', 'pattern'] as const, 'bar'),
     ...(isObj(v.wildcard) ? { wildcard: repairWild(v.wildcard) } : {}),
+    ...(repairCcSlots(v.midiCc) ? { midiCc: repairCcSlots(v.midiCc) } : {}),
+    ...(repairKitGen(v.kitGen) ? { kitGen: repairKitGen(v.kitGen) } : {}),
     master: { volume: num(master.volume, 0.8, 0, 1), clip: bool(master.clip, true), chain: master.chain ?? null, ...(repairOutputFx(master.out) ? { out: repairOutputFx(master.out) } : {}) },
     ...(Array.isArray(v.macros) ? { macros: [0, 1, 2, 3].map((i) => num((v.macros as unknown[])[i], 0, 0, 1)) } : {}),
     snapshots: new Array(SNAPSHOTS).fill(null),

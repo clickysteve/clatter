@@ -2421,3 +2421,157 @@ html[data-view='pattern'] #main {
   grid-template-columns: 1fr 1fr;
   gap: calc(6 * var(--px)) calc(10 * var(--px));
 }
+
+/* KITS: generation (character, wildness, generate, mutate, seed) */
+.kitgen {
+  gap: calc(6 * var(--px)) calc(10 * var(--px));
+  align-items: center;
+}
+.kitgen .range {
+  flex: none;
+}
+.kitseed {
+  gap: calc(6 * var(--px));
+  align-items: center;
+}
+
+/* MIDI SETTINGS: five sections in a grid, never a long page */
+.mididlg {
+  max-height: 100%;
+}
+.midigrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(14 * var(--px)) calc(18 * var(--px));
+  overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  align-items: start;
+  scrollbar-color: var(--ink) var(--paper);
+  padding-right: calc(4 * var(--px));
+}
+.midigrid > .midiaccess,
+.midigrid > .midienable {
+  grid-column: 1 / -1;
+}
+.midigrid > .midienable {
+  justify-self: start;
+}
+.midiaccess {
+  font-family: var(--font-2);
+  font-size: var(--fs-2);
+}
+.midisec {
+  gap: calc(6 * var(--px));
+  min-width: 0;
+}
+.midiwide {
+  grid-column: span 2;
+}
+.mrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(6 * var(--px));
+}
+.msub {
+  font-family: var(--font-2);
+  font-size: var(--fs-2);
+  margin-top: calc(4 * var(--px));
+  border-top: var(--u) solid var(--ink);
+  padding-top: calc(4 * var(--px));
+}
+.mtable {
+  display: grid;
+  gap: calc(3 * var(--px)) calc(6 * var(--px));
+  align-items: center;
+}
+.routetable {
+  grid-template-columns: minmax(calc(120 * var(--px)), 1.4fr) auto auto auto auto;
+}
+.learntable {
+  grid-template-columns: minmax(calc(80 * var(--px)), 1fr) auto auto calc(26 * var(--px));
+}
+.cctable {
+  grid-template-columns: repeat(6, auto) minmax(0, 1fr);
+}
+.mth {
+  font-family: var(--font-2);
+  font-size: var(--fs-2);
+  color: var(--dim);
+}
+.mtd.tname {
+  font-family: var(--font-2);
+  font-size: var(--fs-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mseg {
+  gap: 0;
+}
+.mseg .btn + .btn {
+  margin-left: calc(-1 * var(--u));
+}
+.mdup {
+  color: var(--ink);
+  font-weight: bold;
+}
+.midimon {
+  white-space: pre;
+  min-height: calc(60 * var(--px));
+  max-height: calc(80 * var(--px));
+  overflow: hidden;
+  border: var(--u) solid var(--ink);
+  padding: calc(3 * var(--px)) calc(5 * var(--px));
+  font-family: var(--font-2);
+}
+.midilast {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-2);
+}
+.midiled {
+  flex: none;
+}
+.midistat {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4 * var(--px));
+  cursor: pointer;
+  margin-left: calc(10 * var(--px));
+}
+.midifoot {
+  margin-top: calc(10 * var(--px));
+  flex: none;
+}
+.extclock {
+  border: var(--u) solid var(--ink);
+  padding: 0 calc(4 * var(--px));
+}
+@media (max-width: 900px) {
+  .midigrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .midiwide {
+    grid-column: auto;
+  }
+}
+.cctable .msel {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.kitlower > .voicegroup {
+  grid-column: 1 / -1;
+}
+.voicegroup .voicerow > .btn.grow {
+  flex: 0 0 calc(86 * var(--px));
+}
+.voicegroup .voiceowners {
+  flex: 1 1 auto;
+  min-width: 0;
+}

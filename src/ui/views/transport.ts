@@ -22,6 +22,15 @@ export function transportWindow(app: App, chrome: HTMLElement, menubar: HTMLElem
   button(panel, play, '■ STOP', () => app.stop(), { title: 'Stop (space, esc)' }).dataset.test = 'stop';
   h('div', 'lbl', play, 'BPM');
   num(panel, play, { get: () => app.project.tempo, set: (v) => app.setTempo(v), min: 30, max: 300, step: 1, title: 'Tempo (drag, or click and type)' }).dataset.test = 'bpm';
+  // following an external clock: its tempo is shown, the BPM and the curve wait
+  const ext = h('div', 'lbl extclock', play);
+  ext.dataset.test = 'ext-tempo';
+  panel.add(() => {
+    const on = app.midi.prefs.clock === 'external';
+    ext.style.display = on ? '' : 'none';
+    ext.textContent = app.externalTempo ? `EXT ${app.effectiveBpm().toFixed(1)}${app.midi.clock.status === 'lost' ? ' LOST' : ''}` : 'EXT WAIT';
+    ext.title = app.externalTempo ? 'Following external MIDI clock: the BPM and the tempo curve are suspended (kept) until the clock is INTERNAL again' : 'EXTERNAL clock: waiting for MIDI clock';
+  });
   const curve = button(panel, play, 'CURVE', () => app.toggleTempoAuto(), { on: () => !!app.project.tempoAuto?.on, title: 'The tempo curve (WILDCARD tab): on plays the BPM scaled by the curve, off holds the BPM' });
   curve.dataset.test = 'tempo-curve-toggle';
   panel.add(() => (curve.style.display = app.project.tempoAuto ? '' : 'none'));

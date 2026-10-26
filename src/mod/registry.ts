@@ -15,7 +15,7 @@
  */
 import { VOICE_PARAMS } from '../sound/lxrParams';
 
-export type DestKind = 'lxr' | 'sample' | 'track';
+export type DestKind = 'lxr' | 'sample' | 'track' | 'midi';
 export type DestRate = 'continuous' | 'trigger';
 export type SourceMode = 'synth' | 'sample' | 'hybrid';
 
@@ -83,7 +83,14 @@ export const DESTS: DestDef[] = [
   { id: 'trk.pan', label: 'TRACK PAN', group: 'OUTPUT', kind: 'track', rate: 'continuous', span: 1, unit: 'pan', modes: ALL, help: 'The track pan in the mixer.' },
   { id: 'trk.filter', label: 'TRACK FILTER', group: 'OUTPUT', kind: 'track', rate: 'continuous', span: 1, unit: 'knob', modes: ALL, help: 'The track’s one-knob filter (left low-pass, right high-pass).' },
   { id: 'trk.send', label: 'FX SEND', group: 'OUTPUT', kind: 'track', rate: 'continuous', span: 1, unit: 'send', modes: ALL, help: 'The track’s send to the LXR FX bus.' },
+  // MIDI CC out: executed on the main thread by src/midi/ccOut.ts (never by the audio engine), so a
+  // modulation source can drive a parameter of external hardware. The CC number, channel, device,
+  // resolution and rate of each are set in the MIDI window.
+  ...[1, 2, 3, 4].map((i): DestDef => ({ id: `midi.cc${i}`, label: `MIDI CC ${i}`, group: 'MIDI OUT', kind: 'midi', rate: 'continuous', span: 127, unit: 'CC', modes: ALL, help: `External MIDI CC destination ${i}: the CC number, channel and device are set in MIDI › MIDI settings (CC OUT). Sent from the main thread, rate-limited, only when the value changes.`, note: 'SENT AS MIDI CC (SEE THE MIDI WINDOW)' })),
 ];
+
+/** The MIDI CC destination ids, in slot order. */
+export const MIDI_CC_DESTS = ['midi.cc1', 'midi.cc2', 'midi.cc3', 'midi.cc4'] as const;
 
 export const DEST_BY_ID = new Map(DESTS.map((d) => [d.id, d] as const));
 export const DEST_INDEX = new Map(DESTS.map((d, i) => [d.id, i] as const));

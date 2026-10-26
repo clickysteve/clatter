@@ -4,7 +4,7 @@
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
-import { defaultMidiPrefs, type MidiPrefs } from '../midi/controller';
+import { defaultMidiPrefs, repairMidiPrefs, type MidiPrefs } from '../midi/settings';
 import { EXPORT_DEFAULTS } from './exportJob';
 import { defaultWild, repairWild, type WildSettings } from '../destruction/wildcardProject';
 import { DEFAULT_SCALE, snapScale } from '../ui/scale';
@@ -56,7 +56,7 @@ export function loadPrefs(): Prefs {
       soundLane: v.soundLane === true,
       uiScale: snapScale(v.uiScale),
       editMode: v.editMode === 'advanced' ? 'advanced' : 'basic',
-      midi: { ...d.midi, ...(v.midi ?? {}) },
+      midi: repairMidiPrefs(v.midi),
       // export length is not remembered between visits: a fresh export dialog offers the defaults
       wildcard: { ...repairWild(v.wildcard), fixed: (v.wildcard as { fixed?: unknown } | undefined)?.fixed === true },
       exportBars: d.exportBars,

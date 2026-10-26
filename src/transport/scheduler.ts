@@ -149,15 +149,20 @@ export class Scheduler {
     if (this.segs.length > 512) this.segs.splice(0, this.segs.length - 256);
   }
 
-  start(atTime?: number): void {
+  /**
+   * Start: tick `fromTick` (0 = the top; later for Continue or to join an external clock) plays at
+   * `atTime`. Cycles before it are planned (so a chain is where it would be) but not played.
+   */
+  start(atTime?: number, fromTick = 0): void {
+    const from = Math.max(0, fromTick);
     this.running = true;
-    this.cur = this.o.tempo?.(0) ?? this.bpm;
-    this.segs = [{ tick: 0, time: atTime ?? this.o.now() + (this.o.startDelay ?? 0.06), spt: 60 / (this.cur * PPQ) }];
-    this.horizon = 0;
+    this.cur = this.o.tempo?.(from) ?? this.bpm;
+    this.segs = [{ tick: from, time: atTime ?? this.o.now() + (this.o.startDelay ?? 0.06), spt: 60 / (this.cur * PPQ) }];
+    this.horizon = from;
     this.cycles = [];
     this.pending = [];
-    this.nextPulse = 0;
-    this.nextBar = 0;
+    this.nextPulse = Math.ceil(from / PULSE - 1e-9) * PULSE;
+    this.nextBar = Math.ceil(from / BAR - 1e-9) * BAR;
     this.pump();
   }
 

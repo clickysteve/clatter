@@ -248,6 +248,43 @@ export interface TrackPlay {
   length: number;
 }
 
+/**
+ * Where a track's hits go. INTERNAL plays CLATTER's engine (its SYNTH, SAMPLE or HYBRID source,
+ * which is independent of this), MIDI sends notes to the output device only, BOTH does both.
+ */
+export type TrackOut = 'internal' | 'midi' | 'both';
+export const TRACK_OUTS: TrackOut[] = ['internal', 'midi', 'both'];
+
+/** A track's MIDI output (portable project data; the device itself is a browser preference). */
+export interface TrackMidi {
+  /** output channel 1-16 */
+  channel: number;
+  /** output note 0-127 (never changed by sound variations or step sounds) */
+  note: number;
+  /** routing (absent: BOTH, as CLATTER always did when an output was chosen) */
+  out?: TrackOut;
+  /** note length in ms (absent or 0: AUTO, the hit's gate or half a step) */
+  len?: number;
+}
+
+/**
+ * A MIDI CC destination modulation can drive (MIDI CC 1-4 in the modulation matrix).
+ * The CC sent is base + the summed modulation × 127, quantised to `res` steps and sent at most
+ * `rate` times a second, and only when it changes.
+ */
+export interface CcSlot {
+  on: boolean;
+  /** controller number 0-119 */
+  cc: number;
+  channel: number;
+  /** the value with no modulation 0-127 */
+  base: number;
+  /** output resolution: number of distinct values 2-128 */
+  res: number;
+  /** most messages per second 1-100 */
+  rate: number;
+}
+
 export interface Track {
   id: string;
   name: string;
@@ -255,7 +292,7 @@ export interface Track {
   sound: TrackSound;
   mix: TrackMix;
   play: TrackPlay;
-  midi: { channel: number; note: number };
+  midi: TrackMidi;
   /** LOCK: generation and mutation leave this track's rhythm alone */
   lock: boolean;
 }
@@ -359,6 +396,34 @@ export interface SynthKit {
   velTarget: number[];
 }
 
+/** Kit generation characters (stable ids). */
+export const CHARACTERS = ['classic', 'analog', 'digital', 'industrial', 'minimal', 'experimental'] as const;
+export type Character = (typeof CHARACTERS)[number];
+
+/** What GENERATE KIT, MUTATE KIT and NEW VOICE start from (portable, stable ids). */
+export interface KitGenSettings {
+  character: Character;
+  /** 0-1: how far generation may leave conventional drum sounds */
+  wildness: number;
+  /** per LXR voice 0-5: the instrument profile to design (null: from the tracks that play the voice) */
+  profiles: (Role | null)[];
+  /** reuse `seed` on the next press instead of a new one */
+  hold: boolean;
+  seed: number;
+}
+
+/** How a generated kit was made (stored on the kit, so the same settings and seed make it again). */
+export interface KitGenRecord {
+  /** generator version: 2 = profiles, character and wildness */
+  v: 2;
+  op: 'generate' | 'mutate' | 'voice';
+  seed: number;
+  character: Character;
+  wildness: number;
+  /** the profile each voice was designed as */
+  profiles: Role[];
+}
+
 /** A complete kit: the synthesis kit and every track's sound source. */
 export interface Kit {
   name: string;
@@ -436,7 +501,7 @@ export interface Project {
   /** the project seed (performance randomness) */
   seed: number;
   tracks: Track[];
-  kit: { name: string; seed: number; synth: SynthKit };
+  kit: { name: string; seed: number; synth: SynthKit; gen?: KitGenRecord };
   /** the sample set the tracks' samples came from or were saved as (display; the samples themselves are on the tracks) */
   sampleSet?: string;
   soundLocks: SoundLocks;
@@ -452,6 +517,10 @@ export interface Project {
   /** the settings and seed of the last WILDCARD applied (record only; absent if none) */
   wildcard?: WildSettings;
   master: MasterSettings;
+  /** MIDI CC destinations of the modulation (absent: the defaults) */
+  midiCc?: CcSlot[];
+  /** kit generation settings: character, wildness, per-voice profile overrides (absent: the defaults) */
+  kitGen?: KitGenSettings;
   snapshots: (Snapshot | null)[];
   notes: string;
 }

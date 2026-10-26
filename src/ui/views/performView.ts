@@ -102,7 +102,7 @@ export function performView(app: App, screen: HTMLElement): View {
     if (d().destroy.on) app.redestroy(true);
   }, { sub: () => 'RE-DRAW WHAT IS ON', title: 'A new take of every transformation that is on' });
   pad(ap, ag, 'NEW KIT', () => void app.generateKit(true), { sub: () => (app.ui.busy ? 'CHECKING…' : 'GENERATE'), title: 'Generate a kit (K)' });
-  pad(ap, ag, 'MUTATE KIT', () => void app.mutateKit(0.25, undefined, true), { sub: () => '25%', title: 'Mutate the kit' });
+  pad(ap, ag, 'MUTATE KIT', () => void app.mutateKit(undefined, undefined, true), { sub: () => `WILD ${Math.round(app.kitGen.wildness * 100)}%`, title: 'Mutate the kit (as far as the WILDNESS of the KITS workspace allows)' });
   pad(ap, ag, 'NEW SOUNDS', () => app.generateSound(true), { sub: () => 'VARIATIONS + STEPS', title: 'Generate variations A-D and distribute them over the steps. Hand-made sounds and the rhythm stay.' }).dataset.test = 'p-new-sounds';
   pad(ap, ag, 'MUTATE SOUND', () => app.mutateSound(0.3, true), { sub: () => 'STEP SOUNDS', title: 'Redraw a share of the generated step sounds' }).dataset.test = 'p-mutate-sound';
   pad(ap, ag, 'EVOLVE', () => app.setEvolve({ target: app.project.evolve.target === 'off' ? 'both' : 'off' }), { on: () => app.project.evolve.target !== 'off', sub: () => (app.project.evolve.target === 'off' ? 'OFF' : `${app.project.evolve.target.toUpperCase()} /${app.project.evolve.every}`), title: 'Rhythm and sound evolve on their own' });

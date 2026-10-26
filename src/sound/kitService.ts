@@ -12,7 +12,8 @@ import type { SynthKit } from '../model/types';
 
 export class KitService {
   private worker: Worker | null = null;
-  private engine: LxrEngine | null = null;
+  /** without a Worker: the compiled engine, instantiated afresh for each check */
+  private module: WebAssembly.Module | null = null;
   private waiting = new Map<number, (r: { kit: SynthKit }) => void>();
   private nextId = 1;
   initKit: SynthKit | null = null;
@@ -46,15 +47,15 @@ export class KitService {
   private async fallback(wasm: ArrayBuffer): Promise<SynthKit> {
     this.worker?.terminate();
     this.worker = null;
-    this.engine = await LxrEngine.create(wasm.slice(0), 1);
-    this.initKit = readKit(this.engine);
+    this.module = await WebAssembly.compile(wasm.slice(0));
+    this.initKit = readKit(LxrEngine.fromModule(this.module, 1));
     return this.initKit;
   }
 
   /** A level-matched, audible version of a kit (resolves with the input on failure). */
   async check(kit: SynthKit, opts: CheckOptions): Promise<SynthKit> {
     await this.ready;
-    if (this.engine) return checkKit(this.engine, kit, { ...opts, fallback: opts.fallback ?? this.initKit ?? undefined }).kit;
+    if (this.module) return checkKit(LxrEngine.fromModule(this.module, 1), kit, { ...opts, fallback: opts.fallback ?? this.initKit ?? undefined }).kit;
     const w = this.worker;
     if (!w) return kit;
     const id = this.nextId++;

@@ -18,6 +18,7 @@ import { bindKeys } from './ui/keys';
 import { closePopups, download, h, toast, win } from './ui/widgets';
 import { installTooltips } from './ui/tooltip';
 import { aboutDialog } from './ui/dialogs';
+import { midiDialog } from './ui/midiDialog';
 import { cpx, initScale } from './ui/scale';
 
 /** The page: fixed chrome (menu bar, transport, view tabs) above a work area that scrolls. */
@@ -57,12 +58,31 @@ async function main(): Promise<void> {
   const { bar, status } = menubar(app, chrome);
   const st = h('div', '', status);
   st.dataset.test = 'status';
-  const midiSt = h('div', '', status);
+  // MIDI: what is connected, with activity lights (polled lightly; nothing runs per message)
+  const midiSt = h('div', 'midistat', status);
+  midiSt.dataset.test = 'midi-status';
+  midiSt.title = 'MIDI: click for MIDI settings';
+  midiSt.addEventListener('click', () => midiDialog(app));
+  const midiLbl = h('span', '', midiSt);
+  const ledIn = h('span', 'led midiled', midiSt);
+  const ledOut = h('span', 'led midiled', midiSt);
+  ledIn.title = 'MIDI in';
+  ledOut.title = 'MIDI out';
   const showStatus = () => {
     st.textContent = (app.ui.busy ? '… ' : '') + app.ui.status;
     const m = app.midi;
-    midiSt.textContent = m.supported ? (m.state === 'ready' ? `MIDI ${m.prefs.outId ? 'OUT' : ''}${m.prefs.inId ? ' IN' : ''}`.trim() : '') : '';
+    const on = m.supported && m.state === 'ready';
+    midiSt.style.display = on ? '' : 'none';
+    const clock = m.prefs.clock === 'external' ? (m.clock.status === 'lost' ? ' EXT LOST' : ' EXT') : m.sendingClock ? ' CLK' : '';
+    midiLbl.textContent = `MIDI${m.prefs.input ? ' IN' : ''}${m.outputName ? ' OUT' : m.outputMissing ? ' OUT?' : ''}${clock}`;
   };
+  setInterval(() => {
+    const m = app.midi;
+    if (m.state !== 'ready') return;
+    const now = performance.now();
+    ledIn.classList.toggle('on', !!m.input.last && now - m.input.last.at < 120);
+    ledOut.classList.toggle('on', !!m.outLast && now - m.outLast.at < 120 && m.outLast.at <= now);
+  }, 80);
   app.on('status', showStatus);
   app.on('midi', showStatus);
   showStatus();
@@ -74,7 +94,7 @@ async function main(): Promise<void> {
   });
 
   const transport = transportWindow(app, chrome, bar);
-  for (const t of ['transport', 'pattern', 'history', 'project', 'view'] as const) app.on(t, () => transport.panel.refresh());
+  for (const t of ['transport', 'pattern', 'history', 'project', 'view', 'midi'] as const) app.on(t, () => transport.panel.refresh());
   app.on('pattern', () => transport.rebuildPatterns());
   app.on('project', () => transport.rebuildPatterns());
 

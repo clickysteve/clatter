@@ -182,7 +182,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   button(sy, sb, 'BASIC', () => app.setEditMode('basic'), { cls: 'small', on: () => app.ui.editMode === 'basic', title: 'The parameters that matter most' });
   button(sy, sb, 'ADVANCED', () => app.setEditMode('advanced'), { cls: 'small', on: () => app.ui.editMode === 'advanced', title: 'Every parameter of the voice' });
   button(sy, sb, 'LOCK VOICE', () => app.lockVoice(editVoice(app)), { cls: 'small', on: () => !!app.project.soundLocks.voices[editVoice(app)], title: 'GENERATE KIT, MUTATE KIT and EVOLVE leave this voice alone' });
-  button(sy, sb, 'MUTATE VOICE', () => void app.mutateKit(0.4, [editVoice(app)]), { cls: 'small', disabled: () => app.ui.busy, title: 'Controlled changes to this voice of the kit' });
+  button(sy, sb, 'MUTATE VOICE', () => void app.mutateKit(undefined, [editVoice(app)]), { cls: 'small', disabled: () => app.ui.busy, title: 'Controlled changes to this voice of the kit' });
   const syinfo = h('div', 'tiny grow', sb);
   const cols = h('div', 'synthcols sndscroll', syp);
   let shown = '';

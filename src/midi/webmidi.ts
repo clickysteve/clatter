@@ -1,7 +1,8 @@
 /*
  * From DOWNBEAT (https://github.com/clickysteve/downbeat, src/midi/webmidi.ts),
  * Copyright (c) 2026 The DOWNBEAT contributors, MIT licence (see THIRD_PARTY_NOTICES.md).
- * Modifications: messages name CLATTER; ports typed with Slop Factory Core's MidiPortInfo.
+ * Modifications: messages name CLATTER; ports typed with Slop Factory Core's MidiPortInfo; ALL INPUTS
+ * (every connected input, following hot-plug); extra output sinks for MIDI CC destinations.
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 /**
@@ -56,7 +57,7 @@ export class MidiAccess {
   private inId: string | null = null;
   private inLost = false;
   private handler: InputHandler | null = null;
-  private attached: MIDIInput | null = null;
+  private attached = new Map<string, MIDIInput>();
 
   constructor(private events: MidiAccessEvents) {}
 
@@ -108,7 +109,14 @@ export class MidiAccess {
     return new WebMidiSink(port);
   }
 
-  /** Listen to one input (null to stop). Re-attaches automatically when replugged. */
+  /** A sink for any connected output (MIDI CC destinations on another device), or null. */
+  sink(id: string | null): MidiSink | null {
+    if (!id || !this.access) return null;
+    const port = this.access.outputs.get(id);
+    return port && port.state === 'connected' ? new WebMidiSink(port) : null;
+  }
+
+  /** Listen to one input, to every input ('*'), or to none (null). Re-attaches automatically when replugged. */
   openInput(id: string | null, handler: InputHandler | null): boolean {
     this.detach();
     this.inId = id;
@@ -118,29 +126,54 @@ export class MidiAccess {
   }
 
   get inputReady(): boolean {
-    return !!this.attached;
+    return this.attached.size > 0;
+  }
+
+  /** Names of the inputs listened to. */
+  get listening(): string[] {
+    return [...this.attached.values()].map((p) => p.name ?? p.id);
+  }
+
+  private attachPort(port: MIDIInput): void {
+    const h = this.handler;
+    if (!h || this.attached.has(port.id)) return;
+    port.onmidimessage = (e: MIDIMessageEvent) => {
+      if (e.data) h(e.data, e.timeStamp);
+    };
+    this.attached.set(port.id, port);
   }
 
   private attach(): boolean {
     if (!this.access || !this.inId || !this.handler) return false;
+    if (this.inId === '*') {
+      this.access.inputs.forEach((p) => {
+        if (p.state === 'connected') this.attachPort(p);
+      });
+      return this.attached.size > 0;
+    }
     const port = this.access.inputs.get(this.inId);
     if (!port || port.state !== 'connected') return false;
-    const h = this.handler;
-    port.onmidimessage = (e: MIDIMessageEvent) => {
-      if (e.data) h(e.data, e.timeStamp);
-    };
-    this.attached = port;
+    this.attachPort(port);
     return true;
   }
 
-  private detach(): void {
-    if (this.attached) this.attached.onmidimessage = null;
-    this.attached = null;
+  private detach(id?: string): void {
+    for (const [k, p] of this.attached) {
+      if (id !== undefined && k !== id) continue;
+      p.onmidimessage = null;
+      this.attached.delete(k);
+    }
   }
 
   private handleState(e: MIDIConnectionEvent): void {
     const port = e.port;
-    if (port?.type === 'input' && port.id === this.inId) {
+    if (port?.type === 'input' && this.inId === '*') {
+      if (port.state === 'disconnected') this.detach(port.id);
+      else if (this.access) {
+        const p = this.access.inputs.get(port.id);
+        if (p && p.state === 'connected') this.attachPort(p);
+      }
+    } else if (port?.type === 'input' && port.id === this.inId) {
       if (port.state === 'disconnected' && !this.inLost) {
         this.inLost = true;
         this.detach();

@@ -57,7 +57,8 @@ export function bindKeys(app: App): void {
     switch (e.key === ' ' ? 'space' : k) {
       case 'space':
         if (e.repeat) break;
-        app.togglePlay();
+        if (e.shiftKey) app.togglePause();
+        else app.togglePlay();
         break;
       case '1':
         app.setView('pattern');
@@ -81,7 +82,7 @@ export function bindKeys(app: App): void {
         app.regenerate(q);
         break;
       case 'k':
-        if (e.shiftKey) void app.mutateKit(0.3, undefined, q);
+        if (e.shiftKey) void app.mutateKit(undefined, undefined, q);
         else void app.generateKit(q);
         break;
       case 'c':

@@ -9,6 +9,8 @@ import { aboutDialog, confirmDialog, exportDialog, helpDialog, paletteDialog } f
 import { importFolder, importZip, kitLibraryDialog, openKitFile } from './kitDialogs';
 import { DEFAULT_SCALE, SCALES, scaleLabel } from './scale';
 import { chooseFiles, closePopups, download, h } from './widgets';
+import { midiDialog } from './midiDialog';
+import { CLOCK_LABEL, CLOCK_MODES } from '../midi/settings';
 
 interface Item {
   label: string;
@@ -83,7 +85,7 @@ export function menubar(app: App, screen: HTMLElement): { bar: HTMLElement; stat
       'KIT',
       () => [
         { label: 'Generate kit', key: 'K', action: () => void app.generateKit() },
-        { label: 'Mutate kit', key: '⇧K', action: () => void app.mutateKit(0.3) },
+        { label: 'Mutate kit', key: '⇧K', action: () => void app.mutateKit() },
         { label: 'Mutate selected voice', action: () => voiceMutate(app) },
         'sep',
         { label: 'Synth kit: save or load…', action: () => kitLibraryDialog(app, 'synth', '', app.project.kit.name) },
@@ -112,17 +114,14 @@ export function menubar(app: App, screen: HTMLElement): { bar: HTMLElement; stat
       'MIDI',
       () => {
         const m = app.midi;
-        const list: Entry[] = [];
-        if (!m.supported) return [{ label: 'This browser has no Web MIDI', disabled: () => true }];
+        const list: Entry[] = [{ label: 'MIDI settings…', action: () => midiDialog(app) }];
+        if (!m.supported) return [...list, { label: 'This browser has no Web MIDI', disabled: () => true }];
         if (m.state !== 'ready') list.push({ label: 'Enable MIDI…', action: () => void m.enable() });
-        else {
-          list.push({ label: 'Output', sub: () => [{ label: 'None', action: () => m.selectOutput(null), checked: () => !m.prefs.outId }, ...m.outputs().map((p) => ({ label: p.name, action: () => m.selectOutput(p.id), checked: () => m.prefs.outId === p.id }))] });
-          list.push({ label: 'Input', sub: () => [{ label: 'None', action: () => m.selectInput(null), checked: () => !m.prefs.inId }, ...m.inputs().map((p) => ({ label: p.name, action: () => m.selectInput(p.id), checked: () => m.prefs.inId === p.id }))] });
-        }
-        const flag = (label: string, k: 'notesOut' | 'clockOut' | 'clockIn' | 'notesIn') => ({ label, action: () => ((m.prefs[k] = !m.prefs[k]), app.emit(['midi'])), checked: () => m.prefs[k] });
-        list.push('sep', flag('Send notes', 'notesOut'), flag('Send clock and start/stop', 'clockOut'), flag('Follow incoming clock', 'clockIn'), flag('Play tracks from incoming notes', 'notesIn'));
+        list.push('sep', { label: 'Clock', sub: () => CLOCK_MODES.map((c) => ({ label: CLOCK_LABEL[c], action: () => app.setClockMode(c), checked: () => m.prefs.clock === c })) });
+        list.push({ label: 'Send clock (internal)', action: () => m.update({ sendClock: !m.prefs.sendClock }), checked: () => m.prefs.sendClock, disabled: () => m.prefs.clock !== 'internal' });
         list.push({ label: 'Record incoming notes into the pattern', action: () => ((app.ui.record = !app.ui.record), app.emit(['midi'])), checked: () => app.ui.record });
-        list.push('sep', { label: 'Panic: all notes off', action: () => app.panic() });
+        list.push('sep', { label: app.ui.playing ? 'Pause' : 'Continue', key: '⇧SPACE', action: () => app.togglePause() });
+        list.push({ label: 'Panic: all notes off', action: () => app.panic() });
         return list;
       },
     ],
@@ -189,7 +188,7 @@ export function menubar(app: App, screen: HTMLElement): { bar: HTMLElement; stat
 function voiceMutate(app: App): void {
   const v = app.voiceOf(app.track);
   if (v < 0) return app.say('THE SELECTED TRACK PLAYS SAMPLES ONLY');
-  void app.mutateKit(0.4, [v]);
+  void app.mutateKit(undefined, [v]);
 }
 
 export async function openFile(app: App, accept = '.json,.zip'): Promise<void> {

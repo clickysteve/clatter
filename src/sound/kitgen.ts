@@ -1,6 +1,13 @@
 /**
  * Generative sound design: GENERATE KIT, MUTATE KIT, MUTATE VOICE and EVOLVE for the LXR engine.
  *
+ * Two generations of the designer live here. With a CHARACTER and a WILDNESS (the KITS workspace,
+ * NEW VOICE, the K keys) voices are designed from instrument PROFILES (profiles.ts): ten drum
+ * roles written for each LXR voice model, leaned by the character, relaxed continuously by the
+ * wildness, and chosen between by measuring candidates in the engine (kitcheck.ts). Without them
+ * (factory presets, WILDCARD's kit mutation, EVOLVE) the original archetype designer below runs
+ * unchanged, so every preset and every stored seed still makes exactly the sound it always did.
+ *
  * Not random parameter values: each voice is designed from an ARCHETYPE (kick, tom, perc,
  * snare, clap, hat, cymbal, zap) that knows how the LXR's parameters relate for that sound
  * (a kick is a low sine with a fast, deep pitch sweep; a hat is a high carrier with two noisy
@@ -18,10 +25,11 @@
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
-import type { SoundLocks, SynthKit } from '../model/types';
+import type { Character, Role, SoundLocks, SynthKit } from '../model/types';
 import type { KitFlavour } from '../rhythm/styles';
 import { hash32, Rng, SALT } from '../rhythm/rng';
 import { PAR } from './lxrParamIds';
+import { boundsAt, CHARACTER_DEFS, cohere, designProfileVoice, fxFlavour, isMenu, lfoKeys, modelOf, profileForVoice, recipeFor, type Profile } from './profiles';
 
 export type Archetype = 'kick' | 'tom' | 'perc' | 'zap' | 'snare' | 'clap' | 'hat' | 'cymbal';
 
@@ -432,6 +440,19 @@ export interface KitGenOptions {
   locks: SoundLocks;
   /** also design the FX bus */
   fx?: boolean;
+  /** the profile designer: a character (with it, `flavour` is not used) */
+  character?: Character;
+  /** 0-1 (default 0.3) */
+  wildness?: number;
+  /** per voice: the profile to design (null or absent: from the voice's tracks) */
+  profiles?: (Role | null)[];
+  /** only these voices (default: all six; the FX bus only with all six) */
+  voices?: number[];
+}
+
+/** The profile each voice is designed as: an override, else from the roles of its tracks. */
+export function resolveProfiles(o: Pick<KitGenOptions, 'voiceRoles' | 'profiles'>): Profile[] {
+  return [0, 1, 2, 3, 4, 5].map((v) => o.profiles?.[v] ?? profileForVoice(v, o.voiceRoles[v] ?? []));
 }
 
 /** Write a design into a kit (respecting parameter locks). */
@@ -446,6 +467,7 @@ function apply(kit: SynthKit, voice: number, d: VoiceDesign, locked: Set<number>
 
 /** GENERATE KIT: every unlocked voice designed afresh. */
 export function generateKit(base: SynthKit, o: KitGenOptions): SynthKit {
+  if (o.character) return generateProfileKit(base, o, o.character);
   const kit: SynthKit = { params: base.params.slice(), lfoTarget: base.lfoTarget.slice(), velTarget: base.velTarget.slice() };
   const locked = new Set(o.locks.params);
   for (let v = 0; v < 6; v++) {
@@ -485,6 +507,7 @@ export function designFx(kit: SynthKit, rng: Rng, flavour: KitFlavour, locked: S
  * menus (waveforms, filter types) change rarely.
  */
 export function mutateKit(base: SynthKit, o: KitGenOptions & { amount: number; voices?: number[] }): SynthKit {
+  if (o.character) return mutateProfileKit(base, o, o.character);
   const kit: SynthKit = { params: base.params.slice(), lfoTarget: base.lfoTarget.slice(), velTarget: base.velTarget.slice() };
   const locked = new Set(o.locks.params);
   const amount = Math.max(0, Math.min(1, o.amount));
@@ -543,4 +566,122 @@ export function voiceRolesOf(tracks: readonly { role: string; sound: { mode: str
     out[v]!.push(t.role);
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------- profiles, character, wildness
+
+/** Write values into a voice, respecting locked parameters. */
+function applyValues(kit: SynthKit, voice: number, values: Partial<Record<Key, number>>, locked: Set<number>): void {
+  const keys = voiceKeys(voice);
+  for (const [k, v] of Object.entries(values) as [Key, number][]) {
+    const p = keys[k];
+    if (p === undefined || locked.has(p)) continue;
+    kit.params[p] = v;
+  }
+}
+
+function pickLfoTarget(voice: number, profile: Profile, rng: Rng): number {
+  const keys = voiceKeys(voice);
+  const ok = lfoKeys(profile).map((k) => keys[k]).filter((x): x is number => x !== undefined);
+  return ok.length ? rng.pick(ok) : 0;
+}
+
+/** Design one voice from its profile into a kit (used by GENERATE KIT, NEW VOICE and the engine check's candidates). */
+export function designProfileInto(kit: SynthKit, voice: number, profile: Profile, character: Character, wildness: number, rng: Rng, locked: Set<number>): void {
+  const d = designProfileVoice(voice, voiceKeys(voice), profile, character, wildness, rng);
+  applyValues(kit, voice, d.values, locked);
+  kit.lfoTarget[voice] = d.lfo ? pickLfoTarget(voice, profile, rng) : 0;
+  kit.velTarget[voice] = 0;
+}
+
+/** Low tom below high tom: two drum voices playing toms keep their order unless the kit is wild. */
+export function orderToms(kit: SynthKit, profiles: Profile[], designed: number[], wildness: number, locked: Set<number>): void {
+  if (wildness >= 0.7) return;
+  const lo = designed.find((v) => v < 4 && profiles[v] === 'ltom');
+  const hi = designed.find((v) => v < 4 && profiles[v] === 'htom');
+  if (lo === undefined || hi === undefined) return;
+  const pl = voiceKeys(lo).coarse!;
+  const ph = voiceKeys(hi).coarse!;
+  if (locked.has(pl) || locked.has(ph)) return;
+  const gap = 5;
+  if (kit.params[pl]! + gap <= kit.params[ph]!) return;
+  const a = Math.min(kit.params[pl]!, kit.params[ph]!);
+  const b = Math.max(kit.params[pl]!, kit.params[ph]!);
+  kit.params[pl] = a;
+  kit.params[ph] = Math.min(127, Math.max(b, a + gap));
+}
+
+function generateProfileKit(base: SynthKit, o: KitGenOptions, ch: Character): SynthKit {
+  const kit: SynthKit = { params: base.params.slice(), lfoTarget: base.lfoTarget.slice(), velTarget: base.velTarget.slice() };
+  const locked = new Set(o.locks.params);
+  const w = Math.max(0, Math.min(1, o.wildness ?? 0.3));
+  const profiles = resolveProfiles(o);
+  const voices = o.voices ?? [0, 1, 2, 3, 4, 5];
+  const designed: number[] = [];
+  for (const v of voices) {
+    if (o.locks.voices[v]) continue;
+    designProfileInto(kit, v, profiles[v]!, ch, w, new Rng(hash32(o.seed, SALT.kit, 200 + v)), locked);
+    designed.push(v);
+  }
+  orderToms(kit, profiles, designed, w, locked);
+  if (voices.length === 6 && o.fx !== false && !locked.has(PAR.FX_TYPE)) {
+    designFx(kit, new Rng(hash32(o.seed, SALT.kit, 299)), fxFlavour(ch, o.seed), locked);
+    if (!locked.has(PAR.FX_DRY_WET)) kit.params[PAR.FX_DRY_WET] = clamp127(kit.params[PAR.FX_DRY_WET]! * CHARACTER_DEFS[ch].wet);
+  }
+  return kit;
+}
+
+/**
+ * MUTATE with a character and a wildness: relative to the current kit. Each voice gets a fresh
+ * profile-consistent TARGET; unlocked parameters move part of the way towards it (and a little
+ * beyond, by noise), inside bounds that the wildness opens. At low wildness the moves are small
+ * and stay inside the profile, so a kick stays that kick; at high wildness they are large, menus
+ * change, and the target itself may be wild. Relationships are re-applied gently afterwards.
+ * `amount` (0-1) scales how much moves; by default it follows the wildness.
+ */
+function mutateProfileKit(base: SynthKit, o: KitGenOptions & { amount: number }, ch: Character): SynthKit {
+  const kit: SynthKit = { params: base.params.slice(), lfoTarget: base.lfoTarget.slice(), velTarget: base.velTarget.slice() };
+  const locked = new Set(o.locks.params);
+  const w = Math.max(0, Math.min(1, o.wildness ?? 0.3));
+  const a = Math.max(0, Math.min(1, o.amount));
+  const profiles = resolveProfiles(o);
+  const voices = o.voices ?? [0, 1, 2, 3, 4, 5];
+  for (const v of voices) {
+    if (o.locks.voices[v]) continue;
+    const rng = new Rng(hash32(o.seed, SALT.kit, 1200 + v));
+    const profile = profiles[v]!;
+    const keys = voiceKeys(v);
+    const target = designProfileVoice(v, keys, profile, ch, w, rng);
+    const recipe = recipeFor(profile, modelOf(v), ch);
+    const cur: Partial<Record<Key, number>> = {};
+    for (const [k, p] of Object.entries(keys) as [Key, number][]) cur[k] = kit.params[p]!;
+    const next: Partial<Record<Key, number>> = { ...cur };
+    for (const [k, p] of Object.entries(keys) as [Key, number][]) {
+      const spec = recipe[k];
+      const tgt = target.values[k];
+      if (!spec || tgt === undefined || locked.has(p)) continue;
+      if (!rng.chance(0.2 + 0.7 * a)) continue;
+      const c = cur[k]!;
+      if (isMenu(spec)) {
+        if (rng.chance(0.03 + 0.5 * Math.pow(a, 1.5) * (0.3 + w))) next[k] = tgt;
+        continue;
+      }
+      const [lo, hi] = boundsAt(k, spec, w);
+      const f = (0.08 + 0.6 * a) * (0.5 + rng.next());
+      const noise = (rng.next() + rng.next() - 1) * (hi - lo) * 0.05 * a;
+      next[k] = clamp127(Math.max(Math.min(lo, c), Math.min(Math.max(hi, c), c + (tgt - c) * f + noise)));
+    }
+    // a wild mutation may take on the target's modulation too
+    if (w > 0.45 && rng.chance((w - 0.45) * 0.8)) {
+      for (const k of ['lfoWave', 'lfoSync', 'lfoRate', 'lfoDepth', 'lfoRetrig', 'lfoPhase'] as const) if (target.values[k] !== undefined) next[k] = target.values[k];
+      kit.lfoTarget[v] = target.lfo ? pickLfoTarget(v, profile, rng) : 0;
+    }
+    cohere(next, profile, modelOf(v), w, rng, 0.5);
+    for (const [k, p] of Object.entries(keys) as [Key, number][]) if (!locked.has(p) && next[k] !== undefined && next[k] !== cur[k]) kit.params[p] = next[k]!;
+  }
+  if (voices.length === 6 && !locked.has(PAR.FX_TYPE)) {
+    const r = new Rng(hash32(o.seed, SALT.kit, 1299));
+    if (r.chance(a * 0.4)) for (const p of [PAR.FX_P1, PAR.FX_P2, PAR.FX_P3, PAR.FX_P4]) if (!locked.has(p)) kit.params[p] = clamp127(kit.params[p]! + r.bell() * 30 * a);
+  }
+  return kit;
 }

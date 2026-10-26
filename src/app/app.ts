@@ -23,8 +23,12 @@ import { buildPreset, PRESETS, resolveBundled } from '../model/presets';
 import { describeStepSound, isEmptyStepSound, lockableParam, resolveStepSound, soundSampleIds } from '../sound/stepSound';
 import { addEvolution, clearEvolution, distributeSounds, generateVariations, handMade, mutateSounds, slotWritable } from '../sound/soundgen';
 import { voiceKeys } from '../sound/kitgen';
-import { clamp, clone, MAX_PATTERNS, VARIATION_SLOTS, MAX_STEPS, stepTicks, type StepSound, type Variation, type DestructionSettings, type GenSettings, type Hit, type Pattern, type Project, type Quantize, type Resolution, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from '../model/types';
+import { clamp, clone, PPQ, MAX_PATTERNS, VARIATION_SLOTS, MAX_STEPS, stepTicks, type StepSound, type Variation, type DestructionSettings, type GenSettings, type Hit, type Pattern, type Project, type Quantize, type Resolution, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from '../model/types';
 import { MidiController } from '../midi/controller';
+import { PhaseLock } from '../midi/clock';
+import { noteLength } from '../midi/router';
+import { defaultCcSlots, type ClockMode } from '../midi/settings';
+import type { LearnTarget } from '../midi/input';
 import { generate, stepsPerBar } from '../rhythm/generate';
 import { mutate, summariseOps } from '../rhythm/mutate';
 import { clearTrack, commitEdits, copyRegion, editCount, newPattern, pasteRegion, setHit, setLength, setResolution, setSounds, setStepSound, setStepTrig, setTrigs, trigAt, shiftTrack, soundCount, sourceGrid, stepSoundAt, type Clip } from '../rhythm/pattern';
@@ -38,7 +42,9 @@ import { ExportRunner, type ExportFile, type ExportKind } from './exportJob';
 import { describeChop } from '../destruction/chop';
 import { describeRolls } from '../destruction/rolls';
 import { describeDestroy } from '../destruction/destroy';
-import { evolveKit, generateKit, mutateKit, voiceRolesOf } from '../sound/kitgen';
+import { evolveKit, generateKit, mutateKit, resolveProfiles, voiceRolesOf } from '../sound/kitgen';
+import { CHARACTER_DEFS, defaultKitGen, PROFILE_LABEL, type Profile } from '../sound/profiles';
+import type { Character, KitGenSettings } from '../model/types';
 import { KitService } from '../sound/kitService';
 import { KitManager } from './kitManager';
 import { exportMidi } from '../export/midiFile';
@@ -145,6 +151,13 @@ export class App {
   readonly modLibrary: ModLibrary;
   /** the seed of the next generated modulation (each press differs, a press is reproducible from its seed) */
   modSeed = 1;
+  /** EXTERNAL clock: the tempo CLATTER runs at (measured, phase-corrected); null when not following */
+  extBpm: number | null = null;
+  private phase = new PhaseLock();
+  /** EXTERNAL clock: Start/Continue received, playback begins on the next pulse (tick of that pulse) */
+  private extArm: number | null = null;
+  /** where Continue resumes (ticks; 0 = the top) */
+  resumeTick = 0;
 
   constructor(opts: { trackCount?: number } = {}) {
     this.prefs = loadPrefs();
@@ -206,20 +219,29 @@ export class App {
     this.scheduler = new Scheduler(this.sequence, {
       now: () => this.host.now,
       emit: (evs) => this.emitHits(evs),
-      clock: (times) => this.midi.clock(times.map((t) => this.host.perfTimeOf(t))),
+      clock: (times) => this.midi.clockOut(times.map((t) => this.host.perfTimeOf(t))),
       onBar: (bar, time) => this.onBar(bar, time),
       onCycle: () => this.emit(['transport']),
-      tempo: (tick) => (tempoActive(this.project.tempoAuto) ? bpmAt(this.project.tempo, this.project.tempoAuto, tick) : null),
-      onTempo: (bpm) => this.live.setBpm(bpm),
+      // an external clock takes precedence: the tempo curve is suspended while CLATTER follows it
+      tempo: (tick) => (!this.externalTempo && tempoActive(this.project.tempoAuto) ? bpmAt(this.project.tempo, this.project.tempoAuto, tick) : null),
+      onTempo: (bpm) => {
+        this.live.setBpm(bpm);
+        this.midi.cc.setBpm(bpm);
+      },
       startDelay: 0.08,
     });
     this.midi = new MidiController(
       {
-        note: (ch, note, vel) => this.midiNote(ch, note, vel),
-        tempo: (bpm) => this.setTempo(bpm, false),
-        transport: (m) => (m === 'stop' ? this.stop() : void this.play()),
+        trigger: (track, vel) => this.midiNote(track, vel),
+        macro: (i, v) => this.setMacro(i, v),
+        trackCount: () => this.project.tracks.length,
+        extStart: (pulse) => this.extStart(pulse),
+        extStop: () => this.stop(true),
+        extPulse: (n, ms) => this.extPulse(n, ms),
+        extTempo: (bpm) => this.extTempo(bpm),
+        extLost: () => this.emit(['transport', 'midi']),
         changed: () => {
-          this.prefs.midi = { ...this.midi.prefs };
+          this.prefs.midi = this.midi.prefs;
           savePrefs(this.prefs);
           this.emit(['midi']);
         },
@@ -227,6 +249,9 @@ export class App {
       },
       this.prefs.midi,
     );
+    this.prefs.midi = this.midi.prefs;
+    // the clock follower notices a master that went away, also while stopped
+    if (typeof window !== 'undefined') setInterval(() => this.midi.clock.watch(), 200);
     this.exporter = new ExportRunner({
       render: (kind, bars, tail, onProgress) => (kind === 'master' ? this.exportMaster(bars, tail, onProgress) : kind === 'stems' ? this.exportStems(bars, tail, onProgress) : this.exportMidiFile(bars)),
       deliver: (f) => this.deliver(f),
@@ -330,7 +355,7 @@ export class App {
     this.ui.queued = null;
     this.evolveHome = null;
     configureEngine(this.live, this.project, this.library);
-    this.scheduler.setTempo(this.project.tempo);
+    this.scheduler.setTempo(this.baseTempo());
     this.scheduler.retempo();
     this.live.setBpm(this.effectiveBpm());
     this.touch(['project', 'pattern', 'tracks', 'kit', 'mix', 'gen', 'destruction', 'transport', 'snapshots', 'master', 'history']);
@@ -338,6 +363,7 @@ export class App {
 
   /** State changed: replan, autosave, redraw. */
   private touch(topics: Topic[]): void {
+    this.configureCc();
     this.sequence.bump();
     this.scheduler.invalidate();
     this.autosave();
@@ -442,7 +468,11 @@ export class App {
   }
 
   // ------------------------------------------------------------------ transport
-  async play(): Promise<void> {
+  /**
+   * Play from the top, or from `fromTick` (Continue, or joining an external clock), with the
+   * first tick at `at` (AudioContext time; default a moment from now).
+   */
+  async play(fromTick = 0, at?: number): Promise<void> {
     if (this.ui.playing) return;
     try {
       await this.host.start();
@@ -450,42 +480,57 @@ export class App {
       this.say(`AUDIO FAILED: ${this.host.error}`);
       return;
     }
+    if (this.ui.playing) return;
     configureEngine(this.live, this.project, this.library);
     this.sequence.reset();
     this.sequence.bump();
-    this.scheduler.setTempo(this.project.tempo);
-    this.live.setBpm(bpmAt(this.project.tempo, this.project.tempoAuto, 0));
-    const t0 = this.host.now + 0.1;
-    this.scheduler.start(t0);
-    this.midi.start(this.host.perfTimeOf(t0));
+    this.scheduler.setTempo(this.baseTempo());
+    const t0 = Math.max(at ?? 0, this.host.now + 0.05);
+    this.scheduler.start(t0, fromTick);
+    this.live.setBpm(this.scheduler.currentBpm);
+    this.configureCc();
+    this.midi.cc.reset(t0);
+    this.midi.start(this.host.perfTimeOf(t0), Math.round(fromTick / (PPQ / 24)));
     this.ui.playing = true;
+    this.resumeTick = 0;
     this.evolveStep = 0;
     this.evolveHome = clone(this.project.kit.synth);
     this.stopTicker = startTicker(() => {
       this.scheduler.pump();
-      this.midi.follower.check(performance.now());
+      this.runCc();
     });
-    this.say('PLAYING');
+    this.say(fromTick > 0 ? 'CONTINUE' : 'PLAYING');
     this.emit(['transport']);
   }
 
-  stop(): void {
+  /** Stop. With `pause` the position is kept for CONTINUE (and the MIDI Song Position says where). */
+  stop(pause = false): void {
+    this.extArm = null;
     if (!this.ui.playing) return;
+    const pos = Math.max(0, this.scheduler.tickAt(this.host.now - this.host.latency));
     this.stopTicker?.();
     this.stopTicker = null;
     this.scheduler.stop();
     this.host.send({ type: 'cancel', time: this.host.now });
-    this.midi.stop();
+    this.midi.stop(pause);
     this.ui.playing = false;
+    // resume on a sixteenth (what a Song Position Pointer can say)
+    this.resumeTick = pause ? Math.floor(pos / (PPQ / 4)) * (PPQ / 4) : 0;
     this.live.setBpm(this.effectiveBpm());
     this.ui.queued = null;
-    this.say('STOPPED');
+    this.say(pause ? 'PAUSED: CONTINUE PLAYS ON FROM HERE' : 'STOPPED');
     this.emit(['transport']);
   }
 
   togglePlay(): void {
     if (this.ui.playing) this.stop();
     else void this.play();
+  }
+
+  /** PAUSE / CONTINUE (MIDI Stop, then Song Position and Continue). */
+  togglePause(): void {
+    if (this.ui.playing) this.stop(true);
+    else void this.play(this.resumeTick);
   }
 
   /** Everything off now: queued hits, sounding samples, synth layers and MIDI notes. */
@@ -499,15 +544,112 @@ export class App {
     const p = this.project;
     const idx = trackIndex(p);
     const hits: TimedHit[] = [];
+    const solo = anySolo(p);
+    const stepMs = this.scheduler.spt * (PPQ / 4) * 1000;
     for (const se of evs) {
       const h = hitOf(se, p, idx, this.scheduler.spt, this.ui.fills);
       if (!h) continue;
-      hits.push(h);
       const t = p.tracks[h.track]!;
-      const audible = !t.mix.mute && (!anySolo(p) || t.mix.solo);
-      if (audible) this.midi.note(t.midi.channel, t.midi.note, h.vel, this.host.perfTimeOf(se.time), Math.max(20, (h.gate ?? 2646) / 44.1));
+      const route = t.midi.out ?? 'both';
+      // INTERNAL and BOTH play the engine (its SYNTH, SAMPLE or HYBRID source); MIDI and BOTH send the note
+      if (route !== 'midi') hits.push(h);
+      this.midi.cc.hit(h.track, se.time, h.vel, h.tb, h.tp);
+      const audible = !t.mix.mute && (!solo || t.mix.solo);
+      if (audible && route !== 'internal') this.midi.note(h.track, t.midi.channel, t.midi.note, h.vel, this.host.perfTimeOf(se.time), noteLength(t.midi.len, h.gate ? (h.gate / ENGINE_RATE) * 1000 : undefined, stepMs));
     }
     if (hits.length) this.host.send({ type: 'hits', hits });
+  }
+
+  /** MIDI CC out: which tracks drive a CC destination (call when modulation or tracks change). */
+  private configureCc(): void {
+    this.midi.cc.configure(this.project.tracks.map((t) => t.sound.mod), this.effectiveBpm());
+  }
+
+  /** The CC destinations, up to the scheduler's lookahead (from the ticker, never the audio thread). */
+  private runCc(): void {
+    if (!this.midi.cc.active) return;
+    const slots = this.project.midiCc ?? defaultCcSlots();
+    const macros = Float32Array.from(this.project.macros ?? [0, 0, 0, 0]);
+    this.midi.cc.run(this.host.now + this.scheduler.lookahead, slots, macros, (slot, cfg, v, t) => this.midi.sendCc(slot, cfg, v, this.host.perfTimeOf(t)));
+  }
+
+  // ------------------------------------------------------------------ MIDI clock
+  /** CLATTER follows an external clock's tempo now (the internal tempo and its curve are suspended). */
+  get externalTempo(): boolean {
+    return this.midi.prefs.clock === 'external' && this.extBpm !== null;
+  }
+
+  /** EXTERNAL clock: the last phase error of the lock, in ticks (display) */
+  get phaseError(): number {
+    return this.phase.error;
+  }
+
+  /** The tempo the scheduler runs at before any curve: the external one while following, else the project's. */
+  private baseTempo(): number {
+    return this.externalTempo ? this.extBpm! : this.project.tempo;
+  }
+
+  setClockMode(mode: ClockMode): void {
+    this.midi.setClockMode(mode);
+    if (mode !== 'external') this.leaveExternal();
+    this.emit(['transport', 'midi']);
+  }
+
+  /** Back to the internal tempo state: the project's tempo and its curve, from the horizon on. */
+  private leaveExternal(): void {
+    this.extBpm = null;
+    this.extArm = null;
+    this.scheduler.setTempo(this.project.tempo);
+    this.scheduler.retempo();
+    this.live.setBpm(this.effectiveBpm());
+  }
+
+  private applyExtTempo(bpm: number): void {
+    const b = clamp(bpm, 20, 400);
+    if (this.extBpm !== null && Math.abs(b - this.extBpm) < 0.005) return;
+    this.extBpm = b;
+    this.scheduler.setTempo(b);
+    this.live.setBpm(b);
+    this.midi.cc.setBpm(b);
+  }
+
+  /** The master's tempo estimate changed. */
+  private extTempo(bpm: number): void {
+    const wasFollowing = this.externalTempo;
+    // while running with a phase lock the pulses drive the tempo; otherwise the estimate does
+    if (!this.ui.playing || !this.midi.clock.running || !wasFollowing) this.applyExtTempo(bpm);
+    if (!wasFollowing) this.scheduler.retempo();
+    this.emit(['transport']);
+  }
+
+  /** Start (pulse 0) or Continue (pulse n): playback begins on the next pulse. */
+  private extStart(pulse: number): void {
+    if (this.ui.playing) this.stop();
+    this.extArm = pulse * (PPQ / 24);
+    this.say(pulse ? 'EXTERNAL CONTINUE' : 'EXTERNAL START');
+  }
+
+  private extPulse(n: number, ms: number): void {
+    const tpp = PPQ / 24;
+    if (this.extArm !== null) {
+      // join the master: the pulse at `ms` is tick n × 4; CLATTER starts a moment later at the matching tick
+      const arm = this.extArm;
+      this.extArm = null;
+      const bpm = this.extBpm ?? this.midi.clock.bpm ?? this.project.tempo;
+      if (this.extBpm === null) this.applyExtTempo(bpm || this.project.tempo);
+      const pulseAt = this.host.audioTimeOf(ms);
+      const t0 = this.host.now + 0.05;
+      const spt = 60 / ((this.extBpm ?? bpm) * PPQ);
+      const from = arm + Math.max(0, (t0 - pulseAt) / spt);
+      this.phase.reset(arm - n * tpp);
+      void this.play(from, t0);
+      return;
+    }
+    if (!this.ui.playing || !this.scheduler.running || this.midi.prefs.clock !== 'external') return;
+    const tick = this.scheduler.tickAt(this.host.audioTimeOf(ms));
+    const cmd = this.phase.correct(this.midi.clock.bpm || this.extBpm || this.project.tempo, n, tick, PPQ);
+    // the command changes at most every sixteenth (6 pulses): the error is measured on every pulse
+    if (n % 6 === 0 || this.extBpm === null) this.applyExtTempo(cmd);
   }
 
   setTempo(bpm: number, undoable = true): void {
@@ -515,7 +657,8 @@ export class App {
     if (b === this.project.tempo) return;
     const apply = () => {
       this.project.tempo = b;
-      this.scheduler.setTempo(b);
+      // following an external clock, the new tempo is kept for when CLATTER runs on its own again
+      this.scheduler.setTempo(this.baseTempo());
       this.live.setBpm(this.effectiveBpm());
     };
     if (undoable) this.change('TEMPO', apply, ['transport']);
@@ -525,9 +668,10 @@ export class App {
     }
   }
 
-  /** The tempo in force now: the BPM, times the tempo curve while it plays. */
+  /** The tempo in force now: the BPM, times the tempo curve while it plays (or the external clock's). */
   effectiveBpm(): number {
-    return this.ui.playing && this.scheduler.running ? this.scheduler.currentBpm : bpmAt(this.project.tempo, this.project.tempoAuto, 0);
+    if (this.ui.playing && this.scheduler.running) return this.scheduler.currentBpm;
+    return this.externalTempo ? this.extBpm! : bpmAt(this.project.tempo, this.project.tempoAuto, 0);
   }
 
   /** Replace the tempo curve (undefined removes it). One undo step. */
@@ -931,7 +1075,7 @@ export class App {
       this.evolveHome = null;
       // the engine follows: kit, strips, tempo and the output chain
       configureEngine(this.live, this.project, this.library);
-      this.scheduler.setTempo(this.project.tempo);
+      this.scheduler.setTempo(this.baseTempo());
       this.scheduler.retempo();
       this.live.setBpm(this.effectiveBpm());
       this.say(`WILDCARD ${settings.intensity}% ${SCOPE_LABEL[settings.scope]} · SEED ${settings.seed} · ${r.report.join(' · ')}`);
@@ -1017,7 +1161,7 @@ export class App {
         p.destruction = clone(s.destruction);
         p.tempo = s.tempo;
         p.swing = s.swing;
-        this.scheduler.setTempo(p.tempo);
+        this.scheduler.setTempo(this.baseTempo());
         this.live.setBpm(this.effectiveBpm());
         this.live.setParams(kitDiff(before, p.kit.synth));
         for (let v = 0; v < 6; v++) {
@@ -1040,7 +1184,7 @@ export class App {
       }
       this.live.setTrack(i, engineTrackOf(t, solo));
     });
-    this.live.setOutput(outputOf(this.project));
+    this.live.setOutput(outputOf(this.project));  this.configureCc();
   }
 
   setTrackSound(id: string, sound: Partial<TrackSound>, label = 'SOUND'): void {
@@ -1070,6 +1214,13 @@ export class App {
     if (!transient) this.history.begin(label);
     Object.assign(t.mix, mix);
     if (!transient) this.history.commit();
+    // MIDI notes of a track that is no longer heard end now
+    if (transient) {
+      const solo = anySolo(this.project);
+      this.project.tracks.forEach((x, i) => {
+        if (x.mix.mute || (solo && !x.mix.solo)) this.midi.releaseTrack(i);
+      });
+    }
     this.syncTracks();
     this.autosave();
     this.emit(['mix', 'tracks', 'history']);
@@ -1080,9 +1231,19 @@ export class App {
     if (t) this.change('RENAME TRACK', () => (t.name = name.toUpperCase().slice(0, 10) || t.name), ['tracks']);
   }
 
+  /** A track's MIDI routing, channel, note or length. Its sounding MIDI notes end first. */
   setTrackMidi(id: string, midi: Partial<Track['midi']>): void {
-    const t = this.project.tracks.find((x) => x.id === id);
-    if (t) this.change('TRACK MIDI', () => Object.assign(t.midi, midi), ['tracks', 'midi']);
+    const i = this.trackIndexOf(id);
+    const t = this.project.tracks[i];
+    if (!t) return;
+    this.midi.releaseTrack(i);
+    this.change('TRACK MIDI', () => Object.assign(t.midi, midi), ['tracks', 'midi']);
+  }
+
+  /** The same MIDI settings for every track (TRACK ROUTING: ALL). */
+  setAllTracksMidi(midi: Partial<Track['midi']>): void {
+    this.project.tracks.forEach((_, i) => this.midi.releaseTrack(i));
+    this.change('TRACK MIDI', () => this.project.tracks.forEach((t) => Object.assign(t.midi, midi)), ['tracks', 'midi']);
   }
 
   /** Play a track's sound now (audition). */
@@ -1154,13 +1315,54 @@ export class App {
     return { seed, flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), locks: this.project.soundLocks };
   }
 
-  /** A kit through the engine check (levels, audibility). */
-  private async checkedKit(kit: SynthKit, seed: number, voices?: number[]): Promise<SynthKit> {
+  /** The kit generation settings: character, wildness, profile overrides, seed hold. */
+  get kitGen(): KitGenSettings {
+    return this.project.kitGen ?? defaultKitGen();
+  }
+
+  /** Change the generation settings (part of the project; not an undo step, as a knob position). */
+  setKitGen(g: Partial<KitGenSettings>): void {
+    const cur = (this.project.kitGen ??= defaultKitGen());
+    Object.assign(cur, g);
+    if (g.wildness !== undefined) cur.wildness = clamp(g.wildness, 0, 1);
+    this.autosave();
+    this.emit(['kit']);
+  }
+
+  /** The profile each voice is designed as (an override, or from its tracks). */
+  voiceProfiles(): Profile[] {
+    return resolveProfiles({ voiceRoles: voiceRolesOf(this.project.tracks), profiles: this.kitGen.profiles });
+  }
+
+  /** Profile-designer options for a press: character, wildness, profiles. */
+  private profileOpts(seed: number, voices?: number[]) {
+    const g = this.kitGen;
+    return { ...this.kitOpts(seed), character: g.character, wildness: g.wildness, profiles: g.profiles, voices };
+  }
+
+  /** The seed of a press: the held one, or a new one (remembered so the press can be made again). */
+  private pressSeed(): number {
+    const g = (this.project.kitGen ??= defaultKitGen());
+    if (!g.hold) g.seed = randomSeed();
+    return g.seed;
+  }
+
+  /** A kit through the engine check (levels, audibility; with `gen`, recognition of each profile). */
+  private async checkedKit(kit: SynthKit, seed: number, voices?: number[], gen = false): Promise<SynthKit> {
     if (!this.kits) return kit;
     this.ui.busy = true;
     this.emit(['status']);
     try {
-      return await this.kits.check(kit, { flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), seed, voices, locked: this.project.soundLocks.voices });
+      const g = this.kitGen;
+      return await this.kits.check(kit, {
+        flavour: styleById(this.project.gen.style).kitFlavour,
+        voiceRoles: voiceRolesOf(this.project.tracks),
+        seed,
+        voices,
+        locked: this.project.soundLocks.voices,
+        lockedParams: this.project.soundLocks.params,
+        ...(gen ? { gen: { character: g.character, wildness: g.wildness, profiles: this.voiceProfiles() } } : {}),
+      });
     } finally {
       this.ui.busy = false;
       this.emit(['status']);
@@ -1179,32 +1381,79 @@ export class App {
     }
   }
 
-  /** GENERATE KIT: a new set of synthesised drums designed for the style. */
+  private genLabel(): string {
+    const g = this.kitGen;
+    return `${CHARACTER_DEFS[g.character].label} · WILDNESS ${Math.round(g.wildness * 100)}%`;
+  }
+
+  /**
+   * GENERATE KIT: a new set of synthesised drums, each voice designed from its instrument profile
+   * with the CHARACTER and WILDNESS of the KITS workspace, and checked in the engine. Only the kit:
+   * never the patterns, the tempo or the samples (that is WILDCARD).
+   */
   async generateKit(quantise = false): Promise<void> {
-    const seed = randomSeed();
-    const kit = await this.checkedKit(generateKit(this.project.kit.synth, this.kitOpts(seed)), seed);
+    const seed = this.pressSeed();
+    const g = { ...this.kitGen };
+    const profiles = this.voiceProfiles();
+    const kit = await this.checkedKit(generateKit(this.project.kit.synth, this.profileOpts(seed)), seed, undefined, true);
     const fn = () => {
       this.applyKitChange(kit);
       this.project.kit.seed = seed;
       this.project.kit.name = `KIT ${seed.toString(36).toUpperCase().slice(0, 5)}`;
+      this.project.kit.gen = { v: 2, op: 'generate', seed, character: g.character, wildness: g.wildness, profiles };
       this.evolveHome = clone(kit);
-      this.say(`NEW ${styleById(this.project.gen.style).kitFlavour.toUpperCase()} KIT · SEED ${seed}`);
+      this.say(`NEW KIT · ${this.genLabel()} · SEED ${seed}`);
     };
     if (quantise) this.quantised('GENERATE KIT', fn, ['kit']);
     else this.change('GENERATE KIT', fn, ['kit']);
   }
 
-  /** MUTATE KIT / MUTATE VOICE: controlled changes (amount 0-1). */
-  async mutateKit(amount = 0.3, voices?: number[], quantise = false): Promise<void> {
+  /**
+   * MUTATE KIT / MUTATE VOICE: changes relative to the current kit, as far as the WILDNESS allows
+   * (low: restrained, the drums keep their identity; high: they may leave their roles), leaning
+   * towards the CHARACTER. `amount` (0-1) overrides how much moves (default: from the wildness).
+   * Locked voices and parameters, samples and source modes are never touched. One undo step.
+   */
+  async mutateKit(amount?: number, voices?: number[], quantise = false): Promise<void> {
     const seed = randomSeed();
-    const kit = await this.checkedKit(mutateKit(this.project.kit.synth, { ...this.kitOpts(seed), amount, voices }), seed, voices);
+    const g = { ...this.kitGen };
+    const a = amount ?? 0.12 + 0.75 * g.wildness;
+    const kit = await this.checkedKit(mutateKit(this.project.kit.synth, { ...this.profileOpts(seed, voices), amount: a }), seed, voices, g.wildness < 0.35);
     const label = voices && voices.length === 1 ? 'MUTATE VOICE' : 'MUTATE KIT';
     const fn = () => {
       this.applyKitChange(kit);
-      this.say(`${label} ${Math.round(amount * 100)}%`);
+      this.project.kit.gen = { v: 2, op: 'mutate', seed, character: g.character, wildness: g.wildness, profiles: this.voiceProfiles() };
+      this.say(`${label} · ${this.genLabel()}`);
     };
     if (quantise) this.quantised(label, fn, ['kit']);
     else this.change(label, fn, ['kit']);
+  }
+
+  /**
+   * NEW VOICE: design one voice afresh, as its profile (or `profile`, to make, say, a cymbal on a
+   * kick track: the override is remembered for that voice until set back to AUTO).
+   */
+  async generateVoice(v: number, profile?: Profile | null): Promise<void> {
+    if (v < 0 || v > 5) return;
+    if (profile !== undefined) {
+      const ps = [...this.kitGen.profiles];
+      ps[v] = profile;
+      this.setKitGen({ profiles: ps });
+    }
+    if (this.project.soundLocks.voices[v]) return this.say('THE VOICE IS LOCKED');
+    const seed = this.pressSeed();
+    const prof = this.voiceProfiles()[v]!;
+    const kit = await this.checkedKit(generateKit(this.project.kit.synth, this.profileOpts(seed, [v])), seed, [v], true);
+    this.change('NEW VOICE', () => {
+      this.applyKitChange(kit);
+      const g = this.kitGen;
+      this.project.kit.gen = { v: 2, op: 'voice', seed, character: g.character, wildness: g.wildness, profiles: this.voiceProfiles() };
+      this.say(`NEW ${PROFILE_LABEL[prof]} ON VOICE ${v + 1} · ${this.genLabel()} · SEED ${seed}`);
+    }, ['kit']);
+  }
+
+  setCharacter(c: Character): void {
+    this.setKitGen({ character: c });
   }
 
   /** The LXR voice a track plays (or -1 for a sample track). */
@@ -2129,12 +2378,14 @@ export class App {
   }
 
   // ------------------------------------------------------------------ MIDI input
-  private midiNote(_ch: number, note: number, vel: number): void {
+  /** An incoming note plays a track now (velocity already scaled by the input sensitivity, applied once). */
+  private midiNote(i: number, vel: number): void {
     const p = this.project;
-    let i = p.tracks.findIndex((t) => t.midi.note === note);
-    if (i < 0) i = (note - 36 + 120) % p.tracks.length;
-    const t = p.tracks[i]!;
-    this.host.send({ type: 'hits', hits: [{ time: this.host.now, track: i, vel, pitch: 0 }] });
+    const t = p.tracks[i];
+    if (!t) return;
+    if (this.host.state !== 'running') void this.host.start().then(() => configureEngine(this.live, this.project, this.library)).catch(() => undefined);
+    const route = t.midi.out ?? 'both';
+    if (route !== 'midi') this.host.send({ type: 'hits', hits: [{ time: this.host.now, track: i, vel, pitch: 0 }] });
     if (this.ui.record && this.ui.playing) {
       const pos = this.playhead();
       if (pos && pos.pattern === this.pattern.id) {
@@ -2143,6 +2394,31 @@ export class App {
         this.touch(['pattern']);
       }
     }
+  }
+
+  /** MIDI Learn: the next incoming note plays this track (or the next CC moves this macro); null cancels. */
+  armLearn(t: LearnTarget | null): void {
+    this.midi.armLearn(t);
+  }
+
+  /** Set the note an input position plays (NO_NOTE = none). Per browser, not part of the project. */
+  setInputNote(track: number, note: number): void {
+    const m = this.midi.prefs.inMap;
+    if (track < 0 || track >= m.length) return;
+    m[track] = clamp(Math.round(note), -1, 127);
+    this.midi.update({});
+  }
+
+  /** The MIDI CC destinations (portable: part of the project). */
+  setCcSlot(i: number, c: Partial<import('../model/types').CcSlot>): void {
+    this.change(
+      'MIDI CC',
+      () => {
+        const list = (this.project.midiCc ??= defaultCcSlots());
+        Object.assign(list[i]!, c);
+      },
+      ['midi'],
+    );
   }
 
   // ------------------------------------------------------------------ projects
@@ -2161,7 +2437,7 @@ export class App {
     if (!undoable) this.project.snapshots = snaps.map(() => null);
     this.afterLoad(!undoable);
     this.kitm?.projectReplaced();
-    if (wasPlaying) this.scheduler.setTempo(proj.tempo);
+    if (wasPlaying) this.scheduler.setTempo(this.baseTempo());
     this.say(`PRESET ${spec.name}: ${spec.description}`);
   }
 

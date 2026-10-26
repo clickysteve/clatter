@@ -96,11 +96,12 @@ export function helpDialog(): void {
       'PLAYING AND GENERATING',
       [
         ['SPACE', 'play / stop'],
+        ['SHIFT+SPACE', 'pause / continue from the same place (MIDI Song Position and Continue)'],
         ['ESC', 'stop, close a dialog or panel, clear the selection'],
         ['1  2  3', 'PATTERN, SOUND, PERFORM'],
         ['G  V  M', 'generate a pattern, make a variation, mutate'],
         ['R', 'regenerate after bar 1'],
-        ['K  /  SHIFT+K', 'generate a kit / mutate the kit'],
+        ['K  /  SHIFT+K', 'generate a kit / mutate the kit (with the CHARACTER and WILDNESS of the KITS tab)'],
         ['C  L  D  W', 'CHOP, ROLLS, DESTROY on/off, WILDCARD'],
         ['F (hold)', 'FILL'],
         ['SHIFT 1-9', 'switch pattern (queued to the end of the cycle while playing)'],

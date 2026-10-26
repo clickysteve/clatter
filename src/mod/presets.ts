@@ -166,7 +166,7 @@ const range = (seed: number, salt: number, lo: number, hi: number): number => lo
 
 /** Destinations worth modulating on a voice, most musical first. */
 export function musicalDests(t: ModTarget): string[] {
-  const all = destsFor(t.mode, t.voice).filter((d) => d.rate === 'continuous').map((d) => d.id);
+  const all = destsFor(t.mode, t.voice).filter((d) => d.rate === 'continuous' && d.kind !== 'midi').map((d) => d.id);
   const prefer = t.mode === 'sample'
     ? ['smp.pitch', 'trk.filter', 'smp.pan', 'smp.gain', 'trk.pan']
     : t.voice === 3

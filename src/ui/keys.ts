@@ -35,6 +35,7 @@ export function bindKeys(app: App): void {
       else if (k === 'z' || k === 'y') (k === 'y' ? app.redo() : app.undo());
       else if (k === 'c') app.copy();
       else if (k === 'v') app.paste();
+      else if (k === 'a' && app.ui.view === 'pattern') app.selectAll();
       else if (k === 's') {
         const f = app.projectFile();
         download(f.name, f.data, f.type);

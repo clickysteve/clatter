@@ -38,6 +38,11 @@ export class History<T> {
     this.open = { label, state: this.capture() };
   }
 
+  /** Rename the gesture that is open (it turned out to be something else than it started as). */
+  relabel(label: string): void {
+    if (this.open) this.open.label = label;
+  }
+
   commit(changed = true): void {
     if (this.depth > 0) this.depth--;
     if (!this.open || this.depth > 0) return;

@@ -1820,7 +1820,7 @@ html[data-view='pattern'] #main {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(300 * var(--px))), 1fr));
 }
 .wspane-sequence.show {
-  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
 }
 .wspane-sound.show {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(340 * var(--px))), 1fr));

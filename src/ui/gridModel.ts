@@ -245,3 +245,19 @@ export function summaryLine(name: string, step: number, v: CellView, m: GridMetr
   if (v.state === 'silent') return `${where} · WRITTEN, SILENT THIS PASS (${v.why === 'condition' ? 'CONDITION' : v.why === 'chance' ? 'CHANCE' : v.why === 'density' ? 'DENSITY' : v.why === 'evolved' ? 'EVOLVE' : 'MOVED OR SKIPPED'}) · VELOCITY ${v.vel} · ${sourceLabel(v)}${snd}`;
   return `${where} · EMPTY${v.origin === 'deleted' ? ' (A GENERATED HIT WAS DELETED)' : ''}`;
 }
+
+/**
+ * What the sequencer decided for a step with a trigger condition on the pass being shown:
+ *   played   the condition held and the hit sounds
+ *   held     the condition held but the hit is silent for another reason (chance, density, CHOP)
+ *   skipped  the condition did not hold
+ * null: the step has no condition (or no hit). It reads the realisation the scheduler plays, so
+ * it is the real decision, never a second simulation.
+ */
+export type TrigOutcome = 'played' | 'held' | 'skipped';
+
+export function trigOutcome(v: CellView): TrigOutcome | null {
+  if (!v.trig || !v.hit) return null;
+  if (v.state === 'hit') return 'played';
+  return v.why === 'condition' ? 'skipped' : 'held';
+}

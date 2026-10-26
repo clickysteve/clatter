@@ -15,15 +15,18 @@
  * pattern's resolution). The playhead is a tinted column, the cursor a ring, the pointer a hover
  * outline. SHOW ORIGINAL adds the edit history (hand-edited hits, deleted generated hits).
  *
- * Pointer: click adds or removes a hit and selects it, drag paints (one undo step), Shift-drag
- * selects a region, Alt-drag (or Alt-wheel) sets velocity, right-click opens the step editor. A
- * click anywhere inside a cell edits that cell: hit-testing floors the position, never rounds.
+ * Pointer (the gestures are in stepGesture.ts, each one undo step): click an empty step adds a hit,
+ * drag up / down from it (or from a hit) sets the velocity and shows it, drag sideways paints,
+ * click a hit removes it, Shift-drag erases, Shift-click selects from the cursor to the step, Alt-drag
+ * selects a region, a click in the header selects that column, right-click opens the step editor.
+ * A click anywhere inside a cell edits that cell: hit-testing floors the position, never rounds.
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import type { App } from '../app/app';
-import { boundaryAt, describeCell, gridMetrics, trackCells, type CellView, type GridMetrics } from './gridModel';
+import { boundaryAt, describeCell, gridMetrics, trackCells, trigOutcome, type CellView, type GridMetrics } from './gridModel';
 import { font, hit, logicalWidth, onScale, sz } from './scale';
+import { StepGesture } from './stepGesture';
 import { hideTip, showTip } from './tooltip';
 import { button, h, Panel } from './widgets';
 
@@ -176,6 +179,13 @@ export function drawCell(g: CanvasRenderingContext2D, x: number, y: number, w: n
     const bh = blockH(v.vel);
     dashed(bx, bottom - bh, bw, bh, true);
   }
+  // an empty step is still a place to click: a short rule at its foot
+  if (v.state === 'empty' && !v.outside) {
+    g.fillStyle = c.ink;
+    g.globalAlpha = 0.22;
+    g.fillRect(bx + 2, bottom, bw - 4, 1);
+    g.globalAlpha = 1;
+  }
   // the chance, when it is not certain: a short bar along the top, full length = always
   if (v.hit && v.prob < 100) {
     const x0 = x + 11;
@@ -235,7 +245,9 @@ export class PatternGrid {
   private metrics: GridMetrics = { steps: 32, perBeat: 4, perBar: 16, beatsPerBar: 4 };
   private views: CellView[][] = [];
   private hover: Cell | null = null;
-  private gesture: null | { kind: 'paint'; on: boolean; last: string } | { kind: 'select'; t0: number; s0: number } | { kind: 'vel'; track: string; step: number; y0: number; v0: number } = null;
+  private gesture: StepGesture;
+  /** a header press selects columns: where it started */
+  private columns: number | null = null;
   private lastKey = '';
   private lastUser = 0;
   private tipTimer = 0;
@@ -261,6 +273,7 @@ export class PatternGrid {
     this.over.style.pointerEvents = 'none';
     this.canvas.setAttribute('role', 'grid');
     this.canvas.setAttribute('aria-label', 'Pattern grid');
+    this.gesture = new StepGesture(app.gestureHost());
     if (!o.readonly) {
       this.canvas.tabIndex = 0;
       this.bind();
@@ -582,7 +595,7 @@ export class PatternGrid {
     const app = this.app;
     const sel = app.ui.sel;
     const cur = this.o.readonly ? null : app.cursorCell();
-    const key = `${Math.floor(step)}|${this.hover ? this.hover.track + ':' + this.hover.step : ''}|${sel ? `${sel.t0},${sel.t1},${sel.s0},${sel.s1}` : ''}|${cur ? cur.track + ':' + cur.step : ''}|${app.ui.track}|${this.cellW}|${app.ui.paintVel}`;
+    const key = `${Math.floor(step)}|${this.hover ? this.hover.track + ':' + this.hover.step : ''}|${sel ? `${sel.t0},${sel.t1},${sel.s0},${sel.s1}` : ''}|${cur ? cur.track + ':' + cur.step : ''}|${app.ui.track}|${this.cellW}|${app.ui.paintVel}|${this.gesture.dragging?.vel ?? ''}|${app.ui.playing ? app.playhead()?.cycle : ''}`;
     this.lastHead = step;
     if (key === this.lastKey) return;
     this.lastKey = key;
@@ -608,7 +621,7 @@ export class PatternGrid {
       g.fillRect(0, H + ti * R, 4, R - 1);
     }
 
-    // a region (Shift-drag)
+    // a region (Alt-drag, Shift-click, a click in the header)
     if (sel && !this.o.readonly && !(sel.t0 === sel.t1 && sel.s0 === sel.s1)) {
       const t0 = Math.min(sel.t0, sel.t1);
       const t1 = Math.max(sel.t0, sel.t1);
@@ -623,11 +636,26 @@ export class PatternGrid {
       g.setLineDash([6, 4]);
       g.strokeRect(this.X(s0) + 1.5, H + t0 * R + 1.5, this.X(s1 + 1) - this.X(s0) - 3, (t1 - t0 + 1) * R - 3);
       g.setLineDash([]);
+      // the hits inside it, so what a tool will change is plain: a frame round each
+      g.lineWidth = 2;
+      for (let ti2 = t0; ti2 <= t1; ti2++) {
+        const row = this.views[ti2];
+        if (!row) continue;
+        for (let st = s0; st <= Math.min(s1, this.steps - 1); st++) {
+          const v = row[st];
+          if (!v?.hit || v.outside) continue;
+          const x = this.X(st);
+          g.strokeStyle = c.paper;
+          g.strokeRect(x + 2.5, H + ti2 * R + 2.5, this.X(st + 1) - x - 5, R - 6);
+          g.strokeStyle = c.selection;
+          g.strokeRect(x + 3.5, H + ti2 * R + 3.5, this.X(st + 1) - x - 7, R - 8);
+        }
+      }
     }
 
     // the pointer
     const hv = this.hover;
-    if (hv && !this.o.readonly && !this.gesture) {
+    if (hv && !this.o.readonly && !this.gesture.active) {
       const x = this.X(hv.step);
       const w = this.X(hv.step + 1) - x;
       const y = H + hv.track * R;
@@ -665,6 +693,16 @@ export class PatternGrid {
       }
     }
 
+    // a velocity being dragged: the value beside the hit, with the scale it moves on
+    const dv = this.gesture.dragging;
+    if (dv) {
+      const di = app.trackIndexOf(dv.track);
+      if (di >= 0) this.drawVelReadout(g, c, this.X(dv.step), this.X(dv.step + 1) - this.X(dv.step), H + di * R, R, dv.vel);
+    }
+
+    // trigger feedback: what the sequencer decided for each conditional step, as the playhead passes
+    if (step >= 0 && step < this.steps && app.ui.playing) this.drawOutcomes(g, c, Math.floor(step));
+
     // the playhead: a tinted column that never covers a hit, with its step lit in the header
     if (step >= 0 && step < this.steps) {
       const s = Math.floor(step);
@@ -685,6 +723,105 @@ export class PatternGrid {
       g.textAlign = 'start';
       this.follow(x);
     }
+  }
+
+  /** "VEL 87" on a plate above (or below) the hit being dragged. */
+  private drawVelReadout(g: CanvasRenderingContext2D, c: GridColors, x: number, w: number, y: number, R: number, vel: number): void {
+    const text = `VEL ${vel}`;
+    g.font = `${font(18)}px VT323, monospace`;
+    g.textBaseline = 'middle';
+    const tw = Math.ceil(g.measureText(text).width) + 12;
+    const ph = Math.round(font(18)) + 8;
+    const px = Math.max(2, Math.min(this.X(this.steps) - tw - 2, x + Math.round((w - tw) / 2)));
+    const py = y - ph - 2 < this.headH ? y + R : y - ph - 2;
+    g.fillStyle = c.paper;
+    g.fillRect(px - 2, py - 2, tw + 4, ph + 4);
+    g.fillStyle = c.ink;
+    g.fillRect(px, py, tw, ph);
+    g.fillStyle = c.paper;
+    g.fillText(text, px + 6, py + ph / 2);
+    // a thin gauge down the hit's cell: 1 at the bottom, 127 at the top
+    g.fillStyle = c.ink;
+    g.fillRect(x + w - 4, y + 3, 2, R - 8);
+    g.fillStyle = c.paper;
+    const gy = y + 3 + Math.round(((R - 8) * (127 - vel)) / 126);
+    g.fillRect(x + w - 6, gy - 1, 6, 4);
+    g.fillStyle = c.ink;
+    g.fillRect(x + w - 5, gy, 4, 2);
+  }
+
+  /**
+   * For every conditional step the playhead has passed on this cycle: a mark in the top-left corner,
+   * solid when it played, hollow when the condition held but the hit stayed silent (chance, density),
+   * crossed when the condition skipped it; a step that was just skipped gets a cross over the whole cell.
+   * A step whose sound switches by condition shows the variation that sounds now.
+   */
+  private drawOutcomes(g: CanvasRenderingContext2D, c: GridColors, upTo: number): void {
+    const app = this.app;
+    const R = this.rowH;
+    const H = this.headH;
+    const pos = app.playhead();
+    const m = 8;
+    this.views.forEach((row, ti) => {
+      const t = app.project.tracks[ti];
+      if (!t) return;
+      const y = H + ti * R;
+      for (let s = 0; s <= upTo && s < row.length; s++) {
+        const v = row[s]!;
+        if (v.outside) continue;
+        const out = trigOutcome(v);
+        const x = this.X(s);
+        const w = this.X(s + 1) - x;
+        if (out) {
+          const mx = x + 3;
+          const my = y + 3;
+          g.fillStyle = c.paper;
+          g.fillRect(mx - 1, my - 1, m + 2, m + 2);
+          g.fillStyle = c.ink;
+          if (out === 'played') g.fillRect(mx, my, m, m);
+          else {
+            g.strokeStyle = c.ink;
+            g.lineWidth = 1;
+            g.strokeRect(mx + 0.5, my + 0.5, m - 1, m - 1);
+            if (out === 'skipped') {
+              g.beginPath();
+              g.moveTo(mx + 1, my + 1);
+              g.lineTo(mx + m - 1, my + m - 1);
+              g.moveTo(mx + m - 1, my + 1);
+              g.lineTo(mx + 1, my + m - 1);
+              g.stroke();
+            }
+          }
+          if (out === 'skipped' && s === upTo) {
+            // just now: the whole cell crossed out
+            g.strokeStyle = c.ink;
+            g.lineWidth = 2;
+            g.beginPath();
+            g.moveTo(x + 5, y + 5);
+            g.lineTo(x + w - 5, y + R - 8);
+            g.moveTo(x + w - 5, y + 5);
+            g.lineTo(x + 5, y + R - 8);
+            g.stroke();
+          }
+        }
+        if (v.snd?.cond && v.state === 'hit' && pos) {
+          const vi = app.playingVariation(t.id, s, pos.cycle);
+          const text = vi === null ? '·' : String.fromCharCode(65 + vi);
+          g.font = 'bold 12px VT323, monospace';
+          g.textBaseline = 'middle';
+          const bw = Math.ceil(g.measureText(text).width) + 6;
+          const bx = x + w - bw - 3;
+          const by = y + R - 17;
+          g.fillStyle = c.paper;
+          g.fillRect(bx - 1, by - 1, bw + 2, 14);
+          g.strokeStyle = c.ink;
+          g.lineWidth = 1;
+          g.strokeRect(bx + 0.5, by + 0.5, bw, 12);
+          g.fillStyle = c.ink;
+          g.fillText(text, bx + 3, by + 7);
+        }
+      }
+    });
   }
 
   /** While playing, keep the playhead in view if the grid scrolls (unless the user is scrolling). */
@@ -721,6 +858,40 @@ export class PatternGrid {
     return { track, step };
   }
 
+  /** The step column under the pointer, clamped to the pattern (the pointer may be above, below or beside the grid). */
+  private stepAt(e: PointerEvent | MouseEvent): number {
+    const r = this.canvas.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    let step = Math.floor(x / this.cellW);
+    if (step + 1 <= this.steps && x >= this.X(step + 1)) step++;
+    else if (step > 0 && x < this.X(step)) step--;
+    return Math.max(0, Math.min(this.steps - 1, step));
+  }
+
+  private inHeader(e: PointerEvent | MouseEvent): boolean {
+    const r = this.canvas.getBoundingClientRect();
+    return e.clientY - r.top < this.headH && e.clientY >= r.top && e.clientX >= r.left;
+  }
+
+  /** The pointer says what a press would do: a hit is dragged for velocity, an empty step takes a new hit, Alt selects. */
+  private setCursorStyle(e: PointerEvent | MouseEvent): void {
+    const m = this.gesture.mode;
+    let cur = '';
+    if (m === 'vel') cur = 'ns-resize';
+    else if (m === 'paint' || m === 'erase') cur = 'col-resize';
+    else if (m === 'region') cur = 'crosshair';
+    else if (!m) {
+      if (this.inHeader(e)) cur = 's-resize';
+      else if (e.altKey) cur = 'crosshair';
+      else {
+        const cell = this.cellAt(e);
+        const v = cell ? this.views[cell.track]?.[cell.step] : null;
+        cur = !cell || !v || v.outside ? '' : v.hit ? 'ns-resize' : 'cell';
+      }
+    }
+    this.canvas.style.cursor = cur;
+  }
+
   private inLane(e: PointerEvent | MouseEvent): boolean {
     if (!this.laneOn) return false;
     const r = this.canvas.getBoundingClientRect();
@@ -747,7 +918,7 @@ export class PatternGrid {
     hideTip();
     this.onHover?.(cell);
     this.drawOverlay(this.lastHead);
-    if (cell && e && !this.gesture) {
+    if (cell && e && !this.gesture.active) {
       const x = e.clientX;
       const y = e.clientY;
       this.tipTimer = window.setTimeout(() => {
@@ -771,8 +942,19 @@ export class PatternGrid {
       this.drawOverlay(this.lastHead);
       this.onContext?.(cell, e);
     });
+    const press = (e: PointerEvent, cell: Cell) => ({ track: app.project.tracks[cell.track]!.id, trackIndex: cell.track, step: cell.step, x: e.clientX, y: e.clientY, shift: e.shiftKey, alt: e.altKey });
     c.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
+      // the header: a press selects that step across every track, a drag along it selects the columns
+      if (this.inHeader(e)) {
+        const step = this.stepAt(e);
+        c.setPointerCapture(e.pointerId);
+        c.focus({ preventScroll: true });
+        const from = e.shiftKey ? (app.ui.sel?.s0 ?? step) : step;
+        this.columns = from;
+        app.select({ t0: 0, t1: app.project.tracks.length - 1, s0: from, s1: step });
+        return;
+      }
       const cell = this.cellAt(e);
       if (!cell) return;
       if (this.inLane(e)) {
@@ -787,68 +969,57 @@ export class PatternGrid {
       hideTip();
       c.setPointerCapture(e.pointerId);
       c.focus({ preventScroll: true });
-      const t = app.project.tracks[cell.track]!;
-      if (e.shiftKey) {
-        this.gesture = { kind: 'select', t0: cell.track, s0: cell.step };
-        app.select({ t0: cell.track, t1: cell.track, s0: cell.step, s1: cell.step });
-        this.drawOverlay(this.lastHead);
-        return;
-      }
-      const hit = app.hitAt(t.id, cell.step);
-      app.ui.cursor = { track: t.id, step: cell.step };
-      if (e.altKey && hit) {
-        app.selectTrack(t.id);
-        app.beginDrag('VELOCITY');
-        this.gesture = { kind: 'vel', track: t.id, step: cell.step, y0: e.clientY, v0: hit.vel };
-        return;
-      }
-      if (app.ui.sel) app.select(null);
-      app.selectTrack(t.id);
-      app.beginPaint();
-      this.gesture = { kind: 'paint', on: !hit, last: `${cell.track}:${cell.step}` };
-      app.paintCell(t.id, cell.step, !hit);
-      if (!hit) void app.audition(t.id, app.ui.paintVel);
+      this.gesture.down(press(e, cell));
+      this.setCursorStyle(e);
+      this.redrawOverlay();
     });
     c.addEventListener('pointermove', (e) => {
-      const gs = this.gesture;
-      if (!gs) {
+      if (this.columns !== null) {
+        app.select({ t0: 0, t1: app.project.tracks.length - 1, s0: this.columns, s1: this.stepAt(e) });
+        return;
+      }
+      if (!this.gesture.active) {
         this.setHover(this.cellAt(e), e);
+        this.setCursorStyle(e);
         return;
       }
-      if (gs.kind === 'vel') {
-        const v = Math.max(1, Math.min(127, Math.round(gs.v0 + (gs.y0 - e.clientY))));
-        const hit = app.hitAt(gs.track, gs.step);
-        if (hit && hit.vel !== v) app.setHitProps(gs.track, gs.step, { vel: v }, 'VELOCITY');
-        return;
-      }
+      // a gesture stays on the track it started on: the pointer may wander off the rows or the grid
       const cell = this.cellAt(e);
-      if (!cell) return;
-      this.hover = cell;
-      this.onHover?.(cell);
-      if (gs.kind === 'select') {
-        app.select({ t0: gs.t0, t1: cell.track, s0: gs.s0, s1: cell.step });
-        this.drawOverlay(this.lastHead);
-      } else {
-        const key = `${cell.track}:${cell.step}`;
-        if (key === gs.last) return;
-        gs.last = key;
-        app.paintCell(app.project.tracks[cell.track]!.id, cell.step, gs.on);
-      }
+      const step = this.stepAt(e);
+      const ti = cell?.track ?? Math.max(0, Math.min(app.project.tracks.length - 1, Math.floor((e.clientY - this.canvas.getBoundingClientRect().top - this.headH) / this.rowH)));
+      this.hover = { track: ti, step };
+      this.onHover?.(this.hover);
+      this.gesture.move({ x: e.clientX, y: e.clientY, step, trackIndex: ti });
+      this.redrawOverlay();
     });
     c.addEventListener('pointerleave', () => {
-      if (!this.gesture) this.setHover(null);
+      if (!this.gesture.active) this.setHover(null);
     });
-    const end = () => {
-      const gs = this.gesture;
-      this.gesture = null;
-      if (!gs) return;
-      if (gs.kind === 'paint') app.endPaint();
-      if (gs.kind === 'vel') app.endDrag();
+    const end = (e: PointerEvent) => {
+      if (this.columns !== null) {
+        this.columns = null;
+        return;
+      }
+      if (!this.gesture.active) return;
+      const ti = Math.max(0, Math.min(app.project.tracks.length - 1, Math.floor((e.clientY - this.canvas.getBoundingClientRect().top - this.headH) / this.rowH)));
+      this.gesture.up({ x: e.clientX, y: e.clientY, step: this.stepAt(e), trackIndex: ti });
+      this.setCursorStyle(e);
       this.lastKey = '';
       this.drawOverlay(this.lastHead);
     };
     c.addEventListener('pointerup', end);
-    c.addEventListener('pointercancel', end);
+    // the pointer was taken away (a system gesture, a lost capture): what has been done stays, as one undo step
+    const lost = () => {
+      this.columns = null;
+      if (this.gesture.active) {
+        this.gesture.cancel();
+        this.redrawOverlay();
+      }
+    };
+    c.addEventListener('pointercancel', lost);
+    c.addEventListener('lostpointercapture', lost);
+    window.addEventListener('blur', lost);
+
     // Alt + wheel: velocity of the hit under the pointer (the plain wheel scrolls the page)
     c.addEventListener(
       'wheel',
@@ -868,6 +1039,17 @@ export class PatternGrid {
     // the keyboard: arrows move the cursor along the track, Enter adds or removes the hit there
     c.addEventListener('keydown', (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Shift + ↑ ↓: louder / softer, by 8, on the selected hits (else the hit being edited)
+      if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        const d = e.key === 'ArrowUp' ? 8 : -8;
+        const cur = app.cursorCell();
+        if (app.ui.sel && app.selectedHitCount()) app.editVelocity({ k: 'nudge', d });
+        else if (cur && app.hitAt(cur.track, cur.step)) app.setHitProps(cur.track, cur.step, { vel: Math.max(1, Math.min(127, app.hitAt(cur.track, cur.step)!.vel + d)) }, 'VELOCITY');
+        else return;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       const cur = app.cursorCell() ?? { track: app.ui.track, step: -1 };
       const steps = app.pattern.steps;
       if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End') {

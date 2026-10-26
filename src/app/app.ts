@@ -29,6 +29,8 @@ import { generate, stepsPerBar } from '../rhythm/generate';
 import { mutate, summariseOps } from '../rhythm/mutate';
 import { clearTrack, commitEdits, copyRegion, editCount, newPattern, pasteRegion, setHit, setLength, setResolution, setSounds, setStepSound, setStepTrig, setTrigs, trigAt, shiftTrack, soundCount, sourceGrid, stepSoundAt, type Clip } from '../rhythm/pattern';
 import { hash32, randomSeed, Rng } from '../rhythm/rng';
+import { applyVelOp, clampVel, VEL_LABEL, type VelOp } from '../rhythm/velocity';
+import type { GestureHost } from '../ui/stepGesture';
 import { styleById } from '../rhythm/styles';
 import type { Realization } from '../rhythm/realize';
 import { applyWildcard, repairWild, SCOPE_LABEL, type WildSettings } from '../destruction/wildcardProject';
@@ -792,6 +794,104 @@ export class App {
     );
   }
 
+  /**
+   * The hits the editing tools act on, track by track, each track's in step order: the selected
+   * region, else the whole selected track.
+   */
+  selectedHits(): { track: string; hits: { step: number; hit: Hit }[] }[] {
+    const sel = this.ui.sel;
+    const ids = this.project.tracks.map((t) => t.id);
+    const rows = sel ? ids.slice(Math.min(sel.t0, sel.t1), Math.max(sel.t0, sel.t1) + 1) : [this.ui.track];
+    const a = sel ? Math.min(sel.s0, sel.s1) : 0;
+    const b = sel ? Math.max(sel.s0, sel.s1) : this.pattern.steps - 1;
+    return rows.map((track) => {
+      const g = sourceGrid(this.pattern, track);
+      const hits: { step: number; hit: Hit }[] = [];
+      for (let s = a; s <= Math.min(b, this.pattern.steps - 1); s++) if (g[s]) hits.push({ step: s, hit: g[s]! });
+      return { track, hits };
+    });
+  }
+
+  /** How many hits the selection holds. */
+  selectedHitCount(): number {
+    return this.selectedHits().reduce((n, r) => n + r.hits.length, 0);
+  }
+
+  /**
+   * A velocity tool on the selected hits (SET, NUDGE, RAMP, RANDOM): one undo step. Everything else
+   * about a hit (chance, pitch, ratchet, flam, its step sound and trigger) is left as it is.
+   * Each track's hits are ramped or randomised on their own.
+   */
+  editVelocity(op: VelOp): number {
+    const rows = this.selectedHits().filter((r) => r.hits.length);
+    const n = rows.reduce((a, r) => a + r.hits.length, 0);
+    if (!n) {
+      this.say('NO HITS TO CHANGE');
+      return 0;
+    }
+    this.change(
+      VEL_LABEL[op.k],
+      () => {
+        rows.forEach((r, i) => {
+          // the same seed on every track would make identical rows: derive one per track
+          const o: VelOp = op.k === 'random' ? { ...op, seed: hash32(op.seed, i) } : op;
+          const out = applyVelOp(r.hits.map((x) => x.hit.vel), o);
+          r.hits.forEach((x, k) => setHit(this.pattern, r.track, x.step, cleanHit({ ...x.hit, vel: out[k]! })));
+        });
+      },
+      ['pattern'],
+    );
+    this.say(`${VEL_LABEL[op.k]} · ${n} HIT${n === 1 ? '' : 'S'}`);
+    return n;
+  }
+
+  /**
+   * The variation (0-3) of a step's sound that sounds on a given cycle, decided by the same
+   * function and the same musical clock the engine uses for the hit; null when the step plays the base sound.
+   */
+  playingVariation(trackId: string, step: number, cycle: number): number | null {
+    const t = this.project.tracks.find((x) => x.id === trackId);
+    const ss = this.stepSound(trackId, step);
+    if (!t || !ss) return null;
+    const rs = resolveStepSound(t.sound, ss, (par) => this.project.kit.synth.params[par] ?? 0, { seed: this.project.seed, cycle, fill: this.ui.fills.has(trackId), track: trackId, step });
+    return rs.variation;
+  }
+
+  /** Select every step of every track. */
+  selectAll(): void {
+    this.select({ t0: 0, t1: this.project.tracks.length - 1, s0: 0, s1: this.pattern.steps - 1 });
+  }
+
+  /** The grid's pointer gestures edit through this (see src/ui/stepGesture.ts). */
+  gestureHost(): GestureHost {
+    return {
+      steps: () => this.pattern.steps,
+      hitAt: (t, s) => this.hitAt(t, s),
+      newVelocity: () => this.ui.paintVel,
+      begin: (label) => this.history.begin(label),
+      relabel: (label) => this.history.relabel(label),
+      end: () => this.endDrag(),
+      paint: (t, s, on) => {
+        this.paintCell(t, s, on);
+      },
+      setVelocity: (t, s, v) => this.setHitProps(t, s, { vel: clampVel(v) }, 'VELOCITY'),
+      cursor: () => {
+        const c = this.ui.cursor;
+        const i = c ? this.trackIndexOf(c.track) : -1;
+        return c && i >= 0 && c.step < this.pattern.steps ? { trackIndex: i, step: c.step } : null;
+      },
+      setCursor: (ti, step) => {
+        const t = this.project.tracks[ti];
+        if (!t) return;
+        this.ui.cursor = { track: t.id, step };
+        this.selectTrack(t.id);
+        if (this.ui.sel) this.select(null);
+      },
+      select: (r) => this.select(r),
+      created: (t, s) => void this.audition(t, this.hitAt(t, s)?.vel ?? this.ui.paintVel),
+    };
+  }
+
   select(sel: Selection | null): void {
     this.ui.sel = sel;
     this.emit(['selection']);
@@ -840,8 +940,13 @@ export class App {
     const sel = this.ui.sel;
     const ids = this.project.tracks.map((t) => t.id);
     const t0 = sel ? Math.min(sel.t0, sel.t1) : c.rows.length === ids.length ? 0 : this.trackIndexOf(this.ui.track);
-    const s0 = sel ? Math.min(sel.s0, sel.s1) : 0;
+    // at the selection, else at the step being edited (a whole-pattern clip goes back to the start)
+    const cur = this.cursorCell();
+    const s0 = sel ? Math.min(sel.s0, sel.s1) : cur && c.steps < this.pattern.steps ? cur.step : 0;
     this.change('PASTE', () => pasteRegion(this.pattern, ids.slice(t0), s0, c), ['pattern']);
+    // the pasted steps are the selection now, so the next edit (a velocity tool, DELETE) acts on them
+    const last = Math.min(this.pattern.steps - 1, s0 + c.steps - 1);
+    this.select({ t0, t1: Math.min(ids.length - 1, t0 + c.rows.length - 1), s0: Math.min(s0, last), s1: last });
   }
 
   clearSelection(): void {

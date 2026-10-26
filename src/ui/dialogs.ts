@@ -110,9 +110,14 @@ export function helpDialog(): void {
       'EDITING THE GRID',
       [
         ['CLICK', 'add a hit to an empty step, or remove the hit on a step; the step is selected for editing under the grid'],
-        ['DRAG', 'paint hits on (or off, if you started on a hit); one undo step'],
-        ['SHIFT-DRAG', 'select a region (COPY, PASTE, CLEAR and VEL work on it)'],
-        ['ALT-DRAG, ALT-WHEEL', 'velocity of the hit under the pointer'],
+        ['DRAG UP / DOWN', 'velocity of the hit you pressed (a new one, or the one that is there); the value shows while you drag'],
+        ['DRAG SIDEWAYS', 'paint hits along the track you started on (the hits that are there stay); one undo step'],
+        ['SHIFT-DRAG', 'erase hits along the track'],
+        ['SHIFT-CLICK', 'select from the step being edited to the one you click (COPY, PASTE, CLEAR and the VELOCITY tools work on it)'],
+        ['ALT-DRAG', 'select a region; CLICK OR DRAG IN THE BAR HEADER selects whole columns'],
+        ['ALT-WHEEL', 'velocity of the hit under the pointer'],
+        ['SHIFT + ↑ ↓', 'louder / softer by 8 (the selection, else the step being edited)'],
+        ['⌘/CTRL A', 'select everything in the pattern'],
         ['RIGHT-CLICK', 'select the step and open its editor: velocity, chance, pitch, ratchet, flam, sample'],
         ['ARROWS ← →, ENTER', 'with the grid focused: move along the track, add or remove the hit'],
         ['↑ ↓', 'select the previous / next track'],
@@ -206,7 +211,7 @@ export function gridKeyDialog(): void {
   h('h3', '', s, 'THE PLAYHEAD AND THE POINTER');
   h('p', '', s, 'While playing, the current step is lit in the header and shaded down the grid; it never covers a hit. The ringed step is the one you are editing (the step editor under the grid shows it). A dashed outline follows the pointer. Tracks that are muted, or silenced by another track’s solo, are faded.');
   h('h3', '', s, 'EDITING');
-  h('p', '', s, 'Click a step to add or remove its hit, drag to paint, Shift-drag to select a region, Alt-drag to change a velocity, right-click for the step editor. The hover line under the grid and the tooltips say exactly what a step is: sounding or silent, its velocity and chance, where it came from (generated, hand-edited, added by a fill, ROLLS or CHOP) and what has changed it.');
+  h('p', '', s, 'Click a step to add or remove its hit, drag up or down to set its velocity, drag sideways to paint, Shift-drag to erase, Shift-click or Alt-drag to select, right-click for the step editor. Conditional steps light up as the playhead passes: a solid mark when the hit played, a crossed one when its condition skipped it. The hover line under the grid and the tooltips say exactly what a step is: sounding or silent, its velocity and chance, where it came from (generated, hand-edited, added by a fill, ROLLS or CHOP) and what has changed it.');
   buttons(box, [['OK', closeDialog, true]]);
 }
 

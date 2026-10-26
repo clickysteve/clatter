@@ -18,6 +18,7 @@
 import type { App, Topic } from '../../app/app';
 import { WORKSPACES, type Workspace } from '../../app/prefs';
 import { RESOLUTION_LABEL, RESOLUTIONS, ROLE_LABEL, ROLES, ROLL_SPEEDS, type Resolution, type Role, type SourceMode } from '../../model/types';
+import { randomSeed } from '../../rhythm/rng';
 import { STYLES, styleById } from '../../rhythm/styles';
 import { gridKeyDialog } from '../dialogs';
 import { PatternGrid, type Cell } from '../grid';
@@ -111,7 +112,7 @@ export function patternView(app: App, screen: HTMLElement): View {
   const foot = h('div', 'gridfoot', pb);
   const where = h('div', 'tiny where grow', foot);
   where.style.color = 'var(--ink)';
-  const gestures = h('div', 'hint', foot, 'CLICK: ADD / REMOVE · DRAG: PAINT · SHIFT-DRAG: SELECT · ALT-DRAG: VELOCITY · RIGHT-CLICK: EDIT THE STEP');
+  const gestures = h('div', 'hint', foot, 'CLICK: ADD / REMOVE · DRAG ↕: VELOCITY · DRAG ↔: PAINT · SHIFT-DRAG: ERASE · SHIFT-CLICK / ALT-DRAG: SELECT · RIGHT-CLICK: EDIT');
   gestures.style.flex = '0 1 auto';
   let hovered: Cell | null = null;
   const showWhere = () => {
@@ -197,7 +198,7 @@ export function patternView(app: App, screen: HTMLElement): View {
   const ehint = h('div', 'hint', eb);
   ep.add(() => {
     const s = app.ui.sel;
-    ehint.textContent = s && !(s.t0 === s.t1 && s.s0 === s.s1) ? `ACTS ON THE SELECTED REGION: ${Math.abs(s.t1 - s.t0) + 1} TRACKS × ${Math.abs(s.s1 - s.s0) + 1} STEPS` : s ? 'ACTS ON THE SELECTED STEP' : `NOTHING SELECTED: ACTS ON THE WHOLE ${app.track.name} TRACK (SHIFT-DRAG IN THE GRID TO SELECT A REGION)`;
+    ehint.textContent = s && !(s.t0 === s.t1 && s.s0 === s.s1) ? `ACTS ON THE SELECTED REGION: ${Math.abs(s.t1 - s.t0) + 1} TRACKS × ${Math.abs(s.s1 - s.s0) + 1} STEPS` : s ? 'ACTS ON THE SELECTED STEP' : `NOTHING SELECTED: ACTS ON THE WHOLE ${app.track.name} TRACK (SHIFT-CLICK OR ALT-DRAG IN THE GRID TO SELECT A REGION)`;
   });
   const e1 = h('div', 'row wrap', eb);
   button(ep, e1, 'VEL −', () => app.editSelection((x) => ({ ...x, vel: Math.max(1, Math.round(x.vel * 0.85)) }), 'SOFTER'), { cls: 'grow', title: 'Softer' });
@@ -210,8 +211,36 @@ export function patternView(app: App, screen: HTMLElement): View {
   button(ep, e2, 'CLEAR', () => (app.ui.sel ? app.clearSelection() : app.clearTrack(app.ui.track)), { cls: 'grow', title: 'Clear the selection (or the selected track) DEL' });
   button(ep, e2, 'NONE', () => app.select(null), { cls: 'grow', title: 'Clear the selection (ESC)' });
   const e3 = h('div', 'row wrap', eb);
+  button(ep, e3, 'SELECT ALL', () => app.selectAll(), { cls: 'grow', title: 'Select every step of every track ⌘A' });
   button(ep, e3, '◀ SHIFT', () => app.shiftTrack(app.ui.track, -1), { cls: 'grow', title: 'Shift the selected track one step earlier [' });
   button(ep, e3, 'SHIFT ▶', () => app.shiftTrack(app.ui.track, 1), { cls: 'grow', title: 'Shift the selected track one step later ]' });
+  // velocity tools: each acts on the hits of the selection (else the selected track) as one undo step
+  const vc = card(sq, 'velcard');
+  const vp = new Panel();
+  const vhint = h('div', 'hint', vc);
+  vp.add(() => {
+    const n = app.selectedHitCount();
+    vhint.textContent = `VELOCITY TOOLS · ${n} HIT${n === 1 ? '' : 'S'} ${app.ui.sel ? 'SELECTED' : 'ON ' + app.track.name}`;
+  });
+  const tool = { set: 100, from: 40, to: 120, lo: 60, hi: 120 };
+  const vnum = (row: HTMLElement, key: keyof typeof tool, title: string) => num(vp, row, { get: () => tool[key], set: (v) => (tool[key] = v), min: 1, max: 127, title });
+  const v1 = h('div', 'row wrap', vc);
+  button(vp, v1, 'SET', () => app.editVelocity({ k: 'set', v: tool.set }), { disabled: () => !app.selectedHitCount(), title: 'Every selected hit gets this velocity' }).dataset.test = 'vel-set';
+  vnum(v1, 'set', 'The velocity SET gives');
+  button(vp, v1, '−8', () => app.editVelocity({ k: 'nudge', d: -8 }), { disabled: () => !app.selectedHitCount(), title: 'Softer by 8 (Shift + ↓ in the grid)' }).dataset.test = 'vel-down';
+  button(vp, v1, '+8', () => app.editVelocity({ k: 'nudge', d: 8 }), { disabled: () => !app.selectedHitCount(), title: 'Louder by 8 (Shift + ↑ in the grid)' }).dataset.test = 'vel-up';
+  const v2 = h('div', 'row wrap', vc);
+  button(vp, v2, 'RAMP', () => app.editVelocity({ k: 'ramp', from: tool.from, to: tool.to }), { disabled: () => !app.selectedHitCount(), title: 'A straight line of velocities from the first hit to the last, on each track' }).dataset.test = 'vel-ramp';
+  vnum(v2, 'from', 'Velocity of the first hit');
+  h('div', 'lbl', v2, '→');
+  vnum(v2, 'to', 'Velocity of the last hit');
+  const v3 = h('div', 'row wrap', vc);
+  button(vp, v3, 'RANDOM', () => app.editVelocity({ k: 'random', lo: tool.lo, hi: tool.hi, seed: randomSeed() }), { disabled: () => !app.selectedHitCount(), title: 'A new random velocity for every hit, between these two (a different roll each press)' }).dataset.test = 'vel-random';
+  vnum(v3, 'lo', 'Quietest velocity');
+  h('div', 'lbl', v3, '–');
+  vnum(v3, 'hi', 'Loudest velocity');
+  subscribe(app, ['selection', 'pattern', 'tracks'], () => vp.refresh());
+
   infos.sequence = () => {
     const c = app.cursorCell();
     const t = c ? app.project.tracks.find((x) => x.id === c.track) : null;

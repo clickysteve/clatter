@@ -77,6 +77,7 @@ paths are relative, the same build also works at `https://clickysteve.github.io/
   LXR engine: inheritance, the musical clock, generators, limits (voices, MIDI).
 - [docs/CONDITIONS.md](docs/CONDITIONS.md): conditional triggers and the pass counter.
 - [docs/WILDCARD.md](docs/WILDCARD.md): the global WILDCARD, scopes, seeds, tempo curves and guard rails.
+- [docs/TUNER.md](docs/TUNER.md): the TUNER tab and the pitch analysis of rendered sounds: method, result format, limits.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the three systems, the engine, timing, state,
   files and tests.
 

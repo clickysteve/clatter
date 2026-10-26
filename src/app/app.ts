@@ -15,6 +15,7 @@ import { readBundle, writeBundle, type SampleStore } from '@slopfactory/core/sto
 import { AudioHost, lxrWasm } from '../audio/host';
 import { SampleLibrary } from '../audio/library';
 import { renderHit, renderProject } from '../audio/render';
+import { analyseTarget, PitchCache, type PitchRecord, type PitchTarget } from '../analysis/trackPitch';
 import type { MetersMessage, TimedHit } from '../audio/protocol';
 import { ENGINE_RATE } from '../audio/engine';
 import { defaultProject } from '../model/defaults';
@@ -125,6 +126,8 @@ export class App {
   readonly exporter: ExportRunner;
   /** hands a finished export to the user (the browser download; set by the page) */
   deliver: (file: ExportFile) => void = () => undefined;
+  /** pitch analyses of rendered sounds, beside the project (never saved in it; see src/analysis) */
+  readonly pitch = new PitchCache();
   kits: KitService | null = null;
   /** the synth kit, sample set and full kit libraries (after boot) */
   kitm: KitManager | null = null;
@@ -1362,6 +1365,22 @@ export class App {
     this.prefs.soundLane = on;
     savePrefs(this.prefs);
     this.emit(['tracks']);
+  }
+
+  /**
+   * The audible pitch of a track's sound (the base, or variation A-D; for HYBRID a layer). The sound
+   * is rendered alone and offline in a private engine and analysed; nothing the player hears or the
+   * project holds changes. A stored result is reused while the sound is unchanged unless `force`.
+   */
+  async analysePitch(target: PitchTarget, force = false): Promise<PitchRecord> {
+    if (!this.module) throw new Error('engine not loaded');
+    if (!force) {
+      const fresh = this.pitch.fresh(this.project, target);
+      if (fresh) return fresh;
+    }
+    const rec = await analyseTarget(this.module, this.project, this.library, target);
+    this.pitch.set(rec);
+    return rec;
   }
 
   setSoundTab(tab: SoundTab): void {

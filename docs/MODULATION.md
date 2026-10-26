@@ -1,6 +1,6 @@
 # Sound workspaces, modulation and the mixer
 
-This document describes the SOUND overhaul: the seven workspaces, the modulation engine, how
+This document describes the SOUND overhaul: the eight workspaces, the modulation engine, how
 modulation shares the six LXR voices, how variations carry modulation, the mixer and output
 stage, the file formats, and what remains out of reach.
 

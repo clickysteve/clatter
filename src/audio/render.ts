@@ -6,7 +6,8 @@
  *
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
-import { ClatterEngine, BLOCK, ENGINE_RATE, type EngineSample, type EngineTrack } from './engine';
+import { ClatterEngine, BLOCK, ENGINE_RATE, type EngineSample, type EngineTrack, type HitEvent } from './engine';
+import { resolveStepSound } from '../sound/stepSound';
 import { LxrEngine } from './lxr/lxr';
 import type { SampleLibrary } from './library';
 import { clone, PPQ, type Project, type SynthKit } from '../model/types';
@@ -147,8 +148,18 @@ export async function renderProject(module: WebAssembly.Module, project: Project
   };
 }
 
+/** What a single-hit render can be asked for beyond the track's base sound (used by the tuner). */
+export interface HitOptions {
+  /** play variation A-D (0-3) of the track instead of the base sound */
+  slot?: number | null;
+  /** HYBRID tracks: which layer to render (MIX plays both, as the track does) */
+  layer?: 'mix' | 'synth' | 'sample';
+  /** bypass the channel's processing (the hit as the voice and sample make it) */
+  dry?: boolean;
+}
+
 /** One hit of one track, rendered alone until it falls silent (DRUM HITS). */
-export async function renderHit(module: WebAssembly.Module, project: Project, lib: SampleLibrary | null, trackId: string, vel = 127, maxSeconds = 4): Promise<Float32Array[]> {
+export async function renderHit(module: WebAssembly.Module, project: Project, lib: SampleLibrary | null, trackId: string, vel = 127, maxSeconds = 4, opts: HitOptions = {}): Promise<Float32Array[]> {
   const p = clone(project);
   // the track alone, at unity on the main bus, centred
   p.tracks.forEach((t) => {
@@ -159,13 +170,25 @@ export async function renderHit(module: WebAssembly.Module, project: Project, li
       t.mix.pan = 0;
       t.mix.route = 'main';
       t.mix.filter = 0;
+      if (opts.dry) delete t.mix.fx;
+      if (opts.layer === 'synth') t.sound.sampleLevel = 0;
+      else if (opts.layer === 'sample') t.sound.synthLevel = 0;
     }
   });
   p.master.volume = 0.8;
   p.master.chain = null;
   const e = await newEngine(module, p, lib);
   const ti = p.tracks.findIndex((t) => t.id === trackId);
-  e.schedule({ frame: 0, track: ti, vel, pitch: 0 });
+  const hit: Omit<HitEvent, 'frame'> = { track: ti, vel, pitch: 0 };
+  if (opts.slot != null) {
+    // the variation exactly as a step that names it plays it (see hitOf): its parameters and sample settings travel with the hit
+    const t = p.tracks[ti]!;
+    const rs = resolveStepSound(t.sound, { v: opts.slot }, (par) => p.kit.synth.params[par] ?? 0, { seed: p.seed, cycle: 0, fill: false, track: t.id, step: 0 });
+    if (rs.params.length) hit.sp = rs.params;
+    if (rs.sample) hit.smp = rs.sample;
+    hit.mv = rs.variation != null ? rs.variation + 1 : 0;
+  }
+  e.schedule({ frame: 0, ...hit });
   const maxBlocks = Math.ceil((maxSeconds * ENGINE_RATE) / BLOCK);
   const L: number[] = [];
   const R: number[] = [];

@@ -2055,7 +2055,7 @@ html[data-view='pattern'] #main {
   white-space: nowrap;
 }
 
-/* ------------------------------------------------------------ SOUND: the seven workspaces */
+/* ------------------------------------------------------------ SOUND: the eight workspaces */
 .sndpane {
   overflow: hidden;
 }
@@ -2282,6 +2282,96 @@ html[data-view='pattern'] #main {
 }
 .difflist {
   max-height: calc(240 * var(--px));
+}
+
+/* TUNER */
+.tunerws {
+  display: grid;
+  gap: calc(16 * var(--px)) calc(22 * var(--px));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(340 * var(--px))), 1fr));
+  align-content: start;
+  align-items: start;
+}
+.tnote {
+  font-family: var(--font-chip);
+  font-size: calc(var(--fs) * 4);
+  line-height: 1;
+  letter-spacing: 2px;
+  min-height: 1em;
+}
+.thz {
+  font-size: calc(var(--fs) * 1.4);
+}
+.tcents {
+  min-height: calc(20 * var(--px));
+}
+.tneedle {
+  height: calc(64 * var(--px));
+  cursor: default;
+}
+.tgraph {
+  height: calc(170 * var(--px));
+  cursor: default;
+}
+.tkind {
+  align-self: flex-start;
+  padding: 0 calc(8 * var(--px));
+  border: var(--u) solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-chip);
+}
+.tkind:empty {
+  display: none;
+}
+.tkind.none {
+  background: var(--paper);
+  color: var(--ink);
+}
+.tmeters {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--px));
+}
+.tmeter {
+  align-items: center;
+  gap: calc(8 * var(--px));
+}
+.tmeter .lbl {
+  flex: none;
+  width: calc(96 * var(--px));
+}
+.tmeter .meter {
+  height: calc(14 * var(--px));
+}
+.tmeter .lvl {
+  transition: none;
+}
+.tval {
+  flex: none;
+  min-width: calc(110 * var(--px));
+}
+.tstale {
+  min-height: calc(18 * var(--px));
+  font-family: var(--font-2);
+  color: var(--dim);
+}
+.group.stale .tnote,
+.group.stale .thz,
+.group.stale .tcents,
+.group.stale .tmeters {
+  opacity: 0.45;
+}
+.group.stale .tstale {
+  color: var(--ink);
+  font-family: var(--font-chip);
+}
+.tmrow .lbl {
+  flex: none;
+  width: calc(96 * var(--px));
+}
+.tdetails {
+  max-height: calc(220 * var(--px));
 }
 
 /* MIXER */

@@ -81,3 +81,68 @@ test('a conditional trigger can be set and WILDCARD is one undo step', async ({ 
   expect(await snap()).toEqual(before);
   expect(errors).toEqual([]);
 });
+
+test('EXPORT KIT: the dialog, a real export with progress, cancel, and EXPORT still beside UNDO', async ({ page }) => {
+  test.setTimeout(180_000);
+  for (const [scale, width] of [[90, 1280], [125, 1280], [200, 1280], [90, 900]] as const) {
+    await page.setViewportSize({ width, height: 800 });
+    await bootAt(page, scale);
+    const b = await page.evaluate(() => {
+      const ex = document.querySelector('[data-test=export]');
+      return { adjacent: !!ex && ex.nextElementSibling?.textContent === 'UNDO', sw: document.documentElement.scrollWidth, iw: window.innerWidth };
+    });
+    expect(b.adjacent, `${scale}%/${width}: EXPORT is still directly before UNDO`).toBe(true);
+    expect(b.sw, `${scale}%/${width}: no horizontal page scroll`).toBeLessThanOrEqual(b.iw);
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const errors = await bootAt(page);
+  const openKit = async () => {
+    await page.locator('#menubar .menu', { hasText: 'FILE' }).click();
+    await page.locator('.dropdown .item', { hasText: 'Export kit' }).click();
+  };
+  await openKit();
+  const dlg = page.locator('[data-test=export-kit].dialog');
+  await expect(dlg).toBeVisible();
+  const fits = await dlg.evaluate((e) => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth; });
+  expect(fits).toBe(true);
+  await expect(page.locator('[data-test=kx-status]')).toContainText(/UP TO \d+ FILES/);
+  // bad input is explained and nothing starts
+  await page.locator('[data-test=kx-pitch]').click();
+  await page.locator('.msel-item', { hasText: 'CHROMATIC RANGE' }).click();
+  await page.locator('[data-test=kx-lo]').fill('X9');
+  await expect(page.locator('[data-test=kx-status]')).toContainText('NOT A NOTE');
+  await page.locator('.dialog').getByRole('button', { name: 'EXPORT', exact: true }).click();
+  await expect(dlg).toBeVisible();
+  await page.locator('[data-test=kx-lo]').fill('C2');
+  await page.locator('[data-test=kx-hi]').fill('D2');
+  await page.locator('[data-test=kx-layers]').click();
+  await page.locator('.msel-item', { hasText: /^4$/ }).click();
+  await page.locator('[data-test=kx-instruments]').click();
+  await page.locator('.msel-item', { hasText: 'SELECTED TRACKS' }).click();
+  await expect(dlg).toBeVisible();
+  // cancel a running export
+  await page.locator('.dialog').getByRole('button', { name: 'EXPORT', exact: true }).click();
+  await expect(dlg).toHaveCount(0);
+  const card = page.locator('[data-test=kx-progress]');
+  await expect(card).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as W).clatter.kitExport.busy)).toBe(true);
+  await page.locator('[data-test=kx-cancel]').click();
+  await expect(card).toBeHidden({ timeout: 60_000 });
+  await expect(page.locator('[data-test=toast-info]').last()).toContainText('CANCELLED');
+  // and a real one
+  await openKit();
+  const dl = page.waitForEvent('download', { timeout: 120_000 });
+  await page.locator('.dialog').getByRole('button', { name: 'EXPORT', exact: true }).click();
+  const file = await dl;
+  expect(file.suggestedFilename()).toMatch(/\.zip$/i);
+  expect(errors).toEqual([]);
+});
+
+test('EXPORT KIT is also on SOUND > KITS, and the pattern EXPORT keeps its place', async ({ page }) => {
+  await bootAt(page);
+  await page.click('[data-test=view-sound]');
+  await page.getByText('KITS', { exact: true }).first().click();
+  await page.locator('[data-test=export-kit]').click();
+  await expect(page.locator('[data-test=export-kit].dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+});

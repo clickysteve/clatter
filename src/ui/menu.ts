@@ -5,6 +5,7 @@
  */
 import type { App } from '../app/app';
 import { PRESETS } from '../model/presets';
+import { exportKitDialog } from './kitExportDialog';
 import { aboutDialog, confirmDialog, exportDialog, helpDialog, paletteDialog } from './dialogs';
 import { importFolder, importZip, kitLibraryDialog, openKitFile } from './kitDialogs';
 import { DEFAULT_SCALE, SCALES, scaleLabel } from './scale';
@@ -61,6 +62,7 @@ export function menubar(app: App, screen: HTMLElement): { bar: HTMLElement; stat
         { label: 'Export master WAV…', action: () => exportDialog(app, 'master') },
         { label: 'Export stems (ZIP)…', action: () => exportDialog(app, 'stems') },
         { label: 'Export MIDI file…', action: () => exportDialog(app, 'midi') },
+        { label: 'Export kit (WAV files)…', action: () => exportKitDialog(app) },
         { label: 'Export drum hits (ZIP of WAVs)', action: () => void run('RENDERING HITS', () => app.exportHits()) },
         { label: 'Kit library…', action: () => kitLibraryDialog(app, 'set') },
       ],

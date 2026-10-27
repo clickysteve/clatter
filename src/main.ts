@@ -18,6 +18,7 @@ import { bindKeys } from './ui/keys';
 import { closePopups, download, h, toast, win } from './ui/widgets';
 import { installTooltips } from './ui/tooltip';
 import { aboutDialog } from './ui/dialogs';
+import { kitExportProgress } from './ui/kitExportDialog';
 import { cpx, initScale } from './ui/scale';
 
 /** The page: fixed chrome (menu bar, transport, view tabs) above a work area that scrolls. */
@@ -73,6 +74,7 @@ async function main(): Promise<void> {
     if (n) toast(n.text, n.level);
   });
 
+  kitExportProgress(app);
   const transport = transportWindow(app, chrome, bar);
   for (const t of ['transport', 'pattern', 'history', 'project', 'view'] as const) app.on(t, () => transport.panel.refresh());
   app.on('pattern', () => transport.rebuildPatterns());

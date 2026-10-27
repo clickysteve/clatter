@@ -2511,3 +2511,40 @@ html[data-view='pattern'] #main {
   grid-template-columns: 1fr 1fr;
   gap: calc(6 * var(--px)) calc(10 * var(--px));
 }
+
+/* ------------------------------------------------------------ kit export progress */
+.kxcard {
+  position: fixed;
+  left: calc(16 * var(--px));
+  bottom: calc(16 * var(--px));
+  z-index: 31000;
+  width: min(calc(360 * var(--px)), calc(100vw - 32 * var(--px)));
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--u) solid var(--ink);
+  box-shadow: calc(4 * var(--px)) calc(4 * var(--px)) 0 var(--ink);
+  padding: calc(10 * var(--px)) calc(12 * var(--px));
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--px));
+  letter-spacing: 1px;
+}
+.kxcard .kxtitle {
+  font-size: var(--fs-lg);
+}
+.kxcard .kxline,
+.kxcard .report {
+  overflow-wrap: anywhere;
+}
+.kxcard .kxbar {
+  height: calc(10 * var(--px));
+  border: var(--u) solid var(--ink);
+}
+.kxcard .kxfill {
+  height: 100%;
+  background: var(--ink);
+  width: 0;
+}
+.kxcard .btn {
+  align-self: flex-end;
+}

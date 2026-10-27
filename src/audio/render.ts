@@ -8,6 +8,7 @@
  */
 import { ClatterEngine, BLOCK, ENGINE_RATE, type EngineSample, type EngineTrack, type HitEvent } from './engine';
 import { resolveStepSound } from '../sound/stepSound';
+import { PAR } from '../sound/lxrParamIds';
 import { LxrEngine } from './lxr/lxr';
 import type { SampleLibrary } from './library';
 import { clone, PPQ, type Project, type SynthKit } from '../model/types';
@@ -186,6 +187,7 @@ export async function renderHit(module: WebAssembly.Module, project: Project, li
     const rs = resolveStepSound(t.sound, { v: opts.slot }, (par) => p.kit.synth.params[par] ?? 0, { seed: p.seed, cycle: 0, fill: false, track: t.id, step: 0 });
     if (rs.params.length) hit.sp = rs.params;
     if (rs.sample) hit.smp = rs.sample;
+    if (rs.switched) hit.trig = rs.trig;
     hit.mv = rs.variation != null ? rs.variation + 1 : 0;
   }
   e.schedule({ frame: 0, ...hit });
@@ -211,4 +213,153 @@ export async function renderHit(module: WebAssembly.Module, project: Project, li
   while (end > 1 && Math.abs(L[end - 1]!) < 0.0005 && Math.abs(R[end - 1]!) < 0.0005) end--;
   end = Math.min(L.length, end + 441);
   return [Float32Array.from(L.slice(0, end)), Float32Array.from(R.slice(0, end))];
+}
+
+// ---------------------------------------------------------------------------- kit export hits
+
+/** One instrument hit for the kit exporter: the actual engine, the track alone, deterministic. */
+export interface KitHitOptions {
+  /** MIDI velocity 1-127 */
+  vel: number;
+  /** variation A-D (0-3), or null for the base sound */
+  slot: number | null;
+  layer?: 'mix' | 'synth' | 'sample';
+  /** DRY: the voice and sample as they sound before the channel strip; WET: through the track's channel processing and FX send */
+  wet: boolean;
+  /** the hit's pitch offset in semitones (the synth note rounds to a whole note; the sample layer is continuous) */
+  pitch?: number;
+  /** retune the synth voice by this many cents with its oscillator FINE parameter (the whole-note part is the note itself) */
+  fineCents?: number;
+  /** AUTO: until the sound has died away (never longer than `maxSeconds`); a number: exactly that many seconds */
+  tail: 'auto' | number;
+  /** the longest an automatic tail is followed */
+  maxSeconds?: number;
+}
+
+export interface KitHit {
+  audio: Float32Array[];
+  rate: number;
+  /** the automatic tail was still audible at `maxSeconds` and was faded out there */
+  truncated: boolean;
+  /** a fixed length ended while the sound was still audible and was faded out over the last few ms */
+  faded: boolean;
+  /** the largest absolute sample value */
+  peak: number;
+}
+
+/** The LXR's oscillator FINE parameter moves the pitch by about this many cents per step (measured; the exporter's tuning loop corrects the rest). */
+export const FINE_CENTS_PER_STEP = 0.9;
+
+/** Level under which a sound counts as finished: -80 dBFS. */
+export const SILENCE = 1e-4;
+
+/**
+ * A copy of the project with only this track audible, at unity and centred, with the master
+ * chain, soft clip and limiter out of the way (the exporter normalises and reports clipping
+ * itself) and the track's own processing kept or bypassed.
+ */
+function isolated(project: Project, trackId: string, wet: boolean, layer: 'mix' | 'synth' | 'sample'): Project {
+  const p = clone(project);
+  p.tracks.forEach((t) => {
+    t.mix.mute = t.id !== trackId;
+    t.mix.solo = false;
+    if (t.id !== trackId) return;
+    t.mix.volume = 0.8;
+    t.mix.pan = 0;
+    if (!wet) {
+      t.mix.route = 'main';
+      t.mix.filter = 0;
+      t.mix.send = 0;
+      delete t.mix.fx;
+    }
+    if (layer === 'synth') t.sound.sampleLevel = 0;
+    else if (layer === 'sample') t.sound.synthLevel = 0;
+  });
+  p.master.volume = 0.8;
+  p.master.chain = null;
+  p.master.clip = false;
+  if (p.master.out) p.master.out = { ...p.master.out, limiter: { ...p.master.out.limiter, on: false } };
+  return p;
+}
+
+/**
+ * Render one hit of one track alone, for sampling. The project given is not modified (the
+ * render works on a clone, in a private engine seeded from the project), so the same call gives
+ * the same samples every time and no other track can leak into the file.
+ */
+export async function renderKitHit(module: WebAssembly.Module, project: Project, lib: SampleLibrary | null, trackId: string, o: KitHitOptions): Promise<KitHit> {
+  const p = isolated(project, trackId, o.wet, o.layer ?? 'mix');
+  const e = await newEngine(module, p, lib);
+  const ti = p.tracks.findIndex((t) => t.id === trackId);
+  if (ti < 0) throw new Error('that track no longer exists');
+  const t = p.tracks[ti]!;
+  const hit: Omit<HitEvent, 'frame'> = { track: ti, vel: Math.max(1, Math.min(127, Math.round(o.vel))), pitch: o.pitch ?? 0 };
+  if (o.slot != null) {
+    const rs = resolveStepSound(t.sound, { v: o.slot }, (par) => p.kit.synth.params[par] ?? 0, { seed: p.seed, cycle: 0, fill: false, track: t.id, step: 0 });
+    if (rs.params.length) hit.sp = rs.params;
+    if (rs.sample) hit.smp = rs.sample;
+    if (rs.switched) hit.trig = rs.trig;
+    hit.mv = rs.variation != null ? rs.variation + 1 : 0;
+  }
+  if (o.fineCents && t.sound.mode !== 'sample') {
+    const lv = Math.min(5, hit.trig ?? t.sound.trigger);
+    const par = PAR.FINE1 + 2 * lv;
+    let base = p.kit.synth.params[par] ?? 64;
+    for (let i = 0; i + 1 < (hit.sp?.length ?? 0); i += 2) if (hit.sp![i] === par) base = hit.sp![i + 1]!;
+    hit.sp = [...(hit.sp ?? []), par, Math.max(0, Math.min(127, Math.round(base + o.fineCents / FINE_CENTS_PER_STEP)))];
+  }
+  e.schedule({ frame: 0, ...hit });
+  const fixed = o.tail === 'auto' ? 0 : Math.max(1, Math.round(o.tail * ENGINE_RATE));
+  const maxFrames = fixed || Math.round((o.maxSeconds ?? 10) * ENGINE_RATE);
+  const blocks = Math.ceil(maxFrames / BLOCK);
+  const quietBlocks = Math.ceil((ENGINE_RATE * (o.wet ? 0.6 : 0.35)) / BLOCK);
+  const L = new Float32Array(blocks * BLOCK);
+  const R = new Float32Array(blocks * BLOCK);
+  let quiet = 0;
+  let used = blocks * BLOCK;
+  let heard = false;
+  for (let b = 0; b < blocks; b++) {
+    const l = L.subarray(b * BLOCK, (b + 1) * BLOCK);
+    const r = R.subarray(b * BLOCK, (b + 1) * BLOCK);
+    e.renderBlock(l, r);
+    let peak = 0;
+    for (let i = 0; i < BLOCK; i++) peak = Math.max(peak, Math.abs(l[i]!), Math.abs(r[i]!));
+    if (peak > SILENCE) {
+      heard = true;
+      quiet = 0;
+    } else quiet++;
+    // a sound that has not started yet (a delayed sample layer) is waited for; once heard, a long quiet gap ends it
+    if (!fixed && heard && quiet >= quietBlocks) {
+      used = (b + 1) * BLOCK;
+      break;
+    }
+  }
+  let end = fixed || used;
+  let truncated = false;
+  let faded = false;
+  const lastAudible = (): number => {
+    let i = Math.min(end, L.length);
+    while (i > 0 && Math.abs(L[i - 1]!) <= SILENCE && Math.abs(R[i - 1]!) <= SILENCE) i--;
+    return i;
+  };
+  if (!fixed) {
+    // keep 20 ms after the last audible sample, never less than one block
+    end = Math.max(BLOCK, Math.min(L.length, lastAudible() + Math.round(ENGINE_RATE * 0.02)));
+    if (used === blocks * BLOCK && lastAudible() > used - Math.round(ENGINE_RATE * 0.02)) truncated = true;
+  }
+  const outL = L.slice(0, end);
+  const outR = R.slice(0, end);
+  let peak = 0;
+  for (let i = 0; i < end; i++) peak = Math.max(peak, Math.abs(outL[i]!), Math.abs(outR[i]!));
+  // a cut while the sound is still audible would click: fade over the last 5 ms (or 20 ms)
+  if (truncated || (fixed && Math.max(Math.abs(outL[end - 1] ?? 0), Math.abs(outR[end - 1] ?? 0)) > 1e-3)) {
+    const fade = Math.min(end, Math.round(ENGINE_RATE * (truncated ? 0.02 : 0.005)));
+    for (let i = 0; i < fade; i++) {
+      const g = 1 - (i + 1) / fade;
+      outL[end - fade + i] = outL[end - fade + i]! * g;
+      outR[end - fade + i] = outR[end - fade + i]! * g;
+    }
+    faded = !truncated;
+  }
+  return { audio: [outL, outR], rate: ENGINE_RATE, truncated, faded, peak };
 }

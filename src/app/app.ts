@@ -25,13 +25,13 @@ import { defaultProject } from '../model/defaults';
 import { BUNDLE_EXT, parseProject, projectSamples, PROJECT_EXT, serialize } from '../model/project';
 import { buildPreset, PRESETS, resolveBundled } from '../model/presets';
 import { describeStepSound, isEmptyStepSound, lockableParam, resolveStepSound, soundSampleIds } from '../sound/stepSound';
-import { addEvolution, clearEvolution, distributeSounds, generateVariations, handMade, mutateSounds, slotWritable } from '../sound/soundgen';
+import { addEvolution, clearEvolution, distributeSounds, generateVariations, mutateSounds, slotWritable } from '../sound/soundgen';
 import { voiceKeys } from '../sound/kitgen';
 import { clamp, clone, MAX_PATTERNS, VARIATION_SLOTS, MAX_STEPS, stepTicks, type StepSound, type Variation, type DestructionSettings, type GenSettings, type Hit, type Pattern, type Project, type Quantize, type Resolution, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from '../model/types';
 import { MidiController } from '../midi/controller';
 import { generate, stepsPerBar } from '../rhythm/generate';
 import { mutate, summariseOps } from '../rhythm/mutate';
-import { clearTrack, commitEdits, copyRegion, editCount, newPattern, pasteRegion, setHit, setLength, setResolution, setSounds, setStepSound, setStepTrig, setTrigs, trigAt, shiftTrack, soundCount, sourceGrid, stepSoundAt, type Clip } from '../rhythm/pattern';
+import { clearTrack, copyRegion, newPattern, pasteRegion, removeNote, setHit, setLength, setResolution, setSounds, setStepSound, setStepTrig, setTrigs, trigAt, shiftTrack, soundCount, trackGrid, stepSoundAt, type Clip } from '../rhythm/pattern';
 import { hash32, randomSeed, Rng } from '../rhythm/rng';
 import { assignSeed, parseSeedInput, randomSeedValue, seedLabel, type SeedValue } from '../rhythm/seed';
 import { applyVelOp, clampVel, VEL_LABEL, type VelOp } from '../rhythm/velocity';
@@ -87,14 +87,14 @@ export interface UiState {
   /** the selected track id */
   track: string;
   sel: Selection | null;
+  /** steps added to the selection one by one (Shift-click); the region `sel` and these together are the selection */
+  picks: { track: string; step: number }[];
   /** a pattern switch waiting for the end of the cycle */
   queued: string | null;
   playing: boolean;
   status: string;
   /** momentary fills */
   fills: Set<string>;
-  /** play only the written pattern */
-  sourceOnly: boolean;
   /** record incoming notes into the pattern */
   record: boolean;
   /** a kit operation is running */
@@ -105,8 +105,6 @@ export interface UiState {
   paintVel: number;
   /** the step being looked at or edited (a click, a right-click or the arrow keys on the grid) */
   cursor: { track: string; step: number } | null;
-  /** the grid also shows what the pattern was before hand edits (deleted generated hits, edit marks) */
-  showOriginal: boolean;
   /** the tab open in the SOUND view */
   soundTab: SoundTab;
   /** the sound the SYNTH editor edits: null = the base sound, 0-3 = variation A-D of the selected track */
@@ -174,17 +172,16 @@ export class App {
       editMode: this.prefs.editMode,
       track: this.project.tracks[0]!.id,
       sel: null,
+      picks: [],
       queued: null,
       playing: false,
       status: 'READY',
       fills: new Set(),
-      sourceOnly: false,
       record: false,
       busy: false,
       notice: null,
       paintVel: 100,
       cursor: null,
-      showOriginal: false,
       soundTab: this.prefs.soundTab,
       slot: null,
       previewPass: 1,
@@ -213,7 +210,6 @@ export class App {
         return q;
       },
       fills: () => this.ui.fills,
-      sourceOnly: () => this.ui.sourceOnly,
       onPattern: (id) => {
         if (this.project.current !== id) {
           this.project.current = id;
@@ -673,7 +669,7 @@ export class App {
         const p: Pattern = copy ? { ...clone(this.pattern), id: `p${n}`, name } : newPattern(`p${n}`, name, this.project.gen, this.pattern.res);
         if (!copy) {
           assignSeed(p, randomSeedValue());
-          p.gen = generate(this.project.tracks, this.project.gen, p.seed, { steps: p.steps, res: p.res });
+          p.grids = generate(this.project.tracks, this.project.gen, p.seed, { steps: p.steps, res: p.res });
         }
         this.project.patterns.push(p);
         if (!this.ui.playing) this.project.current = p.id;
@@ -809,7 +805,7 @@ export class App {
     this.change('SEED', () => assignSeed(this.project, { seed: defaultProject().seed }), ['project']);
   }
 
-  /** GENERATE: a new arrangement from the generator settings (locked tracks and hand edits kept). */
+  /** GENERATE: a new pattern from the generator settings, written straight into the current pattern (locked tracks stay). */
   generatePattern(quantise = false): void {
     const sv = this.drawSeed('pattern');
     const seed = sv.seed;
@@ -819,7 +815,7 @@ export class App {
       if (p.steps !== geo.steps) setLength(p, geo.steps);
       assignSeed(p, sv);
       p.settings = { ...this.project.gen };
-      p.gen = generate(this.project.tracks, this.project.gen, seed, geo, p.gen);
+      p.grids = generate(this.project.tracks, this.project.gen, seed, geo, p.grids);
       p.generation = 0;
       this.say(`GENERATED ${styleById(this.project.gen.style).label} · SEED ${seedLabel(sv)}`);
     };
@@ -836,8 +832,8 @@ export class App {
     const fn = () => {
       const p = this.pattern;
       const lengths = Object.fromEntries(this.project.tracks.filter((t) => t.play.length > 0).map((t) => [t.id, t.play.length]));
-      const r = mutate(p.gen, this.unlocked(), p.res, new Rng(seed), strength, lengths);
-      p.gen = r.grids;
+      const r = mutate(p.grids, this.unlocked(), p.res, new Rng(seed), strength, lengths);
+      p.grids = r.grids;
       p.generation++;
       this.say(`${label}: ${summariseOps(r.ops)}`);
     };
@@ -860,32 +856,32 @@ export class App {
     const seed = randomSeed();
     const fn = () => {
       const p = this.pattern;
-      p.gen = generate(this.project.tracks, p.settings, seed, { steps: p.steps, res: p.res }, p.gen, 1);
+      p.grids = generate(this.project.tracks, p.settings, seed, { steps: p.steps, res: p.res }, p.grids, 1);
       this.say('REGENERATED AFTER BAR 1');
     };
     if (quantise) this.quantised('REGENERATE', fn, ['pattern']);
     else this.change('REGENERATE', fn, ['pattern']);
   }
 
-  /** RESET: back to the generated baseline: hand edits cleared, transformations off. */
-  reset(): void {
-    this.change(
-      'RESET',
-      () => {
-        this.pattern.edits = {};
-        const d = this.project.destruction;
-        d.chop.on = false;
-        d.rolls.on = false;
-        d.destroy.on = false;
-        this.say('RESET TO THE GENERATED PATTERN');
-      },
-      ['pattern', 'destruction'],
-    );
+  /** How many notes the current pattern holds. */
+  noteCount(): number {
+    return Object.values(this.pattern.grids).reduce((n, g) => n + g.filter(Boolean).length, 0);
   }
 
-  /** KEEP: what is written (baseline + edits) becomes the baseline. */
-  keepEdits(): void {
-    this.change('KEEP EDITS', () => commitEdits(this.pattern, this.project.tracks.map((t) => t.id)), ['pattern']);
+  /** CLEAR PATTERN: every note, step sound and trigger condition of the current pattern goes. One undo brings them back. */
+  clearPattern(): void {
+    this.change(
+      'CLEAR PATTERN',
+      () => {
+        const p = this.pattern;
+        p.grids = {};
+        delete p.sounds;
+        delete p.trig;
+        this.ui.sel = null;
+        this.say('PATTERN CLEARED');
+      },
+      ['pattern', 'selection'],
+    );
   }
 
   lockTrack(id: string): void {
@@ -896,13 +892,13 @@ export class App {
 
   // ------------------------------------------------------------------ RHYTHM: editing
   hitAt(trackId: string, step: number): Hit | null {
-    return sourceGrid(this.pattern, trackId)[step] ?? null;
+    return trackGrid(this.pattern, trackId)[step] ?? null;
   }
 
   /** Click on a cell: add (at the paint velocity) or remove. */
   toggleCell(trackId: string, step: number): void {
     const h = this.hitAt(trackId, step);
-    this.change(h ? 'DELETE HIT' : 'ADD HIT', () => setHit(this.pattern, trackId, step, h ? null : { vel: this.ui.paintVel }), ['pattern']);
+    this.change(h ? 'DELETE HIT' : 'ADD HIT', () => (h ? removeNote(this.pattern, trackId, step) : setHit(this.pattern, trackId, step, { vel: this.ui.paintVel })), ['pattern']);
   }
 
   /** A paint gesture over several cells is one undo step. */
@@ -913,7 +909,8 @@ export class App {
   paintCell(trackId: string, step: number, on: boolean): void {
     const h = this.hitAt(trackId, step);
     if (!!h === on) return;
-    setHit(this.pattern, trackId, step, on ? { vel: this.ui.paintVel } : null);
+    if (on) setHit(this.pattern, trackId, step, { vel: this.ui.paintVel });
+    else removeNote(this.pattern, trackId, step);
     this.touch(['pattern']);
   }
 
@@ -929,21 +926,16 @@ export class App {
   }
 
   /** Apply to every hit in the selection (or the selected track's hits). */
-  editSelection(fn: (h: Hit) => Hit, label: string): void {
-    const sel = this.ui.sel;
-    const ids = this.project.tracks.map((t) => t.id);
+  editSelection(fn: (h: Hit) => Hit | null, label: string): void {
     this.change(
       label,
       () => {
         const p = this.pattern;
-        const rows = sel ? ids.slice(Math.min(sel.t0, sel.t1), Math.max(sel.t0, sel.t1) + 1) : [this.ui.track];
-        const a = sel ? Math.min(sel.s0, sel.s1) : 0;
-        const b = sel ? Math.max(sel.s0, sel.s1) : p.steps - 1;
-        for (const id of rows) {
-          const g = sourceGrid(p, id);
-          for (let s = a; s <= b; s++) {
-            const h = g[s];
-            if (h) setHit(p, id, s, cleanHit(fn({ ...h })));
+        for (const row of this.selectedHits()) {
+          for (const { step, hit } of row.hits) {
+            const out = fn({ ...hit });
+            if (out) setHit(p, row.track, step, cleanHit(out));
+            else removeNote(p, row.track, step);
           }
         }
       },
@@ -956,13 +948,21 @@ export class App {
    * region, else the whole selected track.
    */
   selectedHits(): { track: string; hits: { step: number; hit: Hit }[] }[] {
+    if (this.ui.picks.length) {
+      const by = new Map<string, { step: number; hit: Hit }[]>();
+      for (const c of this.selectedCells()) {
+        const hit = this.hitAt(c.track, c.step);
+        if (hit) by.set(c.track, [...(by.get(c.track) ?? []), { step: c.step, hit }]);
+      }
+      return this.project.tracks.filter((t) => by.has(t.id)).map((t) => ({ track: t.id, hits: by.get(t.id)!.sort((a, b) => a.step - b.step) }));
+    }
     const sel = this.ui.sel;
     const ids = this.project.tracks.map((t) => t.id);
     const rows = sel ? ids.slice(Math.min(sel.t0, sel.t1), Math.max(sel.t0, sel.t1) + 1) : [this.ui.track];
     const a = sel ? Math.min(sel.s0, sel.s1) : 0;
     const b = sel ? Math.max(sel.s0, sel.s1) : this.pattern.steps - 1;
     return rows.map((track) => {
-      const g = sourceGrid(this.pattern, track);
+      const g = trackGrid(this.pattern, track);
       const hits: { step: number; hit: Hit }[] = [];
       for (let s = a; s <= Math.min(b, this.pattern.steps - 1); s++) if (g[s]) hits.push({ step: s, hit: g[s]! });
       return { track, hits };
@@ -1042,16 +1042,70 @@ export class App {
         if (!t) return;
         this.ui.cursor = { track: t.id, step };
         this.selectTrack(t.id);
-        if (this.ui.sel) this.select(null);
+        if (this.ui.sel || this.ui.picks.length) {
+          this.ui.picks = [];
+          this.select(null);
+        }
       },
       select: (r) => this.select(r),
+      pick: (t, st) => this.togglePick(t, st),
       created: (t, s) => void this.audition(t, this.hitAt(t, s)?.vel ?? this.ui.paintVel),
     };
   }
 
   select(sel: Selection | null): void {
     this.ui.sel = sel;
+    if (sel) this.ui.picks = [];
     this.emit(['selection']);
+  }
+
+  /** Shift-click: add the step to the selection, or take it out again. The step clicked becomes the one the editors show. */
+  togglePick(trackId: string, step: number): void {
+    if (step < 0 || step >= this.pattern.steps) return;
+    // the first Shift-click starts from what is selected: the region, else the step being edited
+    if (!this.ui.picks.length) {
+      const start = this.ui.sel ? this.selectedCells() : this.cursorCell() ? [this.cursorCell()!] : [];
+      this.ui.picks = start.map((c) => ({ ...c }));
+      this.ui.sel = null;
+    }
+    const i = this.ui.picks.findIndex((x) => x.track === trackId && x.step === step);
+    if (i >= 0) this.ui.picks.splice(i, 1);
+    else this.ui.picks.push({ track: trackId, step });
+    this.ui.cursor = { track: trackId, step };
+    this.ui.track = trackId;
+    this.emit(['selection', 'tracks']);
+  }
+
+  /** Every selected step: the picked ones, else the cells of the region. */
+  selectedCells(): { track: string; step: number }[] {
+    if (this.ui.picks.length) return this.ui.picks.filter((x) => x.step < this.pattern.steps && this.project.tracks.some((t) => t.id === x.track));
+    const s = this.ui.sel;
+    if (!s) return [];
+    const out: { track: string; step: number }[] = [];
+    for (let ti = Math.min(s.t0, s.t1); ti <= Math.max(s.t0, s.t1); ti++) {
+      const t = this.project.tracks[ti];
+      if (!t) continue;
+      for (let st = Math.min(s.s0, s.s1); st <= Math.max(s.s0, s.s1) && st < this.pattern.steps; st++) out.push({ track: t.id, step: st });
+    }
+    return out;
+  }
+
+  /** Delete / Backspace: the notes of the selection (else the step being edited). One undo step. */
+  deleteSelected(): void {
+    const cells = this.ui.picks.length || this.ui.sel ? this.selectedCells() : this.cursorCell() ? [this.cursorCell()!] : [];
+    const notes = cells.filter((c) => this.hitAt(c.track, c.step));
+    if (!notes.length) {
+      this.say('NO NOTES SELECTED');
+      return;
+    }
+    this.change('DELETE NOTES', () => notes.forEach((c) => removeNote(this.pattern, c.track, c.step)), ['pattern']);
+    this.say(`DELETED ${notes.length} NOTE${notes.length === 1 ? '' : 'S'}`);
+  }
+
+  /** Double-click: delete the note on a step. */
+  deleteNote(trackId: string, step: number): void {
+    if (!this.hitAt(trackId, step)) return;
+    this.change('DELETE HIT', () => removeNote(this.pattern, trackId, step), ['pattern']);
   }
 
   selectTrack(id: string): void {
@@ -1078,11 +1132,6 @@ export class App {
     return null;
   }
 
-  setShowOriginal(on: boolean): void {
-    this.ui.showOriginal = on;
-    this.emit(['pattern']);
-  }
-
   copy(): void {
     const sel = this.ui.sel;
     const ids = this.project.tracks.map((t) => t.id);
@@ -1107,7 +1156,7 @@ export class App {
   }
 
   clearSelection(): void {
-    this.editSelection(() => null as unknown as Hit, 'CLEAR');
+    this.editSelection(() => null, 'CLEAR');
   }
 
   clearTrack(id: string): void {
@@ -1118,9 +1167,6 @@ export class App {
     this.change('SHIFT', () => shiftTrack(this.pattern, id, n), ['pattern']);
   }
 
-  editCount(): number {
-    return editCount(this.pattern);
-  }
 
   undo(): void {
     const l = this.history.undo();
@@ -1226,13 +1272,6 @@ export class App {
   fill(on: boolean, trackIds?: string[]): void {
     const ids = trackIds ?? this.project.tracks.filter((t) => ['snare', 'clap', 'ltom', 'htom', 'perc', 'chat'].includes(t.role)).map((t) => t.id);
     for (const id of ids) on ? this.ui.fills.add(id) : this.ui.fills.delete(id);
-    this.sequence.bump();
-    this.scheduler.invalidate();
-    this.emit(['transport', 'pattern']);
-  }
-
-  setSourceOnly(on: boolean): void {
-    this.ui.sourceOnly = on;
     this.sequence.bump();
     this.scheduler.invalidate();
     this.emit(['transport', 'pattern']);
@@ -1535,12 +1574,6 @@ export class App {
     this.emit(['kit', 'selection']);
   }
 
-  /** Show or hide the sound lane under the pattern grid. */
-  setSoundLane(on: boolean): void {
-    this.prefs.soundLane = on;
-    savePrefs(this.prefs);
-    this.emit(['tracks']);
-  }
 
   /**
    * The audible pitch of a track's sound (the base, or variation A-D; for HYBRID a layer). The sound
@@ -1745,7 +1778,6 @@ export class App {
       const patch = diffMod(t.sound.mod, next);
       if (patch) v.mod = patch;
       else delete v.mod;
-      delete v.gen;
     }
     this.history.commit();
     this.syncTracks();
@@ -1914,7 +1946,6 @@ export class App {
       const patch = diffMod(t.sound.mod, next);
       if (patch) v.mod = patch;
       else delete v.mod;
-      delete v.gen;
     }, ['mod', 'tracks', 'pattern']);
     this.syncTracks();
   }
@@ -2020,7 +2051,6 @@ export class App {
     const cur = (list[slot] ??= { name: '', params: {} });
     if (val === (this.project.kit.synth.params[p] ?? 0)) delete cur.params[p];
     else cur.params[p] = val;
-    delete cur.gen;
     this.history.commit();
     this.autosave();
     this.sequence.bump();
@@ -2053,7 +2083,6 @@ export class App {
       else (smp as Record<string, unknown>)[key] = val;
     }
     if (!Object.keys(smp).length) delete cur.sample;
-    delete cur.gen;
     this.history.commit();
     this.syncTracks();
     this.autosave();
@@ -2083,7 +2112,7 @@ export class App {
     const t = this.project.tracks.find((x) => x.id === trackId);
     const src = t?.sound.variations?.[from];
     if (!t || !src) return;
-    this.change('DUPLICATE VARIATION', () => (this.ensureVariations(t)[to] = { ...clone(src), name: src.name, gen: undefined, lock: undefined }), ['tracks', 'kit']);
+    this.change('DUPLICATE VARIATION', () => (this.ensureVariations(t)[to] = { ...clone(src), name: src.name, lock: undefined }), ['tracks', 'kit']);
     this.setSlot(to);
   }
 
@@ -2182,6 +2211,7 @@ export class App {
 
   /** The steps the Step Sound editor acts on: the selected region's hits, or the cursor step. */
   soundTargets(): { track: string; step: number }[] {
+    if (this.ui.picks.length > 1) return this.selectedCells();
     const s = this.ui.sel;
     if (s && !(s.t0 === s.t1 && s.s0 === s.s1)) {
       const out: { track: string; step: number }[] = [];
@@ -2206,7 +2236,6 @@ export class App {
           const t = this.project.tracks.find((y) => y.id === x.track);
           if (!t) continue;
           const next = fn(clone(stepSoundAt(this.pattern, x.track, x.step) ?? {}), t);
-          if (next) delete next.gen; // changed by hand: the generators leave it alone
           setStepSound(this.pattern, x.track, x.step, next && !isEmptyStepSound(next) ? next : undefined);
         }
       },
@@ -2375,8 +2404,8 @@ export class App {
     return sv.seed;
   }
 
-  /** GENERATE VARIATIONS: fill the free slots A-D of the tracks in scope with related timbres. */
-  generateVariationsFor(tracks = this.soundScope().tracks, force = false): void {
+  /** GENERATE VARIATIONS: fill the slots A-D (not locked) of the tracks in scope with related timbres. */
+  generateVariationsFor(tracks = this.soundScope().tracks): void {
     const sv = this.drawSeed('sound');
     const seed = sv.seed;
     this.change(
@@ -2385,14 +2414,14 @@ export class App {
         assignSeed(this.project.timbre, sv);
         let n = 0;
         for (const t of tracks) {
-          const next = generateVariations(t.sound, t.role, this.project.kit.synth.params, { seed, amount: this.project.timbre.amount, locks: this.project.soundLocks, force, pitch: pitchPlanOf(this.project, t) });
+          const next = generateVariations(t.sound, t.role, this.project.kit.synth.params, { seed, amount: this.project.timbre.amount, locks: this.project.soundLocks, pitch: pitchPlanOf(this.project, t) });
           const before = JSON.stringify(t.sound.variations ?? null);
           t.sound.variations = next;
           this.tidyVariations(t);
           if (JSON.stringify(t.sound.variations ?? null) !== before) n++;
         }
         this.syncTracks();
-        this.say(n ? `VARIATIONS FOR ${n} TRACK${n > 1 ? 'S' : ''} · TIMBRE ${Math.round(this.project.timbre.amount * 100)}%` : 'NO FREE SLOTS (LOCKED OR HAND-MADE)');
+        this.say(n ? `VARIATIONS FOR ${n} TRACK${n > 1 ? 'S' : ''} · TIMBRE ${Math.round(this.project.timbre.amount * 100)}%` : 'NO FREE SLOTS (LOCKED)');
       },
       ['tracks', 'kit'],
     );
@@ -2404,7 +2433,7 @@ export class App {
     this.change('DISTRIBUTE VARIATIONS', () => this.writeSounds('DISTRIBUTE', tracks, region, (t, grid, cur, o) => distributeSounds(t.sound, t.role, grid, cur, this.project.kit.synth.params, o)), ['pattern']);
   }
 
-  /** MUTATE SOUND: redraw a share of the generated step sounds; hand-made ones and the rhythm stay. */
+  /** MUTATE SOUND: redraw a share of the step sounds; the rhythm stays. */
   mutateSound(amount = 0.3, quantise = false): void {
     if (quantise && this.ui.playing) return this.atBoundary('MUTATE SOUND', () => this.mutateSound(amount));
     const { tracks, region } = this.soundScope();
@@ -2415,7 +2444,7 @@ export class App {
   generateSound(quantise = false): void {
     if (quantise && this.ui.playing) return this.atBoundary('GENERATE SOUND', () => this.generateSound());
     this.history.begin('GENERATE SOUND');
-    this.generateVariationsFor(undefined, false);
+    this.generateVariationsFor();
     this.distributeVariations();
     this.history.commit();
     this.emit(['history']);
@@ -2435,7 +2464,7 @@ export class App {
     const p = this.pattern;
     let steps = 0;
     for (const t of tracks) {
-      const next = fn(t, sourceGrid(p, t.id), p.sounds?.[t.id], { seed, take: 0, amount: this.project.timbre.amount, locks: this.project.soundLocks, region, ...this.geometry(), pitch: pitchPlanOf(this.project, t) });
+      const next = fn(t, trackGrid(p, t.id), p.sounds?.[t.id], { seed, take: 0, amount: this.project.timbre.amount, locks: this.project.soundLocks, region, ...this.geometry(), pitch: pitchPlanOf(this.project, t) });
       setSounds(p, t.id, next);
       steps += Object.keys(next).length;
     }
@@ -2448,7 +2477,7 @@ export class App {
     this.change(
       'EVOLVE SOUND',
       () => {
-        for (const t of tracks) setSounds(this.pattern, t.id, addEvolution(t.sound, t.role, sourceGrid(this.pattern, t.id), this.pattern.sounds?.[t.id], { amount: Math.max(0.1, this.project.timbre.amount), passes, locks: this.project.soundLocks }));
+        for (const t of tracks) setSounds(this.pattern, t.id, addEvolution(t.sound, t.role, trackGrid(this.pattern, t.id), this.pattern.sounds?.[t.id], { amount: Math.max(0.1, this.project.timbre.amount), passes, locks: this.project.soundLocks }));
         this.say(`SOUND EVOLUTION OVER ${passes} PASSES · IT RETURNS TO THE BASE SOUND`);
       },
       ['pattern'],
@@ -2460,18 +2489,18 @@ export class App {
     this.change('CLEAR EVOLUTION', () => tracks.forEach((t) => setSounds(this.pattern, t.id, clearEvolution(this.pattern.sounds?.[t.id]))), ['pattern']);
   }
 
-  /** RESET SOUND: remove the generated step sounds (and, with all, the hand-made ones) in scope. */
-  clearSoundsInScope(all = false): void {
+  /** CLEAR STEP SOUNDS: remove every step sound of the tracks (and steps) in scope. */
+  clearSoundsInScope(): void {
     const { tracks, region } = this.soundScope();
     this.change(
-      all ? 'CLEAR ALL STEP SOUNDS' : 'RESET GENERATED SOUNDS',
+      'CLEAR STEP SOUNDS',
       () => {
         for (const t of tracks) {
           const cur = this.pattern.sounds?.[t.id] ?? {};
           const keep: Record<number, StepSound> = {};
           for (const [k, ss] of Object.entries(cur)) {
             const inside = !region || (Number(k) >= region[0] && Number(k) <= region[1]);
-            if (!inside || (!all && handMade(ss))) keep[Number(k)] = ss;
+            if (!inside) keep[Number(k)] = ss;
           }
           setSounds(this.pattern, t.id, keep);
         }
@@ -2480,13 +2509,13 @@ export class App {
     );
   }
 
-  /** RESET VARIATIONS: remove the generated variations of the tracks in scope (hand-made and locked stay). */
-  resetGeneratedVariations(): void {
+  /** CLEAR VARIATIONS: empty the variation slots of the tracks in scope (locked slots stay). */
+  clearVariations(): void {
     const { tracks } = this.soundScope();
-    this.change('RESET VARIATIONS', () => {
+    this.change('CLEAR VARIATIONS', () => {
       for (const t of tracks) {
         if (t.sound.soundLock || !t.sound.variations) continue;
-        t.sound.variations = t.sound.variations.map((v, i) => (v && slotWritable(t.sound, i) && v.gen ? null : v));
+        t.sound.variations = t.sound.variations.map((v, i) => (v && slotWritable(t.sound, i) ? null : v));
         this.tidyVariations(t);
       }
       this.syncTracks();
@@ -2501,7 +2530,7 @@ export class App {
     this.change(
       'RANDOMISE VARIATION',
       () => {
-        const only: (Variation | null)[] = generateVariations({ ...t.sound, variations: undefined }, t.role, this.project.kit.synth.params, { seed, amount, locks: this.project.soundLocks, force: true, pitch: pitchPlanOf(this.project, t) });
+        const only: (Variation | null)[] = generateVariations({ ...t.sound, variations: undefined }, t.role, this.project.kit.synth.params, { seed, amount, locks: this.project.soundLocks, pitch: pitchPlanOf(this.project, t) });
         const fresh = only[slot];
         if (fresh) this.ensureVariations(t)[slot] = { ...fresh, lock: t.sound.variations?.[slot]?.lock };
         this.syncTracks();
@@ -2523,7 +2552,6 @@ export class App {
           if (!def || this.project.soundLocks.params.includes(Number(k))) continue;
           v.params[Number(k)] = clamp(Math.round(val + rng.bell() * 40 * amount * (def.kind === 'menu' ? 0 : 1)), 0, def.max);
         }
-        delete v.gen;
       },
       ['kit'],
     );
@@ -2618,7 +2646,7 @@ export class App {
     const p = defaultProject();
     p.kit = { name: 'INIT', seed: 0, synth: clone(this.initKit) };
     assignSeed(p.patterns[0]!, randomSeedValue());
-    p.patterns[0]!.gen = generate(p.tracks, p.gen, p.patterns[0]!.seed, { steps: p.patterns[0]!.steps, res: 4 });
+    p.patterns[0]!.grids = generate(p.tracks, p.gen, p.patterns[0]!.seed, { steps: p.patterns[0]!.steps, res: 4 });
     this.project = p;
     this.afterLoad(false);
     this.kitm?.projectReplaced();

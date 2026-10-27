@@ -9,13 +9,13 @@
  *                       alternatives and random ranges, as TIMBRE grows) to the steps of a track by
  *                       its role: a kick keeps its main sound on the beat, a hi-hat varies often
  *                       and subtly, percussion roams.
- *   mutateSounds        redraws some of the generated step sounds; the rhythm never moves.
+ *   mutateSounds        redraws some of the step sounds of the hits; the rhythm never moves.
  *   addEvolution /      bounded glides on a few parameters over successive passes; they return home.
  *   clearEvolution
  *
- * All of it is a function of its seed: the same inputs give the same sounds. Hand-made work is
- * protected: a step sound or variation edited by hand loses its `gen` flag and is left alone, and
- * so are locked tracks, locked variations, locked voices and locked parameters.
+ * All of it is a function of its seed: the same inputs give the same sounds. A sound is just a
+ * sound, whoever made it, and the generators write over it; only locks protect: locked tracks,
+ * locked variations, locked voices and locked parameters. One undo restores the sounds before.
  *
  * TIMBRE (0-1) is a designed curve, not a scale on every random number:
  *   0      nothing: every step plays its track's sound
@@ -136,10 +136,10 @@ const intensity = (amount: number): number => 0.3 + 0.7 * clamp(amount, 0, 1);
 const archetypeOf = (sound: TrackSound, role: string): Archetype => archetypeFor(sound.trigger >= 5 ? 5 : sound.trigger, [role]);
 export const voiceOf = (sound: TrackSound): number => (sound.trigger >= 5 ? 5 : sound.trigger);
 
-/** Is this slot free for a generator to write? (empty, or generated and not locked) */
+/** Is this slot free for a generator to write? (not locked) */
 export function slotWritable(sound: TrackSound, i: number): boolean {
   const v = sound.variations?.[i];
-  return !v || (!!v.gen && !v.lock);
+  return !v || !v.lock;
 }
 
 /** The sample-layer moves of a variation (SAMPLE and HYBRID tracks). */
@@ -169,11 +169,11 @@ function sampleMoves(sound: TrackSound, slot: number, k: number, rng: Rng): Samp
 }
 
 /**
- * Variations of a track's sound for slots A-D. Slots that are hand-made or locked are kept;
- * `force` writes every unlocked slot. Returns the whole slot list (or the input when the track,
+ * Variations of a track's sound for slots A-D. Locked slots are kept, every other slot is
+ * written. Returns the whole slot list (or the input when the track,
  * its voice or every slot is protected).
  */
-export function generateVariations(sound: TrackSound, role: string, kit: readonly number[], o: GenOptions & { force?: boolean }): (Variation | null)[] {
+export function generateVariations(sound: TrackSound, role: string, kit: readonly number[], o: GenOptions): (Variation | null)[] {
   const cur: (Variation | null)[] = Array.from({ length: VARIATION_SLOTS }, (_, i) => sound.variations?.[i] ?? null);
   if (sound.soundLock) return cur;
   const synth = sound.mode !== 'sample';
@@ -193,7 +193,7 @@ export function generateVariations(sound: TrackSound, role: string, kit: readonl
   }
   for (let slot = 0; slot < VARIATION_SLOTS; slot++) {
     const existing = cur[slot];
-    if (existing && (existing.lock || (!existing.gen && !o.force))) continue;
+    if (existing?.lock) continue;
     const recipe = recipes[order[slot % recipes.length]!]!;
     const params: Record<number, number> = {};
     if (synth) {
@@ -213,7 +213,7 @@ export function generateVariations(sound: TrackSound, role: string, kit: readonl
       if (o.pitch && keys.coarse !== undefined && params[keys.coarse] !== undefined) params[keys.coarse] = snapCoarse(o.pitch, params[keys.coarse]!);
       for (const id of Object.keys(params).map(Number)) if (params[id] === (kit[id] ?? 0)) delete params[id];
     }
-    const v: Variation = { name: recipe.name.slice(0, 10), params, gen: true };
+    const v: Variation = { name: recipe.name.slice(0, 10), params };
     if (sample) {
       const sm = sampleMoves(sound, slot, k, rng);
       if (!synth) v.name = sm.reverse ? 'REVERSE' : sm.tune ? 'TUNED' : sm.pan !== undefined ? 'PANNED' : 'SOFT';
@@ -253,21 +253,18 @@ export interface DistributeOptions extends GenOptions {
   region?: [number, number];
 }
 
-/** Does the step have hand-made sound that a generator must leave alone? */
-export const handMade = (s: StepSound | undefined): boolean => !!s && !isEmptyStepSound(s) && !s.gen;
-
 const DECAY_KEYS: Key[] = ['decay'];
 
 /**
- * Step sounds for a track's hits. Returns the track's whole set of step sounds: hand-made ones
- * (and everything outside `region`) as they were, generated ones redrawn for hits that exist.
+ * Step sounds for a track's hits. Returns the track's whole set of step sounds: everything outside
+ * `region` as it was, the rest redrawn for the hits that exist.
  */
 export function distributeSounds(sound: TrackSound, role: string, grid: Grid, existing: Record<number, StepSound> | undefined, kit: readonly number[], o: DistributeOptions): Record<number, StepSound> {
   const out: Record<number, StepSound> = {};
   const [r0, r1] = o.region ?? [0, o.steps - 1];
   for (const [k, ss] of Object.entries(existing ?? {})) {
     const i = Number(k);
-    if (i < r0 || i > r1 || handMade(ss)) out[i] = ss;
+    if (i < r0 || i > r1) out[i] = ss;
   }
   if (sound.soundLock || (sound.mode !== 'sample' && o.locks.voices[voiceOf(sound)])) return out;
   const slots = [0, 1, 2, 3].filter((i) => sound.variations?.[i]);
@@ -307,7 +304,7 @@ export function distributeSounds(sound: TrackSound, role: string, grid: Grid, ex
         p = 1;
     }
     p *= Math.min(1, amount * 1.25);
-    const ss: StepSound = { gen: true };
+    const ss: StepSound = {};
     if (slots.length && r(i, 1) < p) {
       // louder hits favour the first slots; quiet ones the later
       const w = cls === 'free' ? r(i, 2) : Math.pow(r(i, 2), accent ? 1.8 : 1);
@@ -362,8 +359,8 @@ export function distributeSounds(sound: TrackSound, role: string, grid: Grid, ex
 }
 
 /**
- * MUTATE SOUND: redraws a share (`amount`) of the generated step sounds and of the empty hits,
- * from a fresh take, and keeps the rest. Hand-made sounds and the rhythm are untouched.
+ * MUTATE SOUND: redraws a share (`amount`) of the step sounds of the hits, from a fresh take, and
+ * keeps the rest. The rhythm is untouched.
  */
 export function mutateSounds(sound: TrackSound, role: string, grid: Grid, existing: Record<number, StepSound> | undefined, kit: readonly number[], o: DistributeOptions & { amount: number }): Record<number, StepSound> {
   const fresh = distributeSounds(sound, role, grid, undefined, kit, { ...o, amount: Math.max(o.amount, clamp(o.amount, 0, 1) > 0 ? 0.35 : 0) });
@@ -372,11 +369,11 @@ export function mutateSounds(sound: TrackSound, role: string, grid: Grid, existi
   const [r0, r1] = o.region ?? [0, o.steps - 1];
   const tc = strCode(role);
   for (let i = r0; i <= r1 && i < grid.length; i++) {
-    if (!grid[i] || handMade(out[i])) continue;
+    if (!grid[i]) continue;
     if (hash32(o.seed, SALT.sndMut, tc, o.take, i) / 4294967296 >= o.amount) continue;
     // EVOLVE glides are a separate layer: a redrawn step keeps them
     const glides = out[i]?.rules?.filter((r) => r.op === 'evolve') ?? [];
-    const next: StepSound | undefined = fresh[i] ? { ...fresh[i]! } : glides.length ? { gen: true } : undefined;
+    const next: StepSound | undefined = fresh[i] ? { ...fresh[i]! } : glides.length ? {} : undefined;
     if (next && glides.length) next.rules = [...(next.rules ?? []), ...glides];
     if (next) out[i] = next;
     else delete out[i];

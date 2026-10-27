@@ -3,14 +3,13 @@
  * feeds it pointer positions already turned into steps, and it calls the application's editing
  * functions. Every gesture is ONE undo step.
  *
- *   press an empty step       the hit is made at once (at the new-hit velocity)
+ *   press an empty step       the hit is made and selected at once (at the new-hit velocity)
  *     then drag up / down     sets its velocity (up is louder)
  *     then drag sideways      paints hits along the same track
- *   press a hit               nothing yet
- *     release in place        removes it
+ *   press a hit               selects it; nothing is deleted (a double-click deletes, see the grid)
  *     drag up / down          sets its velocity
  *     drag sideways           paints hits on the empty steps (the hits that are there stay)
- *   Shift-press               release in place: select from the cursor to here
+ *   Shift-press               release in place: add the step to the selection, or take it out
  *     drag sideways           erases hits along the same track
  *   Alt-press, drag           select a region
  *
@@ -50,6 +49,8 @@ export interface GestureHost {
   cursor(): { trackIndex: number; step: number } | null;
   setCursor(trackIndex: number, step: number): void;
   select(r: Region | null): void;
+  /** Shift-click: add the step to the selection, or take it out */
+  pick(track: string, step: number): void;
   /** a hit was just made by pressing (to hear it) */
   created?(track: string, step: number): void;
 }
@@ -168,20 +169,12 @@ export class StepGesture {
     this.last = m.step;
   }
 
-  up(m?: Move): void {
+  up(_m?: Move): void {
     const ph = this.phase;
     if (!ph) return;
     const s = this.start;
     const h = this.host;
-    if (ph === 'hit') {
-      this.begin('DELETE HIT');
-      h.paint(s.track, s.step, false);
-    } else if (ph === 'shift') {
-      const to = m ?? { trackIndex: s.trackIndex, step: s.step };
-      const from = h.cursor() ?? { trackIndex: s.trackIndex, step: s.step };
-      h.select({ t0: from.trackIndex, t1: to.trackIndex, s0: from.step, s1: to.step });
-      if (!h.cursor()) h.setCursor(s.trackIndex, s.step);
-    }
+    if (ph === 'shift') h.pick(s.track, s.step);
     this.finish();
   }
 

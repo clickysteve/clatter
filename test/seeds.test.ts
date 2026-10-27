@@ -183,7 +183,7 @@ describe('legacy numeric seeds', () => {
     delete old.generator;
     delete old.seedText;
     const back = parseProject(JSON.stringify(old));
-    expect(back.version).toBe(7);
+    expect(back.version).toBe(8);
     expect(back.seed).toBe(p.seed);
     expect(back.seedText).toBeUndefined();
     expect(back.generator).toBe(1);
@@ -194,7 +194,7 @@ describe('legacy numeric seeds', () => {
     for (let i = 0; i < p.patterns.length; i++) {
       expect(back.patterns[i]!.seed).toBe(p.patterns[i]!.seed);
       expect(back.patterns[i]!.seedText).toBeUndefined();
-      expect(back.patterns[i]!.gen).toEqual(p.patterns[i]!.gen);
+      expect(back.patterns[i]!.grids).toEqual(p.patterns[i]!.grids);
     }
     // the generators still make from the old number exactly the pattern that was saved
     const pat = back.patterns[0]!;
@@ -288,7 +288,7 @@ describe('in the app', () => {
     expect(p.seed).toBe(seedFromText(p.seedText!));
     expect(app.seedSlot('pattern').value).toEqual({ seed: p.seed, text: p.seedText });
     expect(app.seedSlot('pattern').fixed).toBe(false);
-    expect(p.gen).toEqual(generate(app.project.tracks, app.project.gen, p.seed, { steps: p.steps, res: p.res }));
+    expect(p.grids).toEqual(generate(app.project.tracks, app.project.gen, p.seed, { steps: p.steps, res: p.res }));
   });
 
   it('a held phrase makes the same pattern every time; clearing frees it', () => {
@@ -296,10 +296,10 @@ describe('in the app', () => {
     expect(app.setSeedInput('pattern', 'Velvet Orbit')).toBe(true);
     expect(app.seedSlot('pattern').fixed).toBe(true);
     app.generatePattern();
-    const first = JSON.stringify(app.pattern.gen);
+    const first = JSON.stringify(app.pattern.grids);
     expect(app.pattern.seedText).toBe('velvet-orbit');
     app.generatePattern();
-    expect(JSON.stringify(app.pattern.gen)).toBe(first);
+    expect(JSON.stringify(app.pattern.grids)).toBe(first);
     app.clearSeed('pattern');
     expect(app.seedSlot('pattern')).toEqual({ value: null, fixed: false });
     app.generatePattern();
@@ -312,7 +312,7 @@ describe('in the app', () => {
     app.generatePattern();
     expect(app.pattern.seed).toBe(12345);
     expect(app.pattern.seedText).toBeUndefined();
-    expect(app.pattern.gen).toEqual(generate(app.project.tracks, app.project.gen, 12345, { steps: app.pattern.steps, res: app.pattern.res }));
+    expect(app.pattern.grids).toEqual(generate(app.project.tracks, app.project.gen, 12345, { steps: app.pattern.steps, res: app.pattern.res }));
     app.rollSeed('pattern');
     expect(app.seedSlot('pattern').fixed).toBe(true);
     expect(app.seedSlot('pattern').value?.text).toMatch(/^[a-z]+-[a-z]+$/);

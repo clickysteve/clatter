@@ -31,13 +31,11 @@ Read from `src/ui/grid.ts` (before this change):
 
 | Mark | Meaning in the code |
 | --- | --- |
-| Solid block, height = velocity | The *written* hit (baseline plus hand edits), whether or not it played this cycle. |
+| Solid block, height = velocity | The *written* hit, whether or not it played this cycle. |
 | Hatched (diagonal lines) block | The written hit has a chance below 100 %. |
 | Paper-coloured dither over a block | The track is muted, or silenced by another track's solo. |
 | 2 × 2 square at a block's top-left | The hit has a flam. |
 | Vertical paper lines inside a block | The hit has a ratchet (one line per repeat). |
-| A 4 px notch at a cell's top-left corner | The hit is a hand edit (`origin === 'edit'`). |
-| **Four dots forming an X in the middle of an empty cell** | A generated hit you deleted by hand (`origin === 'deleted'`). |
 | **Dotted top and bottom edges of a cell** | `CELL_SUPPRESSED`: the written hit did not play this cycle (probability or density). |
 | **A 3 × 3 dot in the middle of an empty cell** | `CELL_ADDED`: something that is not written plays here (a fill, a roll stroke, a slice CHOP moved in). |
 | A line of dots along the top of a cell | `CELL_DESTROYED`: DESTROY changed the hit. |
@@ -74,14 +72,12 @@ beat is `res` steps and a bar `4 × res`): a hairline at every step, a 2 px line
 a 4 px line at every bar, every other beat dotted, bar chips (`BAR 2`) and beat numbers in the
 header.
 
-Provenance (generated, hand-edited, added by ROLLS, moved by CHOP, changed by DESTROY or
-EVOLVE) is not drawn in the grid. It is in:
+What a transformation did (added by ROLLS, moved by CHOP, changed by DESTROY or
+EVOLVE) is not drawn in the grid. A written note carries no provenance. It is in:
 
 * the **hover tooltip** and the **footer line** under the grid (track, step, bar and beat,
-  sounds or silent and why, velocity, chance, source, transformation);
-* the **step editor** under the grid;
-* **SHOW ORIGINAL** (off by default): a corner flag marks hand-edited hits, a crossed-out
-  outline marks generated hits you deleted.
+  sounds or silent and why, velocity, chance, transformation);
+* the **step editor** under the grid.
 
 Playhead: a tinted column (it never covers a block), the step lit in the header with its
 number, a heavy edge on each side. Cursor (the step being edited): a solid ring. Pointer: a
@@ -169,8 +165,8 @@ Changing the scale applies at once (no reload); the grid redraws.
   scroll as a page: the tab panes scroll inside themselves. Tab switching only shows and hides
   panes, so editor state is kept, and the open tab is remembered (`soundTab`). It fits 1920 × 1080,
   1440 × 900 and 1366 × 768 at the default 90 % (and 100 % and 125 %), as the browser tests check.
-* The PATTERN workspace has a fifth tab, STEP SOUND, and the grid can show a SOUND LANE under the
-  tracks (off by default). Step sounds are marked on the cells themselves: a plate with the
+* The PATTERN workspace has a fifth tab, STEP SOUND (the Sound Lane under the grid was removed: the
+  grid selects the step, the tab shows it). Step sounds are marked on the cells themselves: a plate with the
   variation letter, `?` for a condition, `>` for a voice switch and a corner triangle for locks or
   rules (see ? KEY).
 * The PERFORM view's pads re-flow with the window (it still scrolls as a page).

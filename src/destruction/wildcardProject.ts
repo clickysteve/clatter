@@ -34,7 +34,7 @@ import { clamp, type Grid, type Project, type StepSound, type Track, type TrigCo
 import { PAR } from '../sound/lxrParamIds';
 import { generate } from '../rhythm/generate';
 import { mutate, summariseOps } from '../rhythm/mutate';
-import { setHit, setSounds, setStepTrig, shiftTrack, sourceGrid } from '../rhythm/pattern';
+import { setHit, setSounds, setStepTrig, shiftTrack, trackGrid } from '../rhythm/pattern';
 import { hash32, Rng, SALT, strCode } from '../rhythm/rng';
 import { checkedSeedText } from '../rhythm/seed';
 import { styleById } from '../rhythm/styles';
@@ -184,7 +184,7 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
       const r = pr(1);
       const parts: string[] = [];
       const ids = unlocked.map((t) => t.id);
-      // generator controls, transformations and (sometimes) a new baseline: the classic WILDCARD, gated by intensity
+      // generator controls, transformations and (sometimes) a new pattern: the classic WILDCARD, gated by intensity
       if (s.scope === 'project' || s.scope === 'pattern') {
         if (r.chance(0.2 + 0.7 * k)) {
           const w = classicWildcard(p.gen, p.destruction, p.swing, hash32(s.seed, SALT.wild, strCode(pat.id), 91));
@@ -194,9 +194,8 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
             pat.settings = { ...w.gen };
             pat.seed = hash32(s.seed, SALT.wild, strCode(pat.id), 92);
             delete pat.seedText; // a derived number has no phrase
-            const keep = Object.fromEntries(p.tracks.filter((t) => t.lock || !ids.includes(t.id)).map((t) => [t.id, sourceGrid(pat, t.id)]));
-            pat.gen = generate(p.tracks, pat.settings, pat.seed, { steps: pat.steps, res: pat.res }, { ...pat.gen, ...keep });
-            for (const id of ids) delete pat.edits[id];
+            const keep = Object.fromEntries(p.tracks.filter((t) => t.lock || !ids.includes(t.id)).map((t) => [t.id, trackGrid(pat, t.id)]));
+            pat.grids = generate(p.tracks, pat.settings, pat.seed, { steps: pat.steps, res: pat.res }, { ...pat.grids, ...keep });
             pat.generation++;
             parts.push('REGENERATED');
           }
@@ -206,11 +205,10 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
       // hits added, removed, moved, swapped, rotated, reversed
       if (r.chance(0.35 + 0.65 * k)) {
         const lengths = Object.fromEntries(p.tracks.filter((t) => t.play.length > 0).map((t) => [t.id, t.play.length]));
-        const src = Object.fromEntries(p.tracks.map((t) => [t.id, sourceGrid(pat, t.id)] as [string, Grid]));
+        const src = Object.fromEntries(p.tracks.map((t) => [t.id, trackGrid(pat, t.id)] as [string, Grid]));
         const m = mutate(src, ids, pat.res, new Rng(hash32(s.seed, SALT.wild, strCode(pat.id), 93)), 0.1 + 0.75 * k, lengths);
         for (const id of ids) {
-          pat.gen[id] = m.grids[id]!;
-          delete pat.edits[id];
+          pat.grids[id] = m.grids[id]!;
         }
         pat.generation++;
         if (m.ops.length) parts.push(summariseOps(m.ops));
@@ -235,7 +233,7 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
       let probs = 0;
       let conds = 0;
       for (const t of unlocked) {
-        const g = sourceGrid(pat, t.id);
+        const g = trackGrid(pat, t.id);
         const steps = g.map((h, i) => (h ? i : -1)).filter((i) => i >= 0);
         if (!steps.length) continue;
         // hits that hold the groove stay certain: the first hit of a kick or snare, and the downbeat
@@ -281,7 +279,7 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
         if (!r.chance(0.3 + 0.7 * k)) continue;
         const seed = hash32(s.seed, SALT.wild, strCode(pat.id), strCode(t.id), 94);
         const opts = { seed, take: 1, amount: clamp(0.25 + 0.75 * k, 0, 1), locks: p.soundLocks, ...geo, pitch: pitchPlanOf(p, t) };
-        const next = pat.sounds?.[t.id] && r.chance(0.5) ? mutateSounds(t.sound, t.role, sourceGrid(pat, t.id), pat.sounds[t.id], p.kit.synth.params, { ...opts, amount: 0.3 + 0.6 * k }) : distributeSounds(t.sound, t.role, sourceGrid(pat, t.id), pat.sounds?.[t.id], p.kit.synth.params, opts);
+        const next = pat.sounds?.[t.id] && r.chance(0.5) ? mutateSounds(t.sound, t.role, trackGrid(pat, t.id), pat.sounds[t.id], p.kit.synth.params, { ...opts, amount: 0.3 + 0.6 * k }) : distributeSounds(t.sound, t.role, trackGrid(pat, t.id), pat.sounds?.[t.id], p.kit.synth.params, opts);
         setSounds(pat, t.id, clean(next));
         n += Object.keys(next).length;
       }

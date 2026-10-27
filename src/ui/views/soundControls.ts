@@ -35,7 +35,7 @@ export function editingText(app: App): string {
   if (app.ui.slot === null) return `EDITING THE BASE SOUND OF ${t.name}: THE KIT. VARIATIONS FOLLOW IT WHERE THEY DO NOT OVERRIDE.`;
   const v = t.sound.variations?.[app.ui.slot];
   const n = v ? Object.keys(v.params).length + Object.keys(v.sample ?? {}).length : 0;
-  const tag = v ? `${v.gen ? ' · GENERATED' : v.name ? '' : ' · BY HAND'}${v.lock ? ' · LOCKED' : ''}` : ' · EMPTY: IT PLAYS THE BASE SOUND UNTIL YOU CHANGE SOMETHING';
+  const tag = v ? `${v.lock ? ' · LOCKED' : ''}` : ' · EMPTY: IT PLAYS THE BASE SOUND UNTIL YOU CHANGE SOMETHING';
   return `EDITING VARIATION ${SLOT_NAMES[app.ui.slot]}${v?.name ? ' · ' + v.name : ''} OF ${t.name}${tag}${v ? ` · ${n} OVERRIDE${n === 1 ? '' : 'S'}` : ''}`;
 }
 
@@ -231,7 +231,7 @@ export function generativeCard(app: App, parent: HTMLElement, panel: Panel): HTM
   const scope = h('div', 'hint', box);
   panel.add(() => {
     const s = app.ui.sel;
-    scope.textContent = s ? `ACTS ON THE SELECTION: ${Math.abs(s.t1 - s.t0) + 1} TRACKS × ${Math.abs(s.s1 - s.s0) + 1} STEPS` : 'ACTS ON EVERY TRACK (SHIFT-DRAG IN THE GRID TO SELECT A REGION)';
+    scope.textContent = s ? `ACTS ON THE SELECTION: ${Math.abs(s.t1 - s.t0) + 1} TRACKS × ${Math.abs(s.s1 - s.s0) + 1} STEPS` : 'ACTS ON EVERY TRACK (ALT-DRAG IN THE GRID TO SELECT A REGION)';
   });
   pctRange(panel, box, app, 'TIMBRE', () => app.project.timbre.amount, (v) => app.setTimbre(v), 'How far the generated sounds stray from the base sound: 0 is a whisper, 100 is a different instrument of the same family', 0.35);
   const sdr = h('div', 'row', box);
@@ -239,19 +239,18 @@ export function generativeCard(app: App, parent: HTMLElement, panel: Panel): HTM
   const sdh = h('div', 'grow', sdr);
   seedField(panel, sdh, { get: () => app.seedSlot('sound').value, fixed: () => app.seedSlot('sound').fixed, onFixed: (on) => app.setSeedFixed('sound', on), onInput: (t) => void app.setSeedInput('sound', t), onRoll: () => app.rollSeed('sound'), onClear: () => app.clearSeed('sound'), test: 'sound-seed' });
   const r1 = h('div', 'row wrap', box);
-  button(panel, r1, 'GENERATE VARIATIONS', () => app.generateVariationsFor(), { cls: 'grow', title: 'Fill the free slots A-D with related timbres designed for each track’s role. Hand-made and locked variations stay.' }).dataset.test = 'gen-variations';
-  button(panel, r1, 'DISTRIBUTE', () => app.distributeVariations(), { cls: 'grow', title: 'Assign the variations to steps by role (accents, ghosts, off-beats, fills). Hand-made step sounds stay.' }).dataset.test = 'distribute';
+  button(panel, r1, 'GENERATE VARIATIONS', () => app.generateVariationsFor(), { cls: 'grow', title: 'Fill the slots A-D with related timbres designed for each track’s role. Locked variations stay.' }).dataset.test = 'gen-variations';
+  button(panel, r1, 'DISTRIBUTE', () => app.distributeVariations(), { cls: 'grow', title: 'Assign the variations to steps by role (accents, ghosts, off-beats, fills).' }).dataset.test = 'distribute';
   const r2 = h('div', 'row wrap', box);
   button(panel, r2, 'GENERATE SOUND', () => app.generateSound(), { cls: 'grow', title: 'Variations and their distribution in one undo step' }).dataset.test = 'gen-sound';
-  button(panel, r2, 'MUTATE SOUND', () => app.mutateSound(0.3), { cls: 'grow', title: 'Redraw a share of the generated step sounds. The rhythm and hand-made sounds stay.' }).dataset.test = 'mutate-sound';
+  button(panel, r2, 'MUTATE SOUND', () => app.mutateSound(0.3), { cls: 'grow', title: 'Redraw a share of the step sounds. The rhythm stays.' }).dataset.test = 'mutate-sound';
   button(panel, r2, 'MUTATE BOTH', () => app.mutateBoth(), { cls: 'grow', title: 'Mutate the rhythm and the sound together (one undo step)' });
   const r3 = h('div', 'row wrap', box);
   button(panel, r3, 'EVOLVE SOUND', () => app.addSoundEvolution(), { cls: 'grow', title: 'Bounded glides on a few parameters over 8 passes, then back to the base sound' }).dataset.test = 'evolve-sound';
   button(panel, r3, 'END EVOLUTION', () => app.clearSoundEvolution(), { cls: 'grow', title: 'Remove the glides' });
   const r4 = h('div', 'row wrap', box);
-  button(panel, r4, 'RESET GENERATED', () => app.clearSoundsInScope(false), { cls: 'grow', title: 'Remove the generated step sounds (hand-made ones stay)' });
-  button(panel, r4, 'RESET VARIATIONS', () => app.resetGeneratedVariations(), { cls: 'grow', title: 'Empty the generated variation slots (hand-made and locked ones stay)' });
-  button(panel, r4, 'CLEAR ALL STEP SOUNDS', () => app.clearSoundsInScope(true), { cls: 'grow', title: 'Remove every step sound in scope, hand-made ones too (undo brings them back)' });
+  button(panel, r4, 'CLEAR VARIATIONS', () => app.clearVariations(), { cls: 'grow', title: 'Empty the variation slots A-D (locked ones stay; undo brings them back)' });
+  button(panel, r4, 'CLEAR STEP SOUNDS', () => app.clearSoundsInScope(), { cls: 'grow', title: 'Remove every step sound in scope (undo brings them back)' });
   return box;
 }
 

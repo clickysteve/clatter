@@ -7,7 +7,7 @@ import { kitOf, readKitFile, writeKitFile } from '../src/model/kitFile';
 import { readKit } from '../src/sound/kitcheck';
 import { History } from '../src/app/history';
 import { defaultProject } from '../src/model/defaults';
-import { setHit, sourceGrid } from '../src/rhythm/pattern';
+import { setHit, trackGrid } from '../src/rhythm/pattern';
 
 const init = readKit(newLxr(1));
 
@@ -21,7 +21,7 @@ describe('project files', () => {
     const text = serialize(p);
     const q = parseProject(text, init);
     expect(JSON.parse(serialize(q))).toEqual(JSON.parse(text));
-    expect(sourceGrid(q.patterns[0]!, t)[3]).toEqual({ vel: 77, prob: 40, ratchet: 3 });
+    expect(trackGrid(q.patterns[0]!, t)[3]).toEqual({ vel: 77, prob: 40, ratchet: 3 });
   });
 
   it('repairs damaged or hostile data instead of failing', () => {
@@ -31,7 +31,7 @@ describe('project files', () => {
     p.tracks[0].sound.trigger = 99;
     p.tracks[1].mix.volume = -3;
     p.patterns[0].steps = 10000;
-    p.patterns[0].gen.t1 = 'nonsense';
+    p.patterns[0].grids.t1 = 'nonsense';
     p.kit.synth.params = [1, 2, 3];
     p.current = 'missing';
     const r = repairProject(p, init);
@@ -56,7 +56,7 @@ describe('presets', () => {
     expect(PRESETS.length).toBe(8);
     const built = await Promise.all(PRESETS.map((s) => presetProject(s.id, lib)));
     const kits = new Set(built.map((p) => p.kit.synth.params.join(',')));
-    const pats = new Set(built.map((p) => JSON.stringify(p.patterns[0]!.gen)));
+    const pats = new Set(built.map((p) => JSON.stringify(p.patterns[0]!.grids)));
     expect(kits.size).toBe(8);
     expect(pats.size).toBe(8);
     for (const p of built) for (const t of p.tracks) for (const id of t.sound.samples) expect(lib.get(id), `${p.name} ${t.name}`).toBeDefined();

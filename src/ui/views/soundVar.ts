@@ -90,7 +90,7 @@ export function variationsPane(app: App, pane: HTMLElement): PaneParts {
       tr.classList.toggle('on', app.ui.slot === (slot < 0 ? null : slot));
       tr.classList.toggle('empty', slot >= 0 && !v);
       const c = overrideCounts(v);
-      cells[0]!.textContent = slot < 0 ? 'BASE · THE KIT' : `${SLOT_NAMES[slot]} · ${v ? (v.name || (v.gen ? 'GENERATED' : 'BY HAND')) + (v.lock ? ' ◆' : '') : 'EMPTY'}`;
+      cells[0]!.textContent = slot < 0 ? 'BASE · THE KIT' : `${SLOT_NAMES[slot]} · ${v ? (v.name || 'UNNAMED') + (v.lock ? ' ◆' : '') : 'EMPTY'}`;
       cells[1]!.textContent = slot < 0 ? '—' : v ? String(c.params) : '·';
       cells[2]!.textContent = slot < 0 ? '—' : v ? String(c.sample) : '·';
       cells[3]!.textContent = slot < 0 ? String(base) + ' SRC+RTE' : v ? String(c.mod) : '·';

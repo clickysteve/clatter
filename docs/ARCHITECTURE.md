@@ -8,8 +8,8 @@ CLATTER is three systems that stay independent and meet only through small, expl
   ----------------------         ------------------------           --------------------------
   styles, generate,              CHOP, ROLLS, DESTROY,              LXR kit (247 firmware
   mutate, variation,             WILDCARD: seeded layers            parameters + mod targets),
-  pattern = baseline             over the realised events           track sources (SYNTH,
-  + hand edits, per-track        (never over the written            SAMPLE, HYBRID), samples,
+  pattern = one grid per         over the realised events           track sources (SYNTH,
+  track, per-track               (never over the written            SAMPLE, HYBRID), samples,
   density/fill/chance/length     pattern)                           mixer, FX bus, master
             \                          |                                 /
              \______ Sequence (realise a cycle → PerfEvents) ___________/
@@ -48,10 +48,9 @@ pattern can play any kit.
 - **Determinism.** Every random choice is a keyed hash (`src/rhythm/rng.ts`, after DOWNBEAT):
   `rand(seed, salt, ...keys)`. The same seed and settings always give the same pattern; a
   change to one setting changes only what depends on it.
-- **Patterns** are a generated **baseline** per track plus **hand edits** (step → hit, or a
-  deletion). GENERATE, VARIATION, MUTATE and REGENERATE replace the baseline; hand edits stay
-  anchored to their steps and win. KEEP bakes edits into the baseline; RESET drops them.
-  Locked tracks are left alone by generation and mutation.
+- **Patterns** are one **grid** per track (`Pattern.grids`). GENERATE, VARIATION, MUTATE, REGENERATE,
+  WILDCARD and hand edits all write it directly, so a note's origin is irrelevant; one UNDO restores the
+  previous pattern. Locked tracks are left alone by generation and mutation. CLEAR PATTERN empties it.
 - **Realisation** (`realize.ts`): each cycle of a pattern turns into concrete `PerfEvent`s:
   probability, per-track density (weak metric positions drop first), fills into gaps, chance,
   humanise, ratchets and flams, swing, polymetric track lengths, and rhythm evolution. Each cycle
@@ -161,6 +160,6 @@ interfaces. Nothing from the LXR firmware is in Core, and CLATTER does not chang
 - `e2e/sound.spec.ts`: the eight SOUND tabs (modulation editing, variations table, ten mixer
   channels, FX, TUNER, KITS).
 - `e2e/app.spec.ts` (Playwright, Chromium): start-up and audio, grid hit-testing, editing by
-  click, drag and right-click, cell boundaries and the SHOW ORIGINAL overlay, sideways scrolling,
+  click, drag and right-click, cell boundaries, the one-line status bar and the step gestures, sideways scrolling,
   type sizes and overflow at 1920 × 1080, 1440 × 900 and 1366 × 768, palette legibility,
   generation, kits, HYBRID with a sample, project save and open, WAV and MIDI export.

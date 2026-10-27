@@ -5,7 +5,7 @@ import { defaultProject } from '../src/model/defaults';
 import { clone, type Grid, type Project, type SoundCond, type StepSound, type TrackSound } from '../src/model/types';
 import { PAR } from '../src/sound/lxrParamIds';
 import { condHolds, repairStepSound, resolveStepSound, triangle, type SoundContext } from '../src/sound/stepSound';
-import { addEvolution, clearEvolution, distributeSounds, generateVariations, handMade, mutateSounds, roleClass } from '../src/sound/soundgen';
+import { addEvolution, clearEvolution, distributeSounds, generateVariations, mutateSounds, roleClass } from '../src/sound/soundgen';
 import { readKit } from '../src/sound/kitcheck';
 import { parseProject, repairProject, serialize } from '../src/model/project';
 import { copyRegion, pasteRegion, setLength, setStepSound, shiftTrack, soundCount, stepSoundAt } from '../src/rhythm/pattern';
@@ -165,7 +165,6 @@ describe('generated variations (checked in the real engine)', () => {
       expect(names.size).toBeGreaterThanOrEqual(3);
       for (const v of vs) {
         expect(Object.keys(v!.params).length).toBeGreaterThan(0);
-        expect(v!.gen).toBe(true);
         for (const [k, val] of Object.entries(v!.params)) {
           expect(val).toBeGreaterThanOrEqual(0);
           expect(val).toBeLessThanOrEqual(127);
@@ -197,7 +196,7 @@ describe('generated variations (checked in the real engine)', () => {
     expect(dist(0.2)).toBeLessThan(dist(0.6));
     expect(dist(0.6)).toBeLessThan(dist(1));
   });
-  it('respects locked parameters, locked voices, locked tracks, locked and hand-made slots', () => {
+  it('respects locked parameters, locked voices, locked tracks and locked slots', () => {
     const base = generateVariations(sound(), 'kick', kitParams, { seed: 1, amount: 0.8, locks: NO_LOCKS });
     const lockedParam = Number(Object.keys(base[0]!.params)[0]);
     const withLock = generateVariations(sound(), 'kick', kitParams, { seed: 1, amount: 0.8, locks: { ...NO_LOCKS, params: [lockedParam] } });
@@ -206,13 +205,10 @@ describe('generated variations (checked in the real engine)', () => {
     expect(generateVariations(sound({ soundLock: true }), 'kick', kitParams, { seed: 1, amount: 0.8, locks: NO_LOCKS }).every((v) => v === null)).toBe(true);
     const mine = { name: 'MINE', params: { [PAR.VELOD1]: 99 } };
     const mixed = generateVariations(sound({ variations: [mine, { ...base[1]!, lock: true }, null, null] }), 'kick', kitParams, { seed: 9, amount: 0.8, locks: NO_LOCKS });
-    expect(mixed[0]).toEqual(mine);
+    // a variation is just a variation, whoever made it: only a lock protects a slot
+    expect(mixed[0]).not.toEqual(mine);
     expect(mixed[1]!.params).toEqual(base[1]!.params);
     expect(mixed[2]).not.toBeNull();
-    // force replaces hand-made slots but never locked ones
-    const forced = generateVariations(sound({ variations: [mine, { ...base[1]!, lock: true }, null, null] }), 'kick', kitParams, { seed: 9, amount: 0.8, locks: NO_LOCKS, force: true });
-    expect(forced[0]).not.toEqual(mine);
-    expect(forced[1]!.params).toEqual(base[1]!.params);
   });
   it('a SAMPLE track gets sample-layer variations, not LXR parameters', () => {
     const s = sound({ mode: 'sample', samples: ['a', 'b'] });
@@ -245,7 +241,6 @@ describe('distributing sounds over a pattern', () => {
     const out = distributeSounds(s, 'perc', g, undefined, kitParams, { ...dist, amount: 0.8 });
     for (const [k, ss] of Object.entries(out)) {
       expect(g[Number(k)]).not.toBeNull();
-      expect(ss.gen).toBe(true);
       if (ss.v !== undefined) expect(s.variations![ss.v]).not.toBeNull();
     }
   });
@@ -275,17 +270,17 @@ describe('distributing sounds over a pattern', () => {
     expect(distributeSounds(s, 'perc', grid(2), undefined, kitParams, { ...dist, amount: 0.8 })).toEqual(a);
     expect(distributeSounds(s, 'perc', grid(2), undefined, kitParams, { ...dist, amount: 0.8, take: 1 })).not.toEqual(a);
   });
-  it('keeps hand-made step sounds, and replaces generated ones', () => {
+  it('redraws the step sounds of the hits, whoever made them', () => {
     const s = withVars('perc', 2);
     const mine: StepSound = { locks: { [PAR.VELOD3]: 33 } };
-    const old: StepSound = { v: 0, gen: true };
+    const old: StepSound = { v: 0 };
     const out = distributeSounds(s, 'perc', grid(2), { 4: mine, 6: old }, kitParams, { ...dist, amount: 0.8 });
-    expect(out[4]).toEqual(mine);
-    expect(handMade(out[6])).toBe(false);
+    expect(out[4]).not.toEqual(mine);
+    expect(out[6]).not.toEqual(old);
   });
   it('a region leaves everything outside it as it was', () => {
     const s = withVars('perc', 2);
-    const before: Record<number, StepSound> = { 2: { v: 1, gen: true }, 20: { v: 2, gen: true } };
+    const before: Record<number, StepSound> = { 2: { v: 1 }, 20: { v: 2 } };
     const out = distributeSounds(s, 'perc', grid(2), before, kitParams, { ...dist, amount: 1, region: [8, 15] });
     expect(out[2]).toEqual(before[2]);
     expect(out[20]).toEqual(before[20]);
@@ -375,7 +370,7 @@ describe('step sounds in the pattern', () => {
 describe('persistence', () => {
   it('step sounds, variations, conditions, rules and timbre survive a save and reload', () => {
     const p = defaultProject();
-    p.tracks[0]!.sound.variations = [{ name: 'PUNCH', params: { [PAR.VELOD1]: 30 }, gen: true }, null, { name: 'X', params: {}, sample: { tune: 5, samples: ['a'] }, lock: true }, null];
+    p.tracks[0]!.sound.variations = [{ name: 'PUNCH', params: { [PAR.VELOD1]: 30 } }, null, { name: 'X', params: {}, sample: { tune: 5, samples: ['a'] }, lock: true }, null];
     p.tracks[0]!.sound.soundLock = true;
     const ss: StepSound = {
       v: 0,
@@ -383,7 +378,6 @@ describe('persistence', () => {
       voice: 1,
       locks: { [PAR.VELOD2]: 40 },
       rules: [{ p: PAR.FMAMNT2, op: 'evolve', a: 0, b: 30, n: 8, cond: { k: 'prob', p: 40 } }, { p: PAR.COARSE2, op: 'range', a: 50, b: 70, cond: { k: 'fill' } }],
-      gen: true,
     };
     setStepSound(p.patterns[0]!, 't1', 3, ss);
     p.timbre = { amount: 0.8, seed: 77 };
@@ -392,7 +386,7 @@ describe('persistence', () => {
     expect(back.tracks[0]!.sound.variations).toEqual(p.tracks[0]!.sound.variations);
     expect(back.tracks[0]!.sound.soundLock).toBe(true);
     expect(back.timbre).toEqual({ amount: 0.8, seed: 77 });
-    expect(back.version).toBe(7);
+    expect(back.version).toBe(8);
   });
   it('a project from before step sounds loads with sensible defaults', () => {
     const old = JSON.parse(serialize(defaultProject())) as Record<string, unknown>;
@@ -407,7 +401,7 @@ describe('persistence', () => {
     expect(p.timbre.amount).toBe(0.5);
     expect(p.patterns[0]!.sounds).toBeUndefined();
     expect(p.tracks[0]!.sound.variations).toBeUndefined();
-    expect(p.version).toBe(7);
+    expect(p.version).toBe(8);
   });
   it('damaged sound data is repaired, never trusted', () => {
     const r = repairStepSound({ v: 9, voice: 12, alt: { cond: { k: 'nonsense' }, v: 7 }, locks: { [PAR.VELOD1]: 999, 99999: 3, x: 1 }, rules: [{ p: PAR.VELOD1, op: 'fly', a: 1, b: 2 }, { p: PAR.VELOD1, op: 'range', a: -50, b: 900, cond: { k: 'prob', p: 500 } }] });
@@ -440,7 +434,7 @@ describe('from the pattern to the engine, on the musical clock', () => {
     p.kit.synth.params = kitParams.slice();
     const pat = p.patterns[0]!;
     pat.steps = 16;
-    pat.gen = { t1: Array.from({ length: 16 }, (_, i) => (i % 4 === 0 ? { vel: 110 } : null)) };
+    pat.grids = { t1: Array.from({ length: 16 }, (_, i) => (i % 4 === 0 ? { vel: 110 } : null)) };
     p.tracks[0]!.sound.variations = [{ name: 'SHORT', params: { [PAR.VELOD1]: 12 } }, { name: 'LONG', params: { [PAR.VELOD1]: 120 } }, null, null];
     setStepSound(pat, 't1', 8, { v: 0, alt: { cond: { k: 'every', n: 4 }, v: 1 } });
     return p;
@@ -510,10 +504,10 @@ describe('export renders the step sounds', () => {
     const kick = p.tracks.find((t) => t.role === 'kick')!;
     const pat = p.patterns[0]!;
     const steps = pat.steps;
-    pat.gen[kick.id] = Array.from({ length: steps }, (_, i) => (i % 4 === 0 ? { vel: 120 } : null));
+    pat.grids[kick.id] = Array.from({ length: steps }, (_, i) => (i % 4 === 0 ? { vel: 120 } : null));
     const plain = await renderProject(lxrModule(), p, lib, { bars: 8, tail: 0.5 });
     const q = clone(p);
-    q.tracks.find((t) => t.role === 'kick')!.sound.variations = [{ name: 'DIRTY', params: { [PAR.VELOD1 + 2 * kick.sound.trigger]: 10, [PAR.DRIVE1 + kick.sound.trigger]: 120 }, gen: true }, null, null, null];
+    q.tracks.find((t) => t.role === 'kick')!.sound.variations = [{ name: 'DIRTY', params: { [PAR.VELOD1 + 2 * kick.sound.trigger]: 10, [PAR.DRIVE1 + kick.sound.trigger]: 120 } }, null, null, null];
     for (let i = 0; i < steps; i += 4) setStepSound(q.patterns[0]!, kick.id, i, { v: 0, alt: { cond: { k: 'every', n: 2 }, v: null } });
     const a = await renderProject(lxrModule(), q, lib, { bars: 8, tail: 0.5 });
     const b = await renderProject(lxrModule(), q, lib, { bars: 8, tail: 0.5 });

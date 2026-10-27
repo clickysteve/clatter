@@ -123,7 +123,7 @@ export function describeStepSound(sound: TrackSound, ss: StepSound): string {
   if (nl) parts.push(`${nl} LOCK${nl > 1 ? 'S' : ''}`);
   const nr = ss.rules?.length ?? 0;
   if (nr) parts.push(`${nr} RULE${nr > 1 ? 'S' : ''}`);
-  return parts.join(' · ') + (ss.gen ? ' (GENERATED)' : '');
+  return parts.join(' · ');
 }
 
 // ---------------------------------------------------------------------------- resolution
@@ -277,7 +277,6 @@ export function repairStepSound(v: unknown): StepSound | undefined {
     }
     if (rules.length) s.rules = rules;
   }
-  if (o.gen === true) s.gen = true;
   return isEmptyStepSound(s) ? undefined : s;
 }
 
@@ -306,7 +305,6 @@ export function repairVariation(v: unknown): Variation | null {
   }
   const mod = repairPatch(o.mod);
   if (mod) out.mod = mod;
-  if (o.gen === true) out.gen = true;
   if (o.lock === true) out.lock = true;
   return out;
 }

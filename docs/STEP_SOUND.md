@@ -75,27 +75,28 @@ triggering track's mixer strip. Limits, stated plainly:
 All generators work on the tracks and steps in scope (the grid selection, else every track), are
 seeded (same seed, same result), and are one undo step each.
 
-* **GENERATE VARIATIONS** fills free slots A-D with timbres designed for each track's role
+* **GENERATE VARIATIONS** fills the slots A-D that are not locked with timbres designed for each track's role
   (a kick: PUNCH, DEEP, FM, DIRTY; a hat: TIGHT, BRIGHT, METAL, GRIT; and so on). Moves are expressed
   in the firmware's own parameters and kept inside audible ranges.
 * **DISTRIBUTE** assigns variations to steps by role: a kick keeps its main sound on the beat, a
   hi-hat varies often and subtly, percussion roams. Higher TIMBRE adds small locks, conditional
   alternatives and random ranges.
-* **MUTATE SOUND** redraws a share of the *generated* step sounds. The rhythm never moves and EVOLVE
+* **MUTATE SOUND** redraws a share of the step sounds of the hits. The rhythm never moves and EVOLVE
   glides on the redrawn steps are kept.
 * **EVOLVE SOUND** adds bounded glides over 8 passes. END EVOLUTION removes only them.
 * **GENERATE SOUND** is GENERATE VARIATIONS then DISTRIBUTE. **MUTATE BOTH** mutates the rhythm and the sound.
 * **TIMBRE** (0-100%) is a designed curve: 0 nothing; 25 subtle (a few weak hits get tiny decay and
   pitch shifts); 50 noticeable; 75 strong; 100 experimental, still inside DSP limits.
 
-What the generators never touch: hand-made step sounds and variations (editing by hand clears the
-`gen` mark), locked tracks, locked variations, locked voices and locked parameters, and the rhythm.
+A step sound or variation is just a sound, whoever made it, and the generators write over it (one
+undo restores the previous ones). What they never touch: locked tracks, locked variations, locked
+voices and locked parameters, and the rhythm. CLEAR VARIATIONS and CLEAR STEP SOUNDS empty them.
 
 ## Where things live
 
 * SOUND view: a persistent track sidebar plus SYNTH, SAMPLE, MODULATION, VARIATIONS, MIXER, FX and KITS tabs (see MODULATION.md).
   Each tab scrolls inside its pane; the page does not. The open tab is remembered.
-* PATTERN view: the STEP SOUND tab under the grid, grid markers, and the optional SOUND LANE.
+* PATTERN view: the STEP SOUND tab under the grid and the grid markers. Select a step in the grid (a note or an empty step) and the tab shows it.
 * PERFORM view: NEW SOUNDS and MUTATE SOUND pads (quantised) and a TIMBRE macro.
 * Grid markers: a plate at the top right names the variation (A-D), `?` means a condition decides,
   `>` means another voice is triggered; a corner triangle means locks or rules. Hover for the words.
@@ -129,7 +130,7 @@ product. See `docs/LXR_PORT.md`, `NOTICE.md` and `THIRD_PARTY_NOTICES.md`.
 ## Screenshots (90 % interface scale)
 
 * `docs/img/sound-synth-1440x900.png`: SOUND, SYNTH tab with variation A open, at 1440 × 900.
-* `docs/img/pattern-step-sound-1440x900.png`: PATTERN with the STEP SOUND tab, step markers and the sound lane.
+* `docs/img/pattern-step-sound-1440x900.png`: PATTERN with the STEP SOUND tab and step markers.
 * `docs/img/sound-modulation-1366x768.png`: SOUND, MODULATION tab at 1366 × 768.
 
 ## Modulation in variations and step sounds

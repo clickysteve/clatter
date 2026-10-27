@@ -89,9 +89,8 @@ export function performView(app: App, screen: HTMLElement): View {
   pad(ap, ag, 'MUTATE', () => app.mutate(true), { sub: () => 'SMALL CHANGES', title: 'Small controlled changes (M)' });
   pad(ap, ag, 'REGEN', () => app.regenerate(true), { sub: () => 'AFTER BAR 1', title: 'New material after the first bar (R)' });
   pad(ap, ag, 'FILL', null, { hold: (d) => app.fill(d), sub: () => 'HOLD', title: 'Hold for a fill (F)' }).dataset.test = 'p-fill';
-  pad(ap, ag, 'SOURCE', null, { hold: (d) => app.setSourceOnly(d), sub: () => 'HOLD: WRITTEN ONLY', title: 'Hold: only the written pattern, no transformations' });
   pad(ap, ag, 'WILDCARD', () => app.wildcard(true), { sub: () => `${app.prefs.wildcard.intensity}% ${app.prefs.wildcard.scope.toUpperCase()}`, title: 'Re-imagine the instrument on the next quantise boundary, with the settings of the WILDCARD tab (W)' });
-  pad(ap, ag, 'RESET', () => app.reset(), { sub: () => 'TO THE PATTERN', title: 'Hand edits cleared and transformations off' });
+  pad(ap, ag, 'CLEAR', () => app.clearPattern(), { sub: () => 'PATTERN', title: 'Clear the pattern (UNDO brings it back)' });
   const d = () => app.project.destruction;
   pad(ap, ag, 'CHOP', () => app.toggleChop(true), { on: () => d().chop.on, sub: () => (d().chop.on ? 'ON' : 'OFF'), title: 'CHOP on/off (C)' });
   pad(ap, ag, 'ROLLS', () => app.toggleRolls(true), { on: () => d().rolls.on, sub: () => (d().rolls.on ? 'ON' : 'OFF'), title: 'ROLLS on/off (L)' });
@@ -103,8 +102,8 @@ export function performView(app: App, screen: HTMLElement): View {
   }, { sub: () => 'RE-DRAW WHAT IS ON', title: 'A new take of every transformation that is on' });
   pad(ap, ag, 'NEW KIT', () => void app.generateKit(true), { sub: () => (app.ui.busy ? 'CHECKING…' : 'GENERATE'), title: 'Generate a kit (K)' });
   pad(ap, ag, 'MUTATE KIT', () => void app.mutateKit(0.25, undefined, true), { sub: () => '25%', title: 'Mutate the kit' });
-  pad(ap, ag, 'NEW SOUNDS', () => app.generateSound(true), { sub: () => 'VARIATIONS + STEPS', title: 'Generate variations A-D and distribute them over the steps. Hand-made sounds and the rhythm stay.' }).dataset.test = 'p-new-sounds';
-  pad(ap, ag, 'MUTATE SOUND', () => app.mutateSound(0.3, true), { sub: () => 'STEP SOUNDS', title: 'Redraw a share of the generated step sounds' }).dataset.test = 'p-mutate-sound';
+  pad(ap, ag, 'NEW SOUNDS', () => app.generateSound(true), { sub: () => 'VARIATIONS + STEPS', title: 'Generate variations A-D and distribute them over the steps' }).dataset.test = 'p-new-sounds';
+  pad(ap, ag, 'MUTATE SOUND', () => app.mutateSound(0.3, true), { sub: () => 'STEP SOUNDS', title: 'Redraw a share of the step sounds' }).dataset.test = 'p-mutate-sound';
   pad(ap, ag, 'EVOLVE', () => app.setEvolve({ target: app.project.evolve.target === 'off' ? 'both' : 'off' }), { on: () => app.project.evolve.target !== 'off', sub: () => (app.project.evolve.target === 'off' ? 'OFF' : `${app.project.evolve.target.toUpperCase()} /${app.project.evolve.every}`), title: 'Rhythm and sound evolve on their own' });
   pad(ap, ag, 'KIT HOME', () => app.evolveReturn(), { sub: () => 'UNDO THE DRIFT', title: 'Back to the kit the evolution started from' });
   subscribe(app, ['destruction', 'transport', 'kit', 'status', 'pattern'], () => ap.refresh());

@@ -72,21 +72,21 @@ function repairPattern(v: unknown, trackIds: string[], i: number, seedHash: numb
   const patSeed = int(o.seed, 1, 0, 0xffffffff);
   const res = oneOf(o.res, RESOLUTIONS, 4) as Resolution;
   const steps = int(o.steps, 32, 1, MAX_STEPS);
-  const gen: Record<string, Grid> = {};
-  const edits: Pattern['edits'] = {};
-  const og = isObj(o.gen) ? o.gen : {};
-  const oe = isObj(o.edits) ? o.edits : {};
+  // before version 8 a pattern was a generated baseline (`gen`) with hand edits over it (`edits`):
+  // the effective pattern is the baseline with each edit laid over it (null deletes)
+  const grids: Record<string, Grid> = {};
+  const og = isObj(o.grids) ? o.grids : isObj(o.gen) ? o.gen : {};
+  const oe = isObj(o.grids) || !isObj(o.edits) ? {} : o.edits;
   for (const id of trackIds) {
-    gen[id] = repairGrid(og[id], steps);
+    const g = repairGrid(og[id], steps);
     const e = oe[id];
     if (isObj(e)) {
-      const out: Record<number, Hit | null> = {};
       for (const [k, h] of Object.entries(e)) {
         const s = Number(k);
-        if (Number.isInteger(s) && s >= 0 && s < steps) out[s] = h === null ? null : repairHit(h);
+        if (Number.isInteger(s) && s >= 0 && s < steps) g[s] = h === null ? null : repairHit(h);
       }
-      if (Object.keys(out).length) edits[id] = out;
     }
+    grids[id] = g;
   }
   // step sounds (projects before version 2 have none)
   let sounds: Pattern['sounds'];
@@ -125,8 +125,7 @@ function repairPattern(v: unknown, trackIds: string[], i: number, seedHash: numb
     name: str(o.name, String.fromCharCode(65 + i), 12),
     steps,
     res,
-    gen,
-    edits,
+    grids,
     seed: patSeed,
     ...seedPart(patSeed, o.seedText, seedHash),
     settings: {
@@ -268,7 +267,7 @@ function repairDiscovered(v: unknown): { discovered?: Record<number, import('./t
 export function repairProject(v: unknown, initKit?: SynthKit): Project {
   if (!isObj(v)) throw new ProjectError('This is not a CLATTER project.');
   if (v.format !== undefined && v.format !== PROJECT_FORMAT) throw new ProjectError(`This file is not a CLATTER project (${String(v.format)}).`);
-  if (typeof v.version === 'number' && v.version > 7) throw new ProjectError('This project was saved by a newer version of CLATTER.');
+  if (typeof v.version === 'number' && v.version > 8) throw new ProjectError('This project was saved by a newer version of CLATTER.');
   const d = defaultProject();
   const defs = defaultTracks();
   const rawTracks = Array.isArray(v.tracks) ? v.tracks.slice(0, MAX_TRACKS) : [];
@@ -308,7 +307,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
   const timbreSeed = int(isObj(v.timbre) ? v.timbre.seed : undefined, 1, 0, 0xffffffff);
   const p: Project = {
     format: 'clatter-project',
-    version: 7,
+    version: 8,
     name: str(v.name, 'UNTITLED', 40),
     tempo: num(v.tempo, d.tempo, 30, 300),
     ...(repairTempoAuto(v.tempoAuto) ? { tempoAuto: repairTempoAuto(v.tempoAuto) } : {}),
@@ -413,8 +412,7 @@ export function parseProject(text: string, initKit?: SynthKit): Project {
 export function projectSamples(p: Project): string[] {
   const ids = new Set<string>();
   for (const t of p.tracks) for (const s of soundSampleIds(t.sound)) ids.add(s);
-  for (const pat of p.patterns) for (const e of Object.values(pat.edits)) for (const h of Object.values(e)) if (h?.sample) ids.add(h.sample);
-  for (const g of p.patterns.flatMap((pt) => Object.values(pt.gen))) for (const h of g) if (h?.sample) ids.add(h.sample);
+  for (const g of p.patterns.flatMap((pt) => Object.values(pt.grids))) for (const h of g) if (h?.sample) ids.add(h.sample);
   for (const s of p.snapshots) if (s) for (const snd of Object.values(s.sounds)) for (const id of soundSampleIds(snd)) ids.add(id);
   return [...ids];
 }

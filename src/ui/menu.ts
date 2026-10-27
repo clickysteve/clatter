@@ -75,10 +75,8 @@ export function menubar(app: App, screen: HTMLElement): { bar: HTMLElement; stat
         'sep',
         { label: 'Copy', key: '⌘C', action: () => app.copy() },
         { label: 'Paste', key: '⌘V', action: () => app.paste(), disabled: () => !app.clip },
-        { label: 'Clear selection', key: 'DEL', action: () => app.clearSelection() },
-        'sep',
-        { label: 'Keep hand edits (bake into the pattern)', action: () => app.keepEdits() },
-        { label: 'Reset to the generated pattern', action: () => app.reset() },
+        { label: 'Delete selected notes', key: 'DEL', action: () => app.deleteSelected() },
+        { label: 'Clear pattern', action: () => app.clearPattern() },
       ],
     ],
     [

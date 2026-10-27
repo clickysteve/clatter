@@ -99,7 +99,7 @@ ACCENT, FILLS, BARS; TIMBRE; WILDCARD intensity, scope and categories, which is 
 **character** (the style's kit flavour and the track roles) and **starting state** make the same
 result. Where the starting state matters:
 
-- GENERATE keeps locked tracks and hand edits, so the same seed over a different starting pattern
+- GENERATE keeps locked tracks, so the same seed over a different starting pattern
   differs on those tracks. The pattern stores its settings and seed so it can be seen again.
 - REGENERATE keeps bar 1 and regenerates the rest from a fresh seed.
 - GENERATE KIT and the sound generators skip locked voices, parameters and variations, and the kit

@@ -155,7 +155,7 @@ test('seed fields: a typed phrase is held, GENERATE repeats it, the dice and CLE
   await field.fill('Velvet Orbit');
   await field.press('Enter');
   await expect(field).toHaveValue('velvet-orbit');
-  const grids = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.gen));
+  const grids = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.grids));
   await page.click('[data-test=generate]');
   const first = await grids();
   await page.click('[data-test=generate]');

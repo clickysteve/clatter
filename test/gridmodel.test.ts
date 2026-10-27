@@ -1,7 +1,7 @@
-/** The pattern grid's data: what shows as sounding, silent or empty, and where a cell came from. */
+/** The pattern grid's data: what shows as sounding, silent or empty, and nothing about where a note came from. */
 import { describe, expect, it } from 'vitest';
 import { defaultProject } from '../src/model/defaults';
-import { clone, type Hit, type Pattern, type Resolution } from '../src/model/types';
+import { clone, type Pattern, type Resolution } from '../src/model/types';
 import { defaultGen, generate } from '../src/rhythm/generate';
 import { newPattern, setHit } from '../src/rhythm/pattern';
 import { realize, type RealizeInput } from '../src/rhythm/realize';
@@ -11,7 +11,7 @@ function setup(res: Resolution = 4) {
   const proj = defaultProject();
   const gen = { ...defaultGen(), style: 'machine' };
   const p: Pattern = newPattern('p1', 'A', gen, res);
-  p.gen = generate(proj.tracks, gen, 7, { steps: p.steps, res: p.res });
+  p.grids = generate(proj.tracks, gen, 7, { steps: p.steps, res: p.res });
   const input: RealizeInput = { seed: 3, swing: 50, pattern: p, tracks: proj.tracks, destruction: clone(proj.destruction), evolve: proj.evolve };
   return { proj, p, input };
 }
@@ -50,7 +50,7 @@ describe('what the grid shows is what plays', () => {
     for (const t of proj.tracks) {
       const cells = trackCells(p, t, real);
       cells.forEach((c, s) => {
-        const written = !!p.gen[t.id]?.[s];
+        const written = !!p.grids[t.id]?.[s];
         expect(c.state).toBe(written ? 'hit' : 'empty');
         expect(c.added).toBe(false);
       });
@@ -100,7 +100,7 @@ describe('what the grid shows is what plays', () => {
           expect(c.state).toBe('hit');
           expect(c.hit).toBeNull();
           expect(c.kinds.length).toBeGreaterThan(0);
-          expect(sourceLabel(c)).toMatch(/^ADDED BY/);
+          expect(sourceLabel(c)).toMatch(/^ · ADDED BY/);
         }
       }
     }
@@ -131,39 +131,23 @@ describe('what the grid shows is what plays', () => {
     expect(seen).toBeGreaterThan(0);
   });
 
-  it('a deleted generated hit is an empty cell, remembered only for SHOW ORIGINAL', () => {
+  it('a deleted note is an empty cell, and a placed one is just a note', () => {
     const { proj, p, input } = setup();
     const kick = proj.tracks[0]!;
-    const step = p.gen[kick.id]!.findIndex((h) => !!h);
-    const base = p.gen[kick.id]![step] as Hit;
+    const step = p.grids[kick.id]!.findIndex((h) => !!h);
     setHit(p, kick.id, step, null);
-    const c = trackCells(p, kick, realize(input, 0))[step]!;
-    expect(c.state).toBe('empty');
-    expect(c.hit).toBeNull();
-    expect(c.origin).toBe('deleted');
-    expect(c.base?.vel).toBe(base.vel);
-    expect(summaryLine('KICK', step, c, gridMetrics(p))).toMatch(/DELETED/);
-  });
-
-  it('a hand-written hit is marked as a hand edit', () => {
-    const { proj, p, input } = setup();
+    const gone = trackCells(p, kick, realize(input, 0))[step]!;
+    expect(gone.state).toBe('empty');
+    expect(gone.hit).toBeNull();
+    expect(summaryLine('KICK', step, gone, gridMetrics(p))).toMatch(/EMPTY/);
     const t = proj.tracks[5]!;
-    const step = p.gen[t.id]!.findIndex((h) => !h);
-    setHit(p, t.id, step, { vel: 90 });
-    const c = trackCells(p, t, realize(input, 0))[step]!;
+    const free = p.grids[t.id]!.findIndex((h) => !h);
+    setHit(p, t.id, free, { vel: 90 });
+    const c = trackCells(p, t, realize(input, 0))[free]!;
     expect(c.state).toBe('hit');
-    expect(c.origin).toBe('edit');
-    expect(sourceLabel(c)).toBe('HAND EDIT');
-  });
-
-  it('SOURCE (written only) shows exactly the written pattern', () => {
-    const { proj, p, input } = setup();
-    input.sourceOnly = true;
-    input.destruction.rolls = { ...input.destruction.rolls, on: true, prob: 1, place: 'anywhere' };
-    const real = realize(input, 0);
-    for (const t of proj.tracks) {
-      trackCells(p, t, real).forEach((c, s) => expect(c.state).toBe(p.gen[t.id]?.[s] ? 'hit' : 'empty'));
-    }
+    expect(c.hit?.vel).toBe(90);
+    expect('origin' in c).toBe(false);
+    expect(sourceLabel(c)).toBe('');
   });
 
   it('polymeter: steps beyond the track’s own loop are marked outside', () => {
@@ -182,6 +166,6 @@ describe('what the grid shows is what plays', () => {
     const d = describeCell('KICK', 0, cells[0]!, gridMetrics(p));
     expect(d.head).toBe('KICK · STEP 1');
     expect(d.lines.join(' ')).toMatch(/Sounds/);
-    expect(d.lines.join(' ')).toMatch(/Source: generated/);
+    expect(d.lines.join(' ')).not.toMatch(/Source|generated|hand/i);
   });
 });

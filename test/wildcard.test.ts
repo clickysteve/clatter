@@ -113,7 +113,7 @@ describe('scope', () => {
       expect(JSON.stringify(q.destruction)).toBe(JSON.stringify(p.destruction));
       // the other tracks' rhythm and conditions are untouched
       for (const t of others(q, 't2')) {
-        expect(JSON.stringify(q.patterns[0]!.gen[t.id])).toBe(JSON.stringify(p.patterns[0]!.gen[t.id]));
+        expect(JSON.stringify(q.patterns[0]!.grids[t.id])).toBe(JSON.stringify(p.patterns[0]!.grids[t.id]));
         expect(q.patterns[0]!.trig?.[t.id]).toEqual(p.patterns[0]!.trig?.[t.id]);
       }
       // the other voices of the kit are untouched
@@ -287,7 +287,7 @@ describe('guard rails', () => {
     for (let s = 1; s <= 8; s++) {
       const q = clone(p);
       run(q, settings(s, 100, 'project', ['rhythm', 'triggers', 'sound']));
-      expect(JSON.stringify(q.patterns[0]!.gen['t1'])).toBe(JSON.stringify(p.patterns[0]!.gen['t1']));
+      expect(JSON.stringify(q.patterns[0]!.grids['t1'])).toBe(JSON.stringify(p.patterns[0]!.grids['t1']));
       expect(q.patterns[0]!.trig?.['t1']).toEqual(p.patterns[0]!.trig?.['t1']);
       expect(q.tracks[1]!.mix.mute).toBe(true);
     }

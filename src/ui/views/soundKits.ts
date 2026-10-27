@@ -11,6 +11,7 @@ import { errText, type KitKind } from '../../app/kitManager';
 import { synthKitOf } from '../../model/kits';
 import { VOICES } from '../../sound/lxrParams';
 import { kitLibraryDialog, openKitFile } from '../kitDialogs';
+import { exportKitDialog } from '../kitExportDialog';
 import { button, chooseFiles, download, group, h, num, Panel } from '../widgets';
 import { viewVoice } from './soundControls';
 import { subscribe } from './patternView';
@@ -64,6 +65,8 @@ export function kitsPane(app: App, pane: HTMLElement): PaneParts {
       const files = await chooseFiles('.zip,.json');
       for (const f of files) await openKitFile(app, f, true);
     }, { cls: 'small', title: 'A kit file (.kit.zip, .clattersynth.json) goes to the library and offers to load' }).dataset.test = `kit-import-${kind}`;
+    if (kind === 'full')
+      button(kp, r2, 'EXPORT WAVS…', () => exportKitDialog(app), { cls: 'small', disabled: () => app.kitExport.busy, title: 'Render the instruments of the kit as individual WAV files (variations, velocity layers, pitch ranges) in a ZIP with a kit.json' }).dataset.test = 'export-kit';
     return g;
   };
   card('synth', 'SYNTH KIT', () => app.project.kit.name, () => false);

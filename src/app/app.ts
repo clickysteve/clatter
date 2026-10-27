@@ -38,6 +38,8 @@ import { applyWildcard, repairWild, SCOPE_LABEL, type WildSettings } from '../de
 import type { TrigCond } from '../model/types';
 import { bpmAt, tempoActive, type TempoAuto } from '../transport/tempo';
 import { ExportRunner, type ExportFile, type ExportKind } from './exportJob';
+import { KitExportJob } from './kitExportJob';
+import { exportKit, type KitExportOptions } from '../export/kitExport';
 import { describeChop } from '../destruction/chop';
 import { describeRolls } from '../destruction/rolls';
 import { describeDestroy } from '../destruction/destroy';
@@ -59,7 +61,7 @@ import { setScale } from '../ui/scale';
 import { Scheduler, startTicker } from '../transport/scheduler';
 import { PAR } from '../sound/lxrParamIds';
 
-export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod' | 'notice';
+export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod' | 'notice' | 'kitexport';
 
 export interface Selection {
   /** track indices (inclusive) */
@@ -124,6 +126,8 @@ export class App {
   readonly scheduler: Scheduler;
   /** background export (one at a time) */
   readonly exporter: ExportRunner;
+  /** background kit export: every instrument as WAV files in a ZIP (one at a time; see src/export/kitExport.ts) */
+  readonly kitExport: KitExportJob;
   /** hands a finished export to the user (the browser download; set by the page) */
   deliver: (file: ExportFile) => void = () => undefined;
   /** pitch analyses of rendered sounds, beside the project (never saved in it; see src/analysis) */
@@ -239,6 +243,31 @@ export class App {
       status: (t) => this.say(t),
     });
     this.exporter.onChange = () => this.emit(['transport']);
+    this.kitExport = new KitExportJob({
+      project: () => this.project,
+      run: (project, options, onProgress, signal) => {
+        if (!this.module) throw new Error('engine not loaded');
+        const module = this.module;
+        return exportKit(project, options, {
+          module,
+          library: this.library,
+          analyse: async (p, target) => {
+            const fresh = this.pitch.fresh(p, target);
+            if (fresh) return fresh;
+            const rec = await analyseTarget(module, p, this.library, target);
+            this.pitch.set(rec);
+            return rec;
+          },
+          onProgress,
+          signal,
+          generator: 'CLATTER',
+        });
+      },
+      deliver: (f) => this.deliver(f),
+      notify: (text, level) => this.notify(text, level),
+      status: (t) => this.say(t),
+    });
+    this.kitExport.onChange = () => this.emit(['transport', 'kitexport']);
     const host = this.host;
     this.live = {
       setTrack: (i, t) => host.send({ type: 'track', index: i, track: t }),
@@ -288,6 +317,11 @@ export class App {
     this.ui.notice = { id: (this.ui.notice?.id ?? 0) + 1, text, level };
     this.ui.status = text;
     this.emit(['status', 'notice']);
+  }
+
+  /** EXPORT KIT: validate, start, and return at once; the render continues in the background. */
+  startKitExport(options: KitExportOptions): ReturnType<KitExportJob['start']> {
+    return this.kitExport.start(options);
   }
 
   /** EXPORT: validate, start, and return at once; the render continues in the background. */

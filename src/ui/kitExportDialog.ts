@@ -84,7 +84,7 @@ export function exportKitDialog(app: App): void {
 
   // pitch
   const rPitch = row('PITCH');
-  choice<PitchMode>(rPitch, [['original', 'ORIGINAL PITCH'], ['chromatic', 'CHROMATIC RANGE'], ['scale', 'SELECTED SCALE'], ['custom', 'CUSTOM NOTE RANGE']], () => o.pitch.mode, (v) => (o.pitch.mode = v), 'Keep each sound as it is, or retune pitched sounds to every note of a range, a scale or a list', 'kx-pitch');
+  choice<PitchMode>(rPitch, [['original', 'ORIGINAL PITCH'], ['project', 'AS TUNED'], ['global', 'GLOBAL SCALE'], ['track', 'TRACK SCALES'], ['chromatic', 'CHROMATIC RANGE'], ['scale', 'SELECTED SCALE'], ['custom', 'CUSTOM NOTE RANGE']], () => o.pitch.mode, (v) => (o.pitch.mode = v), 'ORIGINAL: each sound before scale tuning. AS TUNED: as the project plays it, scale-locked instruments on their notes. GLOBAL SCALE and TRACK SCALES: every note of the project’s global scale, or of each instrument’s own scale, in a range. Or a range, a chosen scale or a list', 'kx-pitch');
   const rNotes = row('');
   const fields: HTMLElement[] = [];
   const upd = () => panel.refresh();
@@ -126,10 +126,10 @@ export function exportKitDialog(app: App): void {
     (rTracks as HTMLElement).style.display = o.instruments === 'selected' ? '' : 'none';
     (rSlots as HTMLElement).style.display = o.variations === 'selected' ? '' : 'none';
     const m = o.pitch.mode;
-    rNotes.style.display = m === 'original' ? 'none' : '';
+    rNotes.style.display = m === 'original' || m === 'project' ? 'none' : '';
     for (const f of fields) {
       const k = (f as HTMLElement).dataset.k;
-      f.style.display = (m === 'chromatic' && k === 'range') || (m === 'scale' && (k === 'range' || k === 'scale')) || (m === 'custom' && k === 'custom') ? '' : 'none';
+      f.style.display = ((m === 'chromatic' || m === 'global' || m === 'track') && k === 'range') || (m === 'scale' && (k === 'range' || k === 'scale')) || (m === 'custom' && k === 'custom') ? '' : 'none';
     }
     const show = o.tail.mode === 'custom';
     secs.style.display = show ? '' : 'none';

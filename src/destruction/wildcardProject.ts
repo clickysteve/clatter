@@ -39,6 +39,7 @@ import { hash32, Rng, SALT, strCode } from '../rhythm/rng';
 import { checkedSeedText } from '../rhythm/seed';
 import { styleById } from '../rhythm/styles';
 import { distributeSounds, generateVariations, mutateSounds } from '../sound/soundgen';
+import { kitPitchPlans, pitchPlanOf } from '../music/tuning';
 import { mutateKit, voiceRolesOf } from '../sound/kitgen';
 import { isEmptyStepSound } from '../sound/stepSound';
 import { BPM_MAX, BPM_MIN, MAX_TEMPO_BARS, repairTempoAuto, type TempoAuto, type TempoPoint } from '../transport/tempo';
@@ -138,7 +139,7 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
   const tracks: Track[] = s.scope === 'track' ? [selected] : p.tracks;
   const patterns = s.scope === 'project' ? p.patterns : [p.patterns.find((x) => x.id === p.current) ?? p.patterns[0]!];
   const voices = [...new Set(tracks.filter((t) => t.sound.mode !== 'sample').map((t) => (t.sound.trigger >= 5 ? 5 : t.sound.trigger)))];
-  const kitOpts = { seed: s.seed, flavour: styleById(p.gen.style).kitFlavour, voiceRoles: voiceRolesOf(p.tracks), locks: p.soundLocks };
+  const kitOpts = { seed: s.seed, flavour: styleById(p.gen.style).kitFlavour, voiceRoles: voiceRolesOf(p.tracks), locks: p.soundLocks, pitch: kitPitchPlans(p) };
 
   // ------------------------------------------------------------------ TEMPO
   if (has('tempo')) {
@@ -279,7 +280,7 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
         if (t.sound.soundLock) continue;
         if (!r.chance(0.3 + 0.7 * k)) continue;
         const seed = hash32(s.seed, SALT.wild, strCode(pat.id), strCode(t.id), 94);
-        const opts = { seed, take: 1, amount: clamp(0.25 + 0.75 * k, 0, 1), locks: p.soundLocks, ...geo };
+        const opts = { seed, take: 1, amount: clamp(0.25 + 0.75 * k, 0, 1), locks: p.soundLocks, ...geo, pitch: pitchPlanOf(p, t) };
         const next = pat.sounds?.[t.id] && r.chance(0.5) ? mutateSounds(t.sound, t.role, sourceGrid(pat, t.id), pat.sounds[t.id], p.kit.synth.params, { ...opts, amount: 0.3 + 0.6 * k }) : distributeSounds(t.sound, t.role, sourceGrid(pat, t.id), pat.sounds?.[t.id], p.kit.synth.params, opts);
         setSounds(pat, t.id, clean(next));
         n += Object.keys(next).length;
@@ -304,7 +305,7 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
     for (const t of tracks) {
       if (t.sound.soundLock || !r.chance(0.25 + 0.65 * k)) continue;
       const before = JSON.stringify(t.sound.variations ?? null);
-      t.sound.variations = generateVariations(t.sound, t.role, p.kit.synth.params, { seed: hash32(s.seed, SALT.wild, strCode(t.id), 97), amount: 0.25 + 0.75 * k, locks: p.soundLocks });
+      t.sound.variations = generateVariations(t.sound, t.role, p.kit.synth.params, { seed: hash32(s.seed, SALT.wild, strCode(t.id), 97), amount: 0.25 + 0.75 * k, locks: p.soundLocks, pitch: pitchPlanOf(p, t) });
       if (t.sound.variations.every((v) => !v)) delete t.sound.variations;
       if (JSON.stringify(t.sound.variations ?? null) !== before) nv++;
     }

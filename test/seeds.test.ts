@@ -183,7 +183,7 @@ describe('legacy numeric seeds', () => {
     delete old.generator;
     delete old.seedText;
     const back = parseProject(JSON.stringify(old));
-    expect(back.version).toBe(6);
+    expect(back.version).toBe(7);
     expect(back.seed).toBe(p.seed);
     expect(back.seedText).toBeUndefined();
     expect(back.generator).toBe(1);

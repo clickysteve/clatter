@@ -1,6 +1,6 @@
 /**
  * SOUND: what makes the sound. A track sidebar that is always there (name, voice, source, mute
- * and solo) and eight workspaces:
+ * and solo) and nine workspaces:
  *
  *   SYNTH       source (SYNTH, SAMPLE or HYBRID), BASE / A-D, the LXR voice's parameters
  *   SAMPLE      the sample layer (of the base sound, or of the variation being edited), sample sets
@@ -9,6 +9,7 @@
  *   MIXER       channels with processing, bus processing, master (soundMix.ts)
  *   FX          the LXR FX bus and who feeds it (soundMix.ts)
  *   TUNER       the audible pitch of the selected sound, found in the rendered audio (soundTuner.ts)
+ *   SCALE       the global scale and each track's scale: OFF, GLOBAL or CUSTOM (soundScale.ts)
  *   KITS        synth kits, sample sets, full kits, generation, voice locks (soundKits.ts)
  *
  * The page does not scroll: each tab scrolls inside its own pane when it needs to. Switching tabs
@@ -29,12 +30,14 @@ import { kitsPane } from './soundKits';
 import { fxPane, mixerPane } from './soundMix';
 import { modulationPane } from './soundMod';
 import { tunerPane } from './soundTuner';
+import { scalePane } from './soundScale';
 import { discoverPane } from './soundDiscover';
 import { db, type PaneParts } from './soundUi';
 import { variationsPane } from './soundVar';
 import { font } from '../scale';
+import { describeScale, shortScale, trackScaleState } from '../../music/scale';
 
-const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', variations: 'VARIATIONS', mixer: 'MIXER', fx: 'FX', tuner: 'TUNER', discover: 'DISCOVER', kits: 'KITS' };
+const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', variations: 'VARIATIONS', mixer: 'MIXER', fx: 'FX', tuner: 'TUNER', scale: 'SCALE', discover: 'DISCOVER', kits: 'KITS' };
 const TAB_TITLE: Record<SoundTab, string> = {
   synth: 'The selected track’s source, BASE / A-D and the LXR voice parameters',
   sample: 'The sample layer of the base sound or of the variation being edited, and sample sets',
@@ -43,6 +46,7 @@ const TAB_TITLE: Record<SoundTab, string> = {
   mixer: 'Every channel with its processing, the bus processing and the master',
   fx: 'The LXR FX bus and which tracks feed it',
   tuner: 'The audible pitch of the selected sound: note, frequency, cents, confidence and pitch movement, measured in the rendered audio',
+  scale: 'Musical scale quantisation: the global scale and each track’s OFF, GLOBAL or CUSTOM setting, and what the scale does to every sound',
   discover: 'SOUND DISCOVERY: eight candidate sounds for this instrument, auditioned through the LXR engine, compared with the original, mutated, saved and applied only when you say',
   kits: 'Synth kits, sample sets and full kits: save, load, import, export, generate, lock voices',
 };
@@ -74,6 +78,7 @@ export function soundView(app: App, screen: HTMLElement): View {
       li.addEventListener('dblclick', () => void app.audition(tr.id));
       const top = h('div', 'row', li);
       const nm = h('div', 'grow sname', top);
+      const lock = h('div', 'tiny scaletag', top);
       const mode = h('div', 'tiny modetag', top);
       const bot = h('div', 'row', li);
       const src = h('div', 'tiny grow', bot);
@@ -89,6 +94,9 @@ export function soundView(app: App, screen: HTMLElement): View {
         const s = x();
         li.classList.toggle('on', app.ui.track === s.id);
         nm.textContent = s.name;
+        const sc = trackScaleState(app.project, s).spec;
+        lock.textContent = sc ? '♪ ' + shortScale(sc) : '';
+        lock.title = sc ? 'Scale-locked: ' + describeScale(sc) : '';
         mode.textContent = MODE_TAG[s.sound.mode];
         mode.title = s.sound.mode.toUpperCase();
         const names = s.sound.samples.map((id) => app.library.get(id)?.name ?? '?').join(', ');
@@ -98,7 +106,7 @@ export function soundView(app: App, screen: HTMLElement): View {
     }
   };
   buildList();
-  subscribe(app, ['tracks', 'selection', 'kit', 'library', 'project', 'mix', 'status'], () => lp.refresh());
+  subscribe(app, ['tracks', 'selection', 'kit', 'library', 'project', 'mix', 'status', 'scale'], () => lp.refresh());
   app.on('project', buildList);
 
   // ================================================================ the main column: tabs, panes, status
@@ -420,6 +428,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   parts.set('mixer', mixerPane(app, panes.mixer));
   parts.set('fx', fxPane(app, panes.fx));
   parts.set('tuner', tunerPane(app, panes.tuner));
+  parts.set('scale', scalePane(app, panes.scale));
   parts.set('discover', discoverPane(app, panes.discover));
   parts.set('kits', kitsPane(app, panes.kits));
   tp.refresh();

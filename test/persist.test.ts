@@ -35,7 +35,7 @@ describe('projects from before the overhaul', () => {
   it('open at version 3 without modulation, processing or a limiter, and sound the same', () => {
     for (const v of [1, 2] as const) {
       const p = parseProject(JSON.stringify(legacy(v)), init);
-      expect(p.version).toBe(6);
+      expect(p.version).toBe(7);
       expect(p.tracks.every((t) => !t.sound.mod && !t.mix.fx)).toBe(true);
       expect(p.master.out).toBeUndefined();
       expect(outputOf(p)).toEqual(legacyOutputFx());
@@ -46,7 +46,7 @@ describe('projects from before the overhaul', () => {
   });
 
   it('a project from a newer CLATTER is refused with a message', () => {
-    expect(() => repairProject({ ...legacy(2), version: 7 }, init)).toThrow(ProjectError);
+    expect(() => repairProject({ ...legacy(2), version: 8 }, init)).toThrow(ProjectError);
   });
 
   it('new projects get the limiter, old ones do not', () => {

@@ -2665,3 +2665,26 @@ input.num.seedin::placeholder {
   width: calc(16 * var(--px));
   height: calc(16 * var(--px));
 }
+
+/* SCALE */
+.scalerows {
+  gap: calc(8 * var(--px));
+}
+.scalerow {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--px));
+  padding: calc(4 * var(--px)) 0;
+  border-bottom: var(--u) dotted var(--ink);
+}
+.scalelock {
+  width: calc(14 * var(--px));
+  text-align: center;
+}
+.scaleinfo {
+  white-space: normal;
+}
+.scaletag {
+  white-space: nowrap;
+  margin-right: calc(6 * var(--px));
+}

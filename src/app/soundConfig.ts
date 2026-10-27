@@ -17,6 +17,7 @@ import type { TrackMod } from '../mod/types';
 import { PPQ } from '../model/types';
 import { resolveStepSound, soundSampleIds } from '../sound/stepSound';
 import { PAR } from '../sound/lxrParamIds';
+import { engineTunes, noteHint, type EngineTune, type TuneEnv } from '../music/tuning';
 import { HARDWARE_ONLY } from '../sound/lxrParams';
 import type { ScheduledEvent } from '../transport/scheduler';
 
@@ -52,7 +53,7 @@ export function modsOf(s: TrackSound): TrackMod[] | (TrackMod | null)[] {
 export const outputOf = (p: Project): OutputFx => p.master.out ?? legacyOutputFx();
 export { defaultOutputFx };
 
-export function engineTrackOf(t: Track, anySolo: boolean): EngineTrack {
+export function engineTrackOf(t: Track, anySolo: boolean, tunes?: (EngineTune | null)[]): EngineTrack {
   const s = t.sound;
   return {
     mode: s.mode,
@@ -79,8 +80,16 @@ export function engineTrackOf(t: Track, anySolo: boolean): EngineTrack {
     send: t.mix.send ?? 0,
     fx: t.mix.fx,
     mods: modsOf(s),
+    // always present, so that taking a scale away clears the tuning the engine holds
+    tunes,
   };
 }
+
+/** What the scale tuning may know about samples: the pitch their file names claim (a hint; measurements win). */
+export const tuneEnvOf = (lib: SampleLibrary | null): TuneEnv => ({ hint: (id) => noteHint(lib?.get(id)?.name ?? '') });
+
+/** A track as the engine plays it in a project: its sound, mix and scale tuning. */
+export const engineTrackIn = (p: Project, t: Track, solo: boolean, lib: SampleLibrary | null): EngineTrack => engineTrackOf(t, solo, engineTunes(p, t, tuneEnvOf(lib)));
 
 export const anySolo = (p: Project): boolean => p.tracks.some((t) => t.mix.solo);
 
@@ -121,7 +130,7 @@ export function configureEngine(target: EngineTarget, p: Project, lib: SampleLib
       if (s) target.setSample(id, { rate: s.rate, channels: s.channels });
     }
   }
-  p.tracks.forEach((t, i) => target.setTrack(i, engineTrackOf(t, solo)));
+  p.tracks.forEach((t, i) => target.setTrack(i, engineTrackIn(p, t, solo, lib)));
   sendKit(target, p.kit.synth);
   target.setBpm(p.tempo);
   target.setMaster(p.master.volume, p.master.clip, masterChain(p));

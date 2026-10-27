@@ -9,7 +9,10 @@
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import type { App } from '../../app/app';
-import { KIND_LABEL, PITCH_METHOD, centsBetween, midiToHz, noteName, type PitchAnalysis } from '../../analysis/pitch';
+import { KIND_LABEL, PITCH_METHOD, centsBetween, hzToMidiFloat, midiToHz, noteName, type PitchAnalysis } from '../../analysis/pitch';
+import { planTrack } from '../../music/measure';
+import { describeScale, nearestInScale, trackScaleState } from '../../music/scale';
+import { describeLayer } from './soundScale';
 import type { PitchLayer, PitchRecord } from '../../analysis/trackPitch';
 import { font } from '../scale';
 import { button, group, h, Panel } from '../widgets';
@@ -39,13 +42,15 @@ export function tunerPane(app: App, pane: HTMLElement): PaneParts {
   const tp = new Panel();
   const t = () => app.track;
   let layer: PitchLayer = 'mix';
+  /** analyse the sound before scale quantisation moves it, instead of as it plays */
+  let untunedView = false;
   let auto = false;
   let busy = false;
   let error = '';
   let timer: ReturnType<typeof setTimeout> | null = null;
   let open = false;
 
-  const target = () => ({ trackId: t().id, slot: app.ui.slot, layer });
+  const target = () => ({ trackId: t().id, slot: app.ui.slot, layer, ...(untunedView ? { raw: true } : {}) });
   const stored = () => app.pitch.lookup(app.project, target());
 
   // ---------------------------------------------------------------- controls
@@ -101,6 +106,18 @@ export function tunerPane(app: App, pane: HTMLElement): PaneParts {
     }, { on: () => layer === id, cls: 'small', title }).dataset.test = 'tuner-layer-' + id;
   }
   vis(tp, layers, () => t().sound.mode === 'hybrid');
+  const asSeg = h('div', 'seg', bar);
+  button(tp, asSeg, 'AS PLAYED', () => {
+    untunedView = false;
+    tp.refresh();
+    schedule();
+  }, { on: () => !untunedView, cls: 'small', title: 'Analyse the sound as it plays, after scale quantisation has moved it' }).dataset.test = 'tuner-played';
+  button(tp, asSeg, 'UNTUNED', () => {
+    untunedView = true;
+    tp.refresh();
+    schedule();
+  }, { on: () => untunedView, cls: 'small', title: 'Analyse the sound before scale quantisation (its natural pitch)' }).dataset.test = 'tuner-untuned';
+  vis(tp, asSeg, () => !!app.scaleOf(t()));
   const info = h('div', 'tiny grow', bar);
   tp.add(() => {
     const where = app.ui.slot === null ? 'BASE SOUND' : 'VARIATION ' + 'ABCD'[app.ui.slot];
@@ -138,6 +155,14 @@ export function tunerPane(app: App, pane: HTMLElement): PaneParts {
   const stabM = meter('STABILITY');
   const stale = h('div', 'tstale', tg);
   stale.dataset.test = 'tuner-stale';
+
+  // ---------------------------------------------------------------- the scale
+  const sg = group(left, 'SCALE');
+  sg.classList.add('col');
+  sg.dataset.test = 'tuner-scale';
+  const sRows = h('div', 'col tmove', sg);
+  const sAct = h('div', 'row', sg);
+  button(tp, sAct, 'TUNE TO SCALE', () => void app.tuneToScale([t().id]).then(() => run(true)).catch((e) => app.say(`TUNING FAILED: ${e instanceof Error ? e.message.toUpperCase() : String(e)}`)), { cls: 'small', disabled: () => busy || app.tuning || !app.scaleOf(t()), title: 'Measure this track’s sounds, move them onto the scale, then analyse the result' }).dataset.test = 'tuner-tune';
 
   // ---------------------------------------------------------------- pitch over time
   const mg = group(right, 'PITCH OVER TIME');
@@ -301,6 +326,23 @@ export function tunerPane(app: App, pane: HTMLElement): PaneParts {
         row(moveRows, 'MOVEMENT', `${a.sweepCents > 0 ? 'FALLS' : 'RISES'} ${semis.toFixed(1)} SEMITONES (${Math.abs(Math.round(a.sweepCents))} CENTS) IN ${Math.round(a.settleTime * 1000)} MS`);
       } else row(moveRows, 'MOVEMENT', 'NONE: THE PITCH HOLDS');
     } else h('div', 'tiny', moveRows, a ? 'NO PITCH TO FOLLOW' : '');
+    // the scale: detected pitch, target note, deviation, whether quantisation is active
+    sRows.innerHTML = '';
+    const st = trackScaleState(app.project, t());
+    sg.style.display = '';
+    row(sRows, 'QUANTISATION', st.spec ? `ACTIVE · ${describeScale(st.spec)}${st.source === 'custom' ? ' (OWN)' : ' (GLOBAL)'}` : st.mode === 'off' ? 'OFF FOR THIS TRACK' : 'OFF: THE GLOBAL SCALE IS OFF');
+    if (st.spec) {
+      const f = a?.fundamental && (a.kind === 'stable' || a.kind === 'swept') ? a.fundamental : null;
+      row(sRows, 'DETECTED', f ? `${f.note} · ${fmtHz(f.hz)} (${untunedView ? 'BEFORE QUANTISATION' : 'AS PLAYED'})` : a ? 'NO RELIABLE PITCH: NOT TUNED' : 'ANALYSE FIRST');
+      if (f) {
+        const target = nearestInScale(st.spec, hzToMidiFloat(f.hz));
+        const dev = centsBetween(f.hz, midiToHz(target));
+        row(sRows, 'TARGET', `${noteName(target)} · ${fmtHz(midiToHz(target))}`);
+        row(sRows, 'DEVIATION', `${signed(dev)} CENTS ${untunedView ? 'FROM THE NEAREST SCALE NOTE' : Math.abs(dev) <= 12 ? '· ON THE SCALE' : '· OFF THE SCALE: TUNE TO SCALE'}`);
+      }
+      const plan = planTrack(app.project, t(), app.tuneEnv).filter((l) => l.slot === app.ui.slot);
+      for (const l of plan) row(sRows, l.layer === 'sample' ? 'SAMPLE' : 'TUNING', describeLayer({ ...l, slot: null }));
+    }
     // details
     details.innerHTML = '';
     if (a) {
@@ -314,7 +356,7 @@ export function tunerPane(app: App, pane: HTMLElement): PaneParts {
     graph.draw();
   });
 
-  subscribe(app, ['kit', 'tracks', 'selection', 'project', 'library', 'view'], () => {
+  subscribe(app, ['kit', 'tracks', 'selection', 'project', 'library', 'view', 'scale'], () => {
     tp.refresh();
     schedule();
   });

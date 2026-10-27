@@ -23,10 +23,10 @@ const clatter = (page: Page) => ({
   slotMod: (i: number) => page.evaluate((n) => JSON.stringify((window as unknown as W).clatter.track.sound.variations?.[n]?.mod ?? null), i),
 });
 
-test('the nine tabs are there, one is open, and the old KIT & FX name is gone', async ({ page }) => {
+test('the ten tabs are there, one is open, and the old KIT & FX name is gone', async ({ page }) => {
   const errors = await boot(page);
   const labels = await page.locator('.sound-main .wstab').allTextContents();
-  expect(labels).toEqual(['SYNTH', 'SAMPLE', 'MODULATION', 'VARIATIONS', 'MIXER', 'FX', 'TUNER', 'DISCOVER', 'KITS']);
+  expect(labels).toEqual(['SYNTH', 'SAMPLE', 'MODULATION', 'VARIATIONS', 'MIXER', 'FX', 'TUNER', 'SCALE', 'DISCOVER', 'KITS']);
   await page.click('[data-test=sound-tab-modulation]');
   await expect(page.locator('.sndpane.show')).toHaveCount(1);
   expect(errors).toEqual([]);

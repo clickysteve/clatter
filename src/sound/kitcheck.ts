@@ -13,7 +13,7 @@ import type { SynthKit } from '../model/types';
 import type { LxrEngine } from '../audio/lxr/lxr';
 import { hash32, Rng } from '../rhythm/rng';
 import type { KitFlavour } from '../rhythm/styles';
-import { archetypeFor, designVoice, voiceKeys, type Archetype } from './kitgen';
+import { archetypeFor, designVoice, snapCoarse, voiceKeys, type Archetype, type VoicePitchPlan } from './kitgen';
 import { HARDWARE_ONLY } from './lxrParams';
 
 /** Send a whole kit to an engine (all sound parameters, then the modulation targets). */
@@ -84,6 +84,8 @@ export interface CheckOptions {
   locked?: boolean[];
   /** the firmware's init kit, the last resort for a voice */
   fallback?: SynthKit;
+  /** per voice: the scale a redesigned voice's pitch must stay on (plain data: this travels to a Worker) */
+  pitch?: (VoicePitchPlan | null)[];
 }
 
 export interface CheckReport {
@@ -105,6 +107,8 @@ export function checkKit(e: LxrEngine, kit0: SynthKit, o: CheckOptions): { kit: 
     let tries = 0;
     while ((m.peak < 0.03 || m.length < 15) && tries < 5 && !o.locked?.[v]) {
       const d = designVoice(v, a, o.flavour, new Rng(hash32(o.seed, 777, v, tries)));
+      const plan = o.pitch?.[v];
+      if (plan && d.values.coarse !== undefined) d.values.coarse = snapCoarse(plan, d.values.coarse);
       for (const [k, val] of Object.entries(d.values)) {
         const p = keys[k as keyof typeof keys];
         if (p !== undefined) kit.params[p] = val as number;

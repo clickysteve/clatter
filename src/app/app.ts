@@ -47,12 +47,15 @@ import { exportKit, type KitExportOptions } from '../export/kitExport';
 import { describeChop } from '../destruction/chop';
 import { describeRolls } from '../destruction/rolls';
 import { describeDestroy } from '../destruction/destroy';
+import { kitPitchPlans, needsMeasure, pitchPlanList, pitchPlanOf, type TuneEnv } from '../music/tuning';
+import { measureAndTune, type TrackResult } from '../music/measure';
+import { defaultGlobalScale, defaultModeFor, defaultTrackScale, normaliseScale, trackScaleSpec, type GlobalScale, type ScaleSpec, type TrackScale } from '../music/scale';
 import { evolveKit, generateKit, mutateKit, voiceRolesOf } from '../sound/kitgen';
 import { KitService } from '../sound/kitService';
 import { KitManager } from './kitManager';
 import { exportMidi } from '../export/midiFile';
 import { Sequence } from './sequence';
-import { anySolo, configureEngine, engineTrackOf, hitOf, kitDiff, masterChain, outputOf, sendKit, trackIndex, type EngineTarget } from './soundConfig';
+import { anySolo, configureEngine, engineTrackIn, hitOf, kitDiff, masterChain, outputOf, sendKit, trackIndex, tuneEnvOf, type EngineTarget } from './soundConfig';
 import { defaultRoute, defaultSource, diffMod, isSource, newRouteId, resolveMod } from '../mod/config';
 import { destApplies, destsFor } from '../mod/registry';
 import { buildRecipe, fitMod, generateMod, mutateMod, randomiseSource, type ModTarget } from '../mod/presets';
@@ -65,7 +68,7 @@ import { setScale } from '../ui/scale';
 import { Scheduler, startTicker } from '../transport/scheduler';
 import { PAR } from '../sound/lxrParamIds';
 
-export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod' | 'notice' | 'kitexport' | 'discover';
+export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod' | 'notice' | 'kitexport' | 'discover' | 'scale';
 
 export interface Selection {
   /** track indices (inclusive) */
@@ -315,7 +318,7 @@ export class App {
         if (p === this.project) this.pitch.set(rec);
         return rec;
       },
-      check: async (kit, voice, seed) => (this.kits ? this.kits.check(kit, { flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), seed, voices: [voice], locked: [false, false, false, false, false, false] }) : kit),
+      check: async (kit, voice, seed) => (this.kits ? this.kits.check(kit, { flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), seed, voices: [voice], locked: [false, false, false, false, false, false], pitch: this.pitchPlans() }) : kit),
       apply: (c, withExtras) => this.applyDiscovered(c, withExtras),
       changed: () => this.emit(['discover']),
       say: (t) => this.say(t),
@@ -402,6 +405,7 @@ export class App {
     if (resetHistory) {
       this.history.clear();
       this.discover.reset();
+      this.tuneReport.clear();
     }
     this.ui.sel = null;
     this.ui.queued = null;
@@ -415,6 +419,7 @@ export class App {
 
   /** State changed: replan, autosave, redraw. */
   private touch(topics: Topic[]): void {
+    this.autoTuneSoon();
     this.sequence.bump();
     this.scheduler.invalidate();
     this.autosave();
@@ -1292,7 +1297,7 @@ export class App {
         const s = this.library.get(id);
         if (s) this.live.setSample(id, { rate: s.rate, channels: s.channels });
       }
-      this.live.setTrack(i, engineTrackOf(t, solo));
+      this.live.setTrack(i, engineTrackIn(this.project, t, solo, this.library));
     });
     this.live.setOutput(outputOf(this.project));
   }
@@ -1405,7 +1410,7 @@ export class App {
   }
 
   private kitOpts(seed: number) {
-    return { seed, flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), locks: this.project.soundLocks };
+    return { seed, flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), locks: this.project.soundLocks, pitch: kitPitchPlans(this.project) };
   }
 
   /** A kit through the engine check (levels, audibility). */
@@ -1414,7 +1419,7 @@ export class App {
     this.ui.busy = true;
     this.emit(['status']);
     try {
-      return await this.kits.check(kit, { flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), seed, voices, locked: this.project.soundLocks.voices });
+      return await this.kits.check(kit, { flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), seed, voices, locked: this.project.soundLocks.voices, pitch: this.pitchPlans() });
     } finally {
       this.ui.busy = false;
       this.emit(['status']);
@@ -1551,6 +1556,151 @@ export class App {
     const rec = await analyseTarget(this.module, this.project, this.library, target);
     this.pitch.set(rec);
     return rec;
+  }
+
+  // ------------------------------------------------------------------ SCALE
+  /** Per voice, where a scale-locked voice's pitch must land when the generators write it (plain data). */
+  pitchPlans() {
+    return pitchPlanList(this.project);
+  }
+
+  /** What the tuning may know about samples (the pitch their names claim). */
+  get tuneEnv(): TuneEnv {
+    return tuneEnvOf(this.library);
+  }
+
+  /** The global scale (off, C natural minor, until set). */
+  get scale(): GlobalScale {
+    return this.project.scale ?? defaultGlobalScale();
+  }
+
+  /** The scale a track plays in now (null: none) and where it comes from. */
+  scaleOf(t: Track): ScaleSpec | null {
+    return trackScaleSpec(this.project, t);
+  }
+
+  /** SCALE: switch the global scale on or off, change its root, type or user notes. One undo step. */
+  setGlobalScale(patch: Partial<GlobalScale>, label = 'SCALE'): void {
+    this.change(
+      label,
+      () => {
+        const cur = this.scale;
+        const next = { ...cur, ...patch };
+        this.project.scale = { on: next.on, ...normaliseScale(next) };
+        this.syncTracks();
+      },
+      ['tracks', 'scale'],
+    );
+    this.autoTune();
+  }
+
+  /** A track's own scale setting: OFF, GLOBAL or CUSTOM with its root, type and user notes. One undo step. */
+  setTrackScale(id: string, patch: Partial<TrackScale>, label = 'TRACK SCALE'): void {
+    const t = this.project.tracks.find((x) => x.id === id);
+    if (!t) return;
+    this.change(
+      label,
+      () => {
+        const cur: TrackScale = t.scale ?? defaultTrackScale(defaultModeFor(t.role));
+        // a track that becomes CUSTOM starts from the scale it was following
+        const seed = patch.mode === 'custom' && cur.mode !== 'custom' && !('root' in patch) && !('type' in patch) ? { ...this.scale } : {};
+        const { on: _on, ...rest } = seed as Partial<GlobalScale>;
+        void _on;
+        const next = { ...cur, ...rest, ...patch };
+        t.scale = { mode: next.mode, ...normaliseScale(next) };
+        this.syncTracks();
+      },
+      ['tracks', 'scale'],
+    );
+    this.autoTune([id]);
+  }
+
+  /** What the last TUNE TO SCALE found, by track (display only). */
+  readonly tuneReport = new Map<string, TrackResult>();
+  tuning = false;
+  private tuneQueue = new Set<string>();
+
+  private tuneTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** After an edit: a moment later, measure what the edit made new (never while the player is still dragging a control). */
+  private autoTuneSoon(): void {
+    if (!this.module || (!this.project.scale?.on && !this.project.tracks.some((t) => t.scale?.mode === 'custom'))) return;
+    if (this.tuneTimer) clearTimeout(this.tuneTimer);
+    this.tuneTimer = setTimeout(() => {
+      this.tuneTimer = null;
+      this.autoTune();
+    }, 700);
+  }
+
+  /** Measure the sounds of tracks that have a scale in force but no measurement of some sound, and tune them. In the background. */
+  autoTune(ids?: string[]): void {
+    if (!this.module) return;
+    for (const t of this.project.tracks) if ((!ids || ids.includes(t.id)) && trackScaleSpec(this.project, t) && needsMeasure(this.project, t)) this.tuneQueue.add(t.id);
+    if (this.tuneQueue.size && !this.tuning) void this.runTune();
+  }
+
+  private async runTune(): Promise<void> {
+    this.tuning = true;
+    this.emit(['scale']);
+    try {
+      while (this.tuneQueue.size) {
+        const ids = [...this.tuneQueue];
+        this.tuneQueue.clear();
+        await this.tuneToScale(ids, false);
+      }
+    } catch (e) {
+      this.say(`TUNING FAILED: ${e instanceof Error ? e.message.toUpperCase() : String(e)}`);
+    } finally {
+      this.tuning = false;
+      this.emit(['scale']);
+    }
+  }
+
+  /**
+   * TUNE TO SCALE: render each sound of the tracks alone, find its audible fundamental, store the
+   * measurement and move the sound onto its scale. The tuned sound is measured again and corrected.
+   * Sounds with no reliable pitch are left as they are. One undo step (the automatic run that follows
+   * an edit is not a step of its own: it only brings the measurements up to date).
+   */
+  async tuneToScale(ids: string[] = this.project.tracks.filter((t) => trackScaleSpec(this.project, t)).map((t) => t.id), undoable = true): Promise<TrackResult[]> {
+    const module = this.module;
+    if (!module) throw new Error('engine not loaded');
+    if (!ids.length) {
+      this.say('NO TRACK HAS A SCALE IN FORCE');
+      return [];
+    }
+    const work = clone(this.project);
+    this.say('TUNING…');
+    const results = await measureAndTune(work, ids, {
+      env: this.tuneEnv,
+      analyse: async (p, target) => {
+        const fresh = this.pitch.fresh(p, target);
+        if (fresh) return fresh;
+        const rec = await analyseTarget(module, p, this.library, target);
+        this.pitch.set(rec);
+        return rec;
+      },
+    });
+    const write = () => {
+        for (const r of results) {
+          const live = this.project.tracks.find((x) => x.id === r.trackId);
+          const wt = work.tracks.find((x) => x.id === r.trackId);
+          if (!live || !wt) continue;
+          if (wt.pitch) live.pitch = clone(wt.pitch);
+          else delete live.pitch;
+          this.tuneReport.set(r.trackId, r);
+        }
+        this.syncTracks();
+    };
+    if (undoable) this.change('TUNE TO SCALE', write, ['tracks', 'scale']);
+    else {
+      write();
+      this.touch(['tracks', 'scale']);
+    }
+    const tuned = results.flatMap((r) => r.layers.filter((l) => l.state === 'tuned'));
+    const left = results.flatMap((r) => r.layers.filter((l) => l.state === 'left'));
+    this.say(`TUNED ${tuned.length} SOUND${tuned.length === 1 ? '' : 'S'} TO THEIR SCALES${left.length ? ` · ${left.length} LEFT AS THEY ARE (NO RELIABLE PITCH)` : ''}`);
+    return results;
   }
 
   setSoundTab(tab: SoundTab): void {
@@ -2235,7 +2385,7 @@ export class App {
         assignSeed(this.project.timbre, sv);
         let n = 0;
         for (const t of tracks) {
-          const next = generateVariations(t.sound, t.role, this.project.kit.synth.params, { seed, amount: this.project.timbre.amount, locks: this.project.soundLocks, force });
+          const next = generateVariations(t.sound, t.role, this.project.kit.synth.params, { seed, amount: this.project.timbre.amount, locks: this.project.soundLocks, force, pitch: pitchPlanOf(this.project, t) });
           const before = JSON.stringify(t.sound.variations ?? null);
           t.sound.variations = next;
           this.tidyVariations(t);
@@ -2285,7 +2435,7 @@ export class App {
     const p = this.pattern;
     let steps = 0;
     for (const t of tracks) {
-      const next = fn(t, sourceGrid(p, t.id), p.sounds?.[t.id], { seed, take: 0, amount: this.project.timbre.amount, locks: this.project.soundLocks, region, ...this.geometry() });
+      const next = fn(t, sourceGrid(p, t.id), p.sounds?.[t.id], { seed, take: 0, amount: this.project.timbre.amount, locks: this.project.soundLocks, region, ...this.geometry(), pitch: pitchPlanOf(this.project, t) });
       setSounds(p, t.id, next);
       steps += Object.keys(next).length;
     }
@@ -2351,7 +2501,7 @@ export class App {
     this.change(
       'RANDOMISE VARIATION',
       () => {
-        const only: (Variation | null)[] = generateVariations({ ...t.sound, variations: undefined }, t.role, this.project.kit.synth.params, { seed, amount, locks: this.project.soundLocks, force: true });
+        const only: (Variation | null)[] = generateVariations({ ...t.sound, variations: undefined }, t.role, this.project.kit.synth.params, { seed, amount, locks: this.project.soundLocks, force: true, pitch: pitchPlanOf(this.project, t) });
         const fresh = only[slot];
         if (fresh) this.ensureVariations(t)[slot] = { ...fresh, lock: t.sound.variations?.[slot]?.lock };
         this.syncTracks();

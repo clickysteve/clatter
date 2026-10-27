@@ -295,7 +295,7 @@ export interface KitManifest {
   version: number;
   generator: string;
   createdAt: string;
-  kit: { name: string; project: string; seed: number; projectSeed: number; tempo: number; sampleSet: string | null };
+  kit: { name: string; project: string; seed: number; seedText?: string; projectSeed: number; projectSeedText?: string; tempo: number; sampleSet: string | null };
   settings: KitExportOptions & { sampleRate: number; bitDepth: number; layerRanges: { layer: number; velocity: number; low: number; high: number }[]; verification: string };
   scale: { root: string; name: string; label: string; steps: number[]; notes: string[] } | null;
   /** the kit's synthesis settings as they were when exported */
@@ -583,7 +583,7 @@ export async function exportKit(project: Project, options: KitExportOptions, dep
     version: KIT_EXPORT_VERSION,
     generator: deps.generator ?? 'CLATTER',
     createdAt: created,
-    kit: { name: snapshot.kit.name, project: snapshot.name, seed: snapshot.kit.seed, projectSeed: snapshot.seed, tempo: snapshot.tempo, sampleSet: snapshot.sampleSet ?? null },
+    kit: { name: snapshot.kit.name, project: snapshot.name, seed: snapshot.kit.seed, ...(snapshot.kit.seedText ? { seedText: snapshot.kit.seedText } : {}), projectSeed: snapshot.seed, ...(snapshot.seedText ? { projectSeedText: snapshot.seedText } : {}), tempo: snapshot.tempo, sampleSet: snapshot.sampleSet ?? null },
     settings: { ...clone(options), sampleRate: 44100, bitDepth: WAV_FORMATS[options.format].bits, layerRanges: layers.map((l) => ({ layer: l.index + 1, velocity: l.vel, low: l.lo, high: l.hi })), verification: verifyAll ? 'every file measured' : 'the loudest layer of each note measured; softer layers share its tuning' },
     scale: r.scaleInfo ? { root: r.scaleInfo.rootName, name: r.scaleInfo.scale, label: r.scaleInfo.label, steps: r.scaleInfo.steps, notes: r.scaleInfo.notes.map(noteName) } : null,
     synth: clone(snapshot.kit.synth),

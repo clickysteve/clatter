@@ -10,6 +10,7 @@ import { formatValue, modTargets, PAR, targetLabel, TRIGGERS, type ParamDef } fr
 import { COND_KINDS, COND_LABEL, defaultCond, lockableParams } from '../../sound/stepSound';
 import { button, ctl, h, num, Panel, range, select } from '../widgets';
 import { pctRange } from './patternView';
+import { seedField } from '../seedField';
 
 const MODES: { value: SourceMode; label: string; title: string }[] = [
   { value: 'synth', label: 'SYNTH', title: 'The LXR voice' },
@@ -233,6 +234,10 @@ export function generativeCard(app: App, parent: HTMLElement, panel: Panel): HTM
     scope.textContent = s ? `ACTS ON THE SELECTION: ${Math.abs(s.t1 - s.t0) + 1} TRACKS × ${Math.abs(s.s1 - s.s0) + 1} STEPS` : 'ACTS ON EVERY TRACK (SHIFT-DRAG IN THE GRID TO SELECT A REGION)';
   });
   pctRange(panel, box, app, 'TIMBRE', () => app.project.timbre.amount, (v) => app.setTimbre(v), 'How far the generated sounds stray from the base sound: 0 is a whisper, 100 is a different instrument of the same family', 0.35);
+  const sdr = h('div', 'row', box);
+  h('div', 'lbl', sdr, 'SEED').title = 'The seed of the sound generators. Type a phrase (or a number) to hold it: the same seed, TIMBRE and track roles make the same sounds.';
+  const sdh = h('div', 'grow', sdr);
+  seedField(panel, sdh, { get: () => app.seedSlot('sound').value, fixed: () => app.seedSlot('sound').fixed, onFixed: (on) => app.setSeedFixed('sound', on), onInput: (t) => void app.setSeedInput('sound', t), onRoll: () => app.rollSeed('sound'), onClear: () => app.clearSeed('sound'), test: 'sound-seed' });
   const r1 = h('div', 'row wrap', box);
   button(panel, r1, 'GENERATE VARIATIONS', () => app.generateVariationsFor(), { cls: 'grow', title: 'Fill the free slots A-D with related timbres designed for each track’s role. Hand-made and locked variations stay.' }).dataset.test = 'gen-variations';
   button(panel, r1, 'DISTRIBUTE', () => app.distributeVariations(), { cls: 'grow', title: 'Assign the variations to steps by role (accents, ghosts, off-beats, fills). Hand-made step sounds stay.' }).dataset.test = 'distribute';

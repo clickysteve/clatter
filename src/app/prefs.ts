@@ -8,6 +8,21 @@ import { defaultMidiPrefs, type MidiPrefs } from '../midi/controller';
 import { EXPORT_DEFAULTS } from './exportJob';
 import { defaultWild, repairWild, type WildSettings } from '../destruction/wildcardProject';
 import { DEFAULT_SCALE, snapScale } from '../ui/scale';
+import { checkedSeedText, type SeedValue } from '../rhythm/seed';
+
+/** The generators that have a seed field of their own. (WILDCARD keeps its seed with its other settings.) */
+export const SEED_SLOTS = ['pattern', 'kit', 'sound'] as const;
+export type SeedSlot = (typeof SEED_SLOTS)[number] | 'wildcard';
+
+/**
+ * The seed a generator uses on its next press. FIXED: every press uses this seed (the same
+ * settings and starting state give the same result). Not fixed: every press draws a new memorable
+ * phrase and shows it here, so the last result can always be made again.
+ */
+export interface SeedSlotPref {
+  value: SeedValue | null;
+  fixed: boolean;
+}
 
 /** The tabs of the PATTERN view's workspace under the grid. */
 export const WORKSPACES = ['sequence', 'trigger', 'sound', 'generate', 'transform', 'wildcard', 'track'] as const;
@@ -33,6 +48,8 @@ export interface Prefs {
   exportTail: number;
   /** WILDCARD: intensity, scope, categories, the seed of the last press, and whether the seed is held between presses */
   wildcard: WildSettings & { fixed: boolean };
+  /** the seed field of each generator (GENERATE, GENERATE KIT, the sound generators) */
+  seeds: Record<(typeof SEED_SLOTS)[number], SeedSlotPref>;
   /** keyboard plays the selected track on number keys etc. */
   seenHelp: boolean;
   /** collapsible panels the user closed (window id -> collapsed) */
@@ -41,7 +58,15 @@ export interface Prefs {
 
 const KEY = 'clatter.prefs';
 
-export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', soundTab: 'synth', soundLane: false, uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: EXPORT_DEFAULTS.bars, exportTail: EXPORT_DEFAULTS.tail, wildcard: { ...defaultWild(), fixed: false }, seenHelp: false, collapsed: {} });
+export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', soundTab: 'synth', soundLane: false, uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: EXPORT_DEFAULTS.bars, exportTail: EXPORT_DEFAULTS.tail, wildcard: { ...defaultWild(), fixed: false }, seeds: { pattern: { value: null, fixed: false }, kit: { value: null, fixed: false }, sound: { value: null, fixed: false } }, seenHelp: false, collapsed: {} });
+
+function repairSlot(v: unknown): SeedSlotPref {
+  const o = v && typeof v === 'object' ? (v as { value?: { seed?: unknown; text?: unknown }; fixed?: unknown }) : {};
+  const seed = o.value?.seed;
+  if (typeof seed !== 'number' || !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) return { value: null, fixed: false };
+  const text = checkedSeedText(seed, o.value?.text);
+  return { value: { seed, ...(text ? { text } : {}) }, fixed: o.fixed === true };
+}
 
 export function loadPrefs(): Prefs {
   try {
@@ -59,6 +84,7 @@ export function loadPrefs(): Prefs {
       midi: { ...d.midi, ...(v.midi ?? {}) },
       // export length is not remembered between visits: a fresh export dialog offers the defaults
       wildcard: { ...repairWild(v.wildcard), fixed: (v.wildcard as { fixed?: unknown } | undefined)?.fixed === true },
+      seeds: Object.fromEntries(SEED_SLOTS.map((s) => [s, repairSlot((v.seeds as Record<string, unknown> | undefined)?.[s])])) as Prefs['seeds'],
       exportBars: d.exportBars,
       exportTail: d.exportTail,
       seenHelp: v.seenHelp === true,

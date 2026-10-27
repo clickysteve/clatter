@@ -2548,3 +2548,26 @@ html[data-view='pattern'] #main {
 .kxcard .btn {
   align-self: flex-end;
 }
+
+/* ------------------------------------------------------------ seed fields */
+.seedfield {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+input.num.seedin {
+  min-width: calc(110 * var(--px));
+  width: 0;
+  text-transform: lowercase;
+}
+input.num.seedin.held {
+  font-weight: bold;
+}
+input.num.seedin::placeholder {
+  color: var(--dim);
+  opacity: 1;
+  text-transform: uppercase;
+}
+.btn.seeddie svg {
+  width: calc(16 * var(--px));
+  height: calc(16 * var(--px));
+}

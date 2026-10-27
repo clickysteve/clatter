@@ -25,6 +25,7 @@ import { PatternGrid, type Cell } from '../grid';
 import { summaryLine } from '../gridModel';
 import { describeTrig } from '../../rhythm/trigger';
 import { openPopover } from '../popover';
+import { seedField } from '../seedField';
 import { onScale, sz } from '../scale';
 import { button, ctl, group, h, num, Panel, range, select, win } from '../widgets';
 import { stepEditor } from './stepEditor';
@@ -296,7 +297,7 @@ export function patternView(app: App, screen: HTMLElement): View {
   // ---------------------------------------------------------------- WILDCARD
   const wcp = new Panel();
   wildcardPane(app, panes.wildcard, wcp);
-  infos.wildcard = () => `${app.prefs.wildcard.intensity}% · ${app.prefs.wildcard.scope.toUpperCase()} · SEED ${app.prefs.wildcard.seed}`;
+  infos.wildcard = () => `${app.prefs.wildcard.intensity}% · ${app.prefs.wildcard.scope.toUpperCase()} · ${app.seedSlot('wildcard').value ? 'SEED ' + (app.prefs.wildcard.seedText ?? String(app.prefs.wildcard.seed)).toUpperCase() : 'NEW SEED EACH TIME'}`;
   subscribe(app, ['transport', 'pattern', 'history', 'project', 'selection'], () => {
     wcp.refresh();
     wp.refresh();
@@ -337,8 +338,20 @@ export function patternView(app: App, screen: HTMLElement): View {
   h('div', 'lbl', rb, 'BARS').title = 'Length of a generated pattern';
   num(gp, rb, { get: () => app.project.gen.bars, set: (v) => app.setGen({ bars: v }, 'BARS'), min: 1, max: 4, title: 'Length of a generated pattern' });
   button(gp, rb, 'REGENERATE AFTER BAR 1', () => app.regenerate(), { cls: 'grow', title: 'New material after bar 1 (R)' });
+  const sdr = h('div', 'row', gb);
+  h('div', 'lbl', sdr, 'SEED').title = 'The seed of GENERATE. Type a phrase (or a number) to hold it: the same seed and settings make the same pattern. Clear it and every press draws a new one.';
+  const sdh = h('div', 'grow', sdr);
+  seedField(gp, sdh, {
+    get: () => app.seedSlot('pattern').value,
+    fixed: () => app.seedSlot('pattern').fixed,
+    onFixed: (on) => app.setSeedFixed('pattern', on),
+    onInput: (t) => void app.setSeedInput('pattern', t),
+    onRoll: () => app.rollSeed('pattern'),
+    onClear: () => app.clearSeed('pattern'),
+    test: 'gen-seed',
+  });
   const ginfo = h('div', 'report', gb);
-  gp.add(() => (ginfo.textContent = `SEED ${app.pattern.seed} · GENERATION ${app.pattern.generation} · ${app.editCount()} HAND EDITS`));
+  gp.add(() => (ginfo.textContent = `SEED ${(app.pattern.seedText ?? String(app.pattern.seed)).toUpperCase()} · GENERATION ${app.pattern.generation} · ${app.editCount()} HAND EDITS`));
   const gc = card(gpane);
   pctRange(gp, gc, app, 'DENSITY', () => app.project.gen.density, (v) => app.setGen({ density: v }, 'DENSITY'), 'How many hits');
   pctRange(gp, gc, app, 'COMPLEXITY', () => app.project.gen.complexity, (v) => app.setGen({ complexity: v }, 'COMPLEXITY'), 'Syncopation, off-grid emphasis, ghost notes');

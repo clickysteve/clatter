@@ -20,6 +20,7 @@ import { repairTrig } from '../rhythm/trigger';
 import { repairWild } from '../destruction/wildcardProject';
 import { checkedSeedText, GENERATOR_VERSION, SEED_HASH_VERSION } from '../rhythm/seed';
 import { repairTempoAuto } from '../transport/tempo';
+import { repairOrigin } from '../sound/soundLibrary';
 import { repairChannelFx, repairOutputFx } from '../audio/mixfx';
 
 export const PROJECT_FORMAT = 'clatter-project';
@@ -215,11 +216,24 @@ function repairTrack(v: unknown, i: number, def: Track | undefined): Track {
   };
 }
 
+/** The record of what SOUND DISCOVERY applied to each voice (a damaged entry is dropped). */
+function repairDiscovered(v: unknown): { discovered?: Record<number, import('./types').DiscoveredSound> } {
+  if (!isObj(v)) return {};
+  const out: Record<number, import('./types').DiscoveredSound> = {};
+  for (const [k, x] of Object.entries(v)) {
+    const voice = Number(k);
+    if (!Number.isInteger(voice) || voice < 0 || voice > 5 || !isObj(x)) continue;
+    const origin = repairOrigin(x.origin, voice);
+    if (origin) out[voice] = { name: str(x.name, 'SOUND', 24), origin };
+  }
+  return Object.keys(out).length ? { discovered: out } : {};
+}
+
 /** A complete, valid project from parsed JSON (anything else throws ProjectError). */
 export function repairProject(v: unknown, initKit?: SynthKit): Project {
   if (!isObj(v)) throw new ProjectError('This is not a CLATTER project.');
   if (v.format !== undefined && v.format !== PROJECT_FORMAT) throw new ProjectError(`This file is not a CLATTER project (${String(v.format)}).`);
-  if (typeof v.version === 'number' && v.version > 5) throw new ProjectError('This project was saved by a newer version of CLATTER.');
+  if (typeof v.version === 'number' && v.version > 6) throw new ProjectError('This project was saved by a newer version of CLATTER.');
   const d = defaultProject();
   const defs = defaultTracks();
   const rawTracks = Array.isArray(v.tracks) ? v.tracks.slice(0, MAX_TRACKS) : [];
@@ -259,7 +273,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
   const timbreSeed = int(isObj(v.timbre) ? v.timbre.seed : undefined, 1, 0, 0xffffffff);
   const p: Project = {
     format: 'clatter-project',
-    version: 5,
+    version: 6,
     name: str(v.name, 'UNTITLED', 40),
     tempo: num(v.tempo, d.tempo, 30, 300),
     ...(repairTempoAuto(v.tempoAuto) ? { tempoAuto: repairTempoAuto(v.tempoAuto) } : {}),
@@ -275,6 +289,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
       voices: [0, 1, 2, 3, 4, 5].map((i) => bool((locks.voices as unknown[] | undefined)?.[i], false)),
       params: Array.isArray(locks.params) ? locks.params.filter((x): x is number => Number.isInteger(x) && x > 0 && x < SOUND_PARAM_COUNT) : [],
     },
+    ...repairDiscovered(v.discovered),
     patterns,
     current: typeof v.current === 'string' && pids.has(v.current) ? v.current : patterns[0]!.id,
     chain: {

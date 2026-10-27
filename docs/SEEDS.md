@@ -76,6 +76,7 @@ held seed is still there after a reload.
 |---|---|---|
 | GENERATE (pattern) | the GENERATE field | `patterns[].seed`, `seedText` |
 | GENERATE KIT | the KITS field | `kit.seed`, `seedText` |
+| DISCOVER 8 (SOUND > DISCOVER) | the DISCOVER field | each candidate's `origin` (seed, slot, draw, character, wildness); an applied one is recorded in `discovered` |
 | sound variations, GENERATE SOUND, MUTATE SOUND | the VARIATIONS field | `timbre.seed`, `seedText` |
 | WILDCARD | the WILDCARD field | `wildcard.seed`, `seedText` |
 | conditional triggers (PROB, FILL), step-sound probabilities and ranges, CHOP, ROLLS, DESTROY, evolution, modulation generation | the project seed | `seed`, `seedText` |

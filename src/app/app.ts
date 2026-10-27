@@ -15,6 +15,9 @@ import { readBundle, writeBundle, type SampleStore } from '@slopfactory/core/sto
 import { AudioHost, lxrWasm } from '../audio/host';
 import { SampleLibrary } from '../audio/library';
 import { renderHit, renderProject } from '../audio/render';
+import { AuditionPlayer } from '../audio/auditionPlayer';
+import { DiscoverSession } from './discover';
+import { applyToKit, soundWithExtras, type Candidate } from '../sound/discover';
 import { analyseTarget, PitchCache, type PitchRecord, type PitchTarget } from '../analysis/trackPitch';
 import type { MetersMessage, TimedHit } from '../audio/protocol';
 import { ENGINE_RATE } from '../audio/engine';
@@ -62,7 +65,7 @@ import { setScale } from '../ui/scale';
 import { Scheduler, startTicker } from '../transport/scheduler';
 import { PAR } from '../sound/lxrParamIds';
 
-export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod' | 'notice' | 'kitexport';
+export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod' | 'notice' | 'kitexport' | 'discover';
 
 export interface Selection {
   /** track indices (inclusive) */
@@ -133,6 +136,8 @@ export class App {
   deliver: (file: ExportFile) => void = () => undefined;
   /** pitch analyses of rendered sounds, beside the project (never saved in it; see src/analysis) */
   readonly pitch = new PitchCache();
+  /** SOUND DISCOVERY: candidate sounds for the selected instrument, auditioned offline, applied only when asked (src/app/discover.ts) */
+  readonly discover: DiscoverSession;
   kits: KitService | null = null;
   /** the synth kit, sample set and full kit libraries (after boot) */
   kitm: KitManager | null = null;
@@ -288,6 +293,35 @@ export class App {
       this.meters = m;
     });
     host.onState(() => this.emit(['transport', 'status']));
+    const player = new AuditionPlayer(async () => {
+      if (host.state !== 'running') await host.start();
+      return host.ctx;
+    });
+    this.discover = new DiscoverSession({
+      project: () => this.project,
+      track: () => this.track,
+      flavour: () => styleById(this.project.gen.style).kitFlavour,
+      drawSeed: () => this.drawSeed('discover'),
+      render: async (p, trackId) => {
+        if (!this.module) throw new Error('the engine is not loaded yet');
+        return renderHit(this.module, p, this.library, trackId, 110, 3);
+      },
+      play: (audio) => player.play(audio),
+      stop: () => player.stop(host.ctx ?? undefined),
+      analyse: async (p, target) => {
+        if (!this.module) throw new Error('the engine is not loaded yet');
+        const rec = await analyseTarget(this.module, p, this.library, target);
+        // the live sound's result is the TUNER's too
+        if (p === this.project) this.pitch.set(rec);
+        return rec;
+      },
+      check: async (kit, voice, seed) => (this.kits ? this.kits.check(kit, { flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), seed, voices: [voice], locked: [false, false, false, false, false, false] }) : kit),
+      apply: (c, withExtras) => this.applyDiscovered(c, withExtras),
+      changed: () => this.emit(['discover']),
+      say: (t) => this.say(t),
+    });
+    this.discover.character = this.prefs.discover.character;
+    this.discover.wildness = this.prefs.discover.wildness;
   }
 
   // ------------------------------------------------------------------ events
@@ -365,7 +399,10 @@ export class App {
   private afterLoad(resetHistory: boolean): void {
     resolveBundled(this.project, this.bundledId);
     if (!this.project.tracks.some((t) => t.id === this.ui.track)) this.ui.track = this.project.tracks[0]!.id;
-    if (resetHistory) this.history.clear();
+    if (resetHistory) {
+      this.history.clear();
+      this.discover.reset();
+    }
     this.ui.sel = null;
     this.ui.queued = null;
     this.evolveHome = null;
@@ -1423,6 +1460,29 @@ export class App {
     };
     if (quantise) this.quantised(label, fn, ['kit']);
     else this.change(label, fn, ['kit']);
+  }
+
+  /**
+   * SOUND DISCOVERY: APPLY. The candidate becomes the voice of the selected instrument, and (when it
+   * carries them and the player chose to) the track's modulation and variations. One undo step;
+   * locked parameters keep their values. The record of where it came from goes in the project.
+   */
+  private applyDiscovered(c: Candidate, withExtras: boolean): { locked: number } {
+    let locked = 0;
+    const topics: Topic[] = withExtras && c.extras ? ['kit', 'tracks', 'mod'] : ['kit'];
+    this.change('APPLY CANDIDATE', () => {
+      const r = applyToKit(this.project.kit.synth, c.voice, c, this.project.soundLocks);
+      locked = r.locked;
+      this.applyKitChange(r.kit);
+      if (withExtras && c.extras) {
+        const t = this.track;
+        t.sound = soundWithExtras(t, c.voice, c.extras);
+        this.syncTracks();
+      }
+      (this.project.discovered ??= {})[c.voice] = { name: c.name, origin: clone(c.origin) };
+      this.evolveHome = null;
+    }, topics);
+    return { locked };
   }
 
   /** The LXR voice a track plays (or -1 for a sample track). */

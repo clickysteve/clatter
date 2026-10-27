@@ -17,6 +17,7 @@ import type { ChannelFx, OutputFx } from '../audio/mixfx';
 import type { ModPatch, TrackMod } from '../mod/types';
 import type { TempoAuto } from '../transport/tempo';
 import type { WildSettings } from '../destruction/wildcardProject';
+import type { CandidateOrigin } from '../sound/discover';
 
 /** Ticks per quarter note (musical time unit; 24 per sixteenth). */
 export const PPQ = 96;
@@ -352,6 +353,12 @@ export interface DestructionSettings {
   destroy: DestroySettings;
 }
 
+/** Where a voice's sound came from when it was applied from SOUND DISCOVERY. */
+export interface DiscoveredSound {
+  name: string;
+  origin: CandidateOrigin;
+}
+
 /** The LXR kit: every sound parameter value (0-127) and the modulation targets. */
 export interface SynthKit {
   params: number[];
@@ -429,7 +436,7 @@ export interface MasterSettings {
 
 export interface Project {
   format: 'clatter-project';
-  version: 1 | 2 | 3 | 4 | 5;
+  version: 1 | 2 | 3 | 4 | 5 | 6;
   /** the four performance macros 0-1 (absent: 0) */
   macros?: number[];
   name: string;
@@ -451,6 +458,8 @@ export interface Project {
   /** the sample set the tracks' samples came from or were saved as (display; the samples themselves are on the tracks) */
   sampleSet?: string;
   soundLocks: SoundLocks;
+  /** the candidate last applied to each voice from SOUND DISCOVERY (voice 0-5 → its name and the seed metadata that makes it again; record only) */
+  discovered?: Record<number, DiscoveredSound>;
   patterns: Pattern[];
   current: string;
   chain: { on: boolean; entries: ChainEntry[] };

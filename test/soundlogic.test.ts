@@ -392,7 +392,7 @@ describe('persistence', () => {
     expect(back.tracks[0]!.sound.variations).toEqual(p.tracks[0]!.sound.variations);
     expect(back.tracks[0]!.sound.soundLock).toBe(true);
     expect(back.timbre).toEqual({ amount: 0.8, seed: 77 });
-    expect(back.version).toBe(5);
+    expect(back.version).toBe(6);
   });
   it('a project from before step sounds loads with sensible defaults', () => {
     const old = JSON.parse(serialize(defaultProject())) as Record<string, unknown>;
@@ -407,7 +407,7 @@ describe('persistence', () => {
     expect(p.timbre.amount).toBe(0.5);
     expect(p.patterns[0]!.sounds).toBeUndefined();
     expect(p.tracks[0]!.sound.variations).toBeUndefined();
-    expect(p.version).toBe(5);
+    expect(p.version).toBe(6);
   });
   it('damaged sound data is repaired, never trusted', () => {
     const r = repairStepSound({ v: 9, voice: 12, alt: { cond: { k: 'nonsense' }, v: 7 }, locks: { [PAR.VELOD1]: 999, 99999: 3, x: 1 }, rules: [{ p: PAR.VELOD1, op: 'fly', a: 1, b: 2 }, { p: PAR.VELOD1, op: 'range', a: -50, b: 900, cond: { k: 'prob', p: 500 } }] });

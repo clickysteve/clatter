@@ -424,6 +424,16 @@ function lfoTarget(voice: number, a: Archetype, rng: Rng): number {
   return ok.length ? rng.pick(ok) : 0;
 }
 
+/** The LFO target a voice of this archetype would get (SOUND DISCOVERY draws it for its candidates). */
+export const lfoTargetFor = lfoTarget;
+
+/** Is this parameter a menu (a waveform, a filter type) rather than a continuous control? Blends take the one or the other, never a value between. */
+export function isMenuKey(archetype: Archetype, key: Key): boolean {
+  const spec = ARCHETYPES[archetype][key];
+  return spec ? !isRange(spec) : MENU_KEYS.has(key);
+}
+const MENU_KEYS: ReadonlySet<Key> = new Set<Key>(['wave', 'fmWave', 'fmMode', 'm1wave', 'm2wave', 'tWave', 'ftype', 'lfoWave', 'lfoSync', 'lfoRetrig']);
+
 export interface KitGenOptions {
   seed: number;
   flavour: KitFlavour;

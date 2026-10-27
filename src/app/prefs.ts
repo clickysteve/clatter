@@ -9,9 +9,11 @@ import { EXPORT_DEFAULTS } from './exportJob';
 import { defaultWild, repairWild, type WildSettings } from '../destruction/wildcardProject';
 import { DEFAULT_SCALE, snapScale } from '../ui/scale';
 import { checkedSeedText, type SeedValue } from '../rhythm/seed';
+import { CHARACTERS, clampWildness, WILDNESS_DEFAULT } from '../sound/discover';
+import type { KitFlavour } from '../rhythm/styles';
 
 /** The generators that have a seed field of their own. (WILDCARD keeps its seed with its other settings.) */
-export const SEED_SLOTS = ['pattern', 'kit', 'sound'] as const;
+export const SEED_SLOTS = ['pattern', 'kit', 'sound', 'discover'] as const;
 export type SeedSlot = (typeof SEED_SLOTS)[number] | 'wildcard';
 
 /**
@@ -29,7 +31,7 @@ export const WORKSPACES = ['sequence', 'trigger', 'sound', 'generate', 'transfor
 export type Workspace = (typeof WORKSPACES)[number];
 
 /** The tabs of the SOUND view. (Before the overhaul the last one was 'kit': KIT & FX.) */
-export const SOUND_TABS = ['synth', 'sample', 'modulation', 'variations', 'mixer', 'fx', 'tuner', 'kits'] as const;
+export const SOUND_TABS = ['synth', 'sample', 'modulation', 'variations', 'mixer', 'fx', 'tuner', 'discover', 'kits'] as const;
 export type SoundTab = (typeof SOUND_TABS)[number];
 
 export interface Prefs {
@@ -50,6 +52,8 @@ export interface Prefs {
   wildcard: WildSettings & { fixed: boolean };
   /** the seed field of each generator (GENERATE, GENERATE KIT, the sound generators) */
   seeds: Record<(typeof SEED_SLOTS)[number], SeedSlotPref>;
+  /** SOUND DISCOVERY: the character (a kit flavour; 'style' follows the rhythm style) and the wildness 0.05-1 */
+  discover: { character: KitFlavour | 'style'; wildness: number };
   /** keyboard plays the selected track on number keys etc. */
   seenHelp: boolean;
   /** collapsible panels the user closed (window id -> collapsed) */
@@ -58,7 +62,7 @@ export interface Prefs {
 
 const KEY = 'clatter.prefs';
 
-export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', soundTab: 'synth', soundLane: false, uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: EXPORT_DEFAULTS.bars, exportTail: EXPORT_DEFAULTS.tail, wildcard: { ...defaultWild(), fixed: false }, seeds: { pattern: { value: null, fixed: false }, kit: { value: null, fixed: false }, sound: { value: null, fixed: false } }, seenHelp: false, collapsed: {} });
+export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', soundTab: 'synth', soundLane: false, uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: EXPORT_DEFAULTS.bars, exportTail: EXPORT_DEFAULTS.tail, wildcard: { ...defaultWild(), fixed: false }, seeds: { pattern: { value: null, fixed: false }, kit: { value: null, fixed: false }, sound: { value: null, fixed: false }, discover: { value: null, fixed: false } }, discover: { character: 'style', wildness: WILDNESS_DEFAULT }, seenHelp: false, collapsed: {} });
 
 function repairSlot(v: unknown): SeedSlotPref {
   const o = v && typeof v === 'object' ? (v as { value?: { seed?: unknown; text?: unknown }; fixed?: unknown }) : {};
@@ -85,6 +89,7 @@ export function loadPrefs(): Prefs {
       // export length is not remembered between visits: a fresh export dialog offers the defaults
       wildcard: { ...repairWild(v.wildcard), fixed: (v.wildcard as { fixed?: unknown } | undefined)?.fixed === true },
       seeds: Object.fromEntries(SEED_SLOTS.map((s) => [s, repairSlot((v.seeds as Record<string, unknown> | undefined)?.[s])])) as Prefs['seeds'],
+      discover: { character: CHARACTERS.find((c) => c.id === v.discover?.character)?.id ?? 'style', wildness: clampWildness(typeof v.discover?.wildness === 'number' ? v.discover.wildness : WILDNESS_DEFAULT) },
       exportBars: d.exportBars,
       exportTail: d.exportTail,
       seenHelp: v.seenHelp === true,

@@ -29,11 +29,12 @@ import { kitsPane } from './soundKits';
 import { fxPane, mixerPane } from './soundMix';
 import { modulationPane } from './soundMod';
 import { tunerPane } from './soundTuner';
+import { discoverPane } from './soundDiscover';
 import { db, type PaneParts } from './soundUi';
 import { variationsPane } from './soundVar';
 import { font } from '../scale';
 
-const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', variations: 'VARIATIONS', mixer: 'MIXER', fx: 'FX', tuner: 'TUNER', kits: 'KITS' };
+const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', variations: 'VARIATIONS', mixer: 'MIXER', fx: 'FX', tuner: 'TUNER', discover: 'DISCOVER', kits: 'KITS' };
 const TAB_TITLE: Record<SoundTab, string> = {
   synth: 'The selected track’s source, BASE / A-D and the LXR voice parameters',
   sample: 'The sample layer of the base sound or of the variation being edited, and sample sets',
@@ -42,6 +43,7 @@ const TAB_TITLE: Record<SoundTab, string> = {
   mixer: 'Every channel with its processing, the bus processing and the master',
   fx: 'The LXR FX bus and which tracks feed it',
   tuner: 'The audible pitch of the selected sound: note, frequency, cents, confidence and pitch movement, measured in the rendered audio',
+  discover: 'SOUND DISCOVERY: eight candidate sounds for this instrument, auditioned through the LXR engine, compared with the original, mutated, saved and applied only when you say',
   kits: 'Synth kits, sample sets and full kits: save, load, import, export, generate, lock voices',
 };
 const MODE_TAG = { synth: 'SYN', sample: 'SMP', hybrid: 'HYB' } as const;
@@ -418,6 +420,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   parts.set('mixer', mixerPane(app, panes.mixer));
   parts.set('fx', fxPane(app, panes.fx));
   parts.set('tuner', tunerPane(app, panes.tuner));
+  parts.set('discover', discoverPane(app, panes.discover));
   parts.set('kits', kitsPane(app, panes.kits));
   tp.refresh();
 

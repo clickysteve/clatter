@@ -119,6 +119,13 @@ EXPORT(clatter_voice_count) int clatter_voice_count(void) { return CLATTER_VOICE
  */
 static void dispatchParam(uint16_t p)
 {
+	/*
+	 * PAR_BANK_CHANGE (127) has no sound-engine effect: its CC number wraps to 0 (bank select),
+	 * which the handler ignores after first computing paramNr = 0 - 1 as a uint16_t and storing
+	 * midiParser_originalCcValues[0x10000], 64 KB past the 255-byte array. The value stays in
+	 * activeParameters and the kit; it is just never sent to the engine.
+	 */
+	if (p == PAR_BANK_CHANGE) return;
 	MidiMsg msg;
 	msg.data2 = activeParameters[p];
 	if (p < 128)
@@ -241,7 +248,7 @@ EXPORT(clatter_trigger) void clatter_trigger(int trig, int vel, int note)
 /* firmware automation numbering: parameters below 128 carry the +1 offset of the CC handler */
 static uint16_t autoDest(int p)
 {
-	if (p <= 0 || p >= END_OF_SOUND_PARAMETERS) return NO_AUTOMATION;
+	if (p <= 0 || p >= END_OF_SOUND_PARAMETERS || p == PAR_BANK_CHANGE) return NO_AUTOMATION;
 	return (uint16_t)(p < 127 ? p + 1 : p);
 }
 

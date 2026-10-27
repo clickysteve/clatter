@@ -289,6 +289,8 @@ export interface Pattern {
   edits: Record<string, Record<number, Hit | null>>;
   /** the seed and settings that made the baseline */
   seed: number;
+  /** the phrase that named the seed (absent: a plain number, as in every project before 0.5) */
+  seedText?: string;
   settings: GenSettings;
   /** how many VARIATIONs / MUTATEs led here (display) */
   generation: number;
@@ -363,6 +365,7 @@ export interface SynthKit {
 export interface Kit {
   name: string;
   seed: number;
+  seedText?: string;
   synth: SynthKit;
   sounds: Record<string, TrackSound>;
 }
@@ -378,6 +381,8 @@ export interface SoundLocks {
 export interface TimbreSettings {
   amount: number;
   seed: number;
+  /** the phrase that named the seed (absent: a plain number) */
+  seedText?: string;
 }
 
 export type EvolveTarget = 'off' | 'rhythm' | 'sound' | 'both';
@@ -424,7 +429,7 @@ export interface MasterSettings {
 
 export interface Project {
   format: 'clatter-project';
-  version: 1 | 2 | 3 | 4;
+  version: 1 | 2 | 3 | 4 | 5;
   /** the four performance macros 0-1 (absent: 0) */
   macros?: number[];
   name: string;
@@ -435,8 +440,14 @@ export interface Project {
   swing: number;
   /** the project seed (performance randomness) */
   seed: number;
+  /** the phrase that named the project seed (absent: a plain number) */
+  seedText?: string;
+  /** the version of the phrase-to-number hash the phrases were made with (absent: 1; see src/rhythm/seed.ts) */
+  seedHash?: number;
+  /** the version of the generators that made the seeded material (absent: 1, the generators of every older project) */
+  generator?: number;
   tracks: Track[];
-  kit: { name: string; seed: number; synth: SynthKit };
+  kit: { name: string; seed: number; seedText?: string; synth: SynthKit };
   /** the sample set the tracks' samples came from or were saved as (display; the samples themselves are on the tracks) */
   sampleSet?: string;
   soundLocks: SoundLocks;

@@ -18,6 +18,7 @@ import { repairStepSound, repairVariation, soundSampleIds } from '../sound/stepS
 import { repairMod } from '../mod/config';
 import { repairTrig } from '../rhythm/trigger';
 import { repairWild } from '../destruction/wildcardProject';
+import { checkedSeedText, GENERATOR_VERSION, SEED_HASH_VERSION } from '../rhythm/seed';
 import { repairTempoAuto } from '../transport/tempo';
 import { repairChannelFx, repairOutputFx } from '../audio/mixfx';
 
@@ -58,8 +59,15 @@ function repairGrid(v: unknown, steps: number): Grid {
   return g;
 }
 
-function repairPattern(v: unknown, trackIds: string[], i: number): Pattern {
+/** `{ seedText }` when the stored phrase still names the number, else nothing. */
+function seedPart(seed: number, text: unknown, hash: number): { seedText?: string } {
+  const t = checkedSeedText(seed, text, hash);
+  return t ? { seedText: t } : {};
+}
+
+function repairPattern(v: unknown, trackIds: string[], i: number, seedHash: number): Pattern {
   const o = isObj(v) ? v : {};
+  const patSeed = int(o.seed, 1, 0, 0xffffffff);
   const res = oneOf(o.res, RESOLUTIONS, 4) as Resolution;
   const steps = int(o.steps, 32, 1, MAX_STEPS);
   const gen: Record<string, Grid> = {};
@@ -117,7 +125,8 @@ function repairPattern(v: unknown, trackIds: string[], i: number): Pattern {
     res,
     gen,
     edits,
-    seed: int(o.seed, 1, 0, 0xffffffff),
+    seed: patSeed,
+    ...seedPart(patSeed, o.seedText, seedHash),
     settings: {
       style: oneOf(sg.style, STYLES.map((s) => s.id), dg.style),
       density: num(sg.density, dg.density, 0, 1),
@@ -210,7 +219,7 @@ function repairTrack(v: unknown, i: number, def: Track | undefined): Track {
 export function repairProject(v: unknown, initKit?: SynthKit): Project {
   if (!isObj(v)) throw new ProjectError('This is not a CLATTER project.');
   if (v.format !== undefined && v.format !== PROJECT_FORMAT) throw new ProjectError(`This file is not a CLATTER project (${String(v.format)}).`);
-  if (typeof v.version === 'number' && v.version > 4) throw new ProjectError('This project was saved by a newer version of CLATTER.');
+  if (typeof v.version === 'number' && v.version > 5) throw new ProjectError('This project was saved by a newer version of CLATTER.');
   const d = defaultProject();
   const defs = defaultTracks();
   const rawTracks = Array.isArray(v.tracks) ? v.tracks.slice(0, MAX_TRACKS) : [];
@@ -223,7 +232,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
   });
   const ids = tracks.map((t) => t.id);
   const rawPatterns = Array.isArray(v.patterns) ? v.patterns.slice(0, MAX_PATTERNS) : [];
-  const patterns = (rawPatterns.length ? rawPatterns : d.patterns).map((p, i) => repairPattern(p, ids, i));
+  const patterns = (rawPatterns.length ? rawPatterns : d.patterns).map((p, i) => repairPattern(p, ids, i, int(v.seedHash, SEED_HASH_VERSION, 1, 1e6)));
   const pids = new Set<string>();
   patterns.forEach((p, i) => {
     if (pids.has(p.id)) p.id = `p${i + 1}x`;
@@ -243,16 +252,24 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
   const master = isObj(v.master) ? v.master : {};
   const locks = isObj(v.soundLocks) ? v.soundLocks : {};
   const dg = defaultGen();
+  // seeds: the numbers are the truth (old projects have only numbers); a phrase is kept only while it still names its number
+  const seedHash = int(v.seedHash, SEED_HASH_VERSION, 1, 1e6);
+  const projectSeed = int(v.seed, 1, 0, 0xffffffff);
+  const kitSeed = int(kit.seed, 0, 0, 0xffffffff);
+  const timbreSeed = int(isObj(v.timbre) ? v.timbre.seed : undefined, 1, 0, 0xffffffff);
   const p: Project = {
     format: 'clatter-project',
-    version: 4,
+    version: 5,
     name: str(v.name, 'UNTITLED', 40),
     tempo: num(v.tempo, d.tempo, 30, 300),
     ...(repairTempoAuto(v.tempoAuto) ? { tempoAuto: repairTempoAuto(v.tempoAuto) } : {}),
     swing: num(v.swing, 50, 50, 75),
-    seed: int(v.seed, 1, 0, 0xffffffff),
+    seed: projectSeed,
+    ...seedPart(projectSeed, v.seedText, seedHash),
+    seedHash,
+    generator: int(v.generator, GENERATOR_VERSION, 1, 1e6),
     tracks,
-    kit: { name: str(kit.name, 'KIT', 24), seed: int(kit.seed, 0, 0, 0xffffffff), synth: repairKit(kit.synth, initKit) },
+    kit: { name: str(kit.name, 'KIT', 24), seed: kitSeed, ...seedPart(kitSeed, kit.seedText, seedHash), synth: repairKit(kit.synth, initKit) },
     ...(str(v.sampleSet, '', 24) ? { sampleSet: str(v.sampleSet, '', 24) } : {}),
     soundLocks: {
       voices: [0, 1, 2, 3, 4, 5].map((i) => bool((locks.voices as unknown[] | undefined)?.[i], false)),
@@ -298,7 +315,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
       },
     },
     evolve: { target: oneOf(ev.target, ['off', 'rhythm', 'sound', 'both'] as const, 'off'), every: int(ev.every, 4, 1, 64), amount: num(ev.amount, 0.3, 0, 1), returnEvery: int(ev.returnEvery, 4, 0, 64) },
-    timbre: { amount: num(isObj(v.timbre) ? v.timbre.amount : undefined, 0.5, 0, 1), seed: int(isObj(v.timbre) ? v.timbre.seed : undefined, 1, 0, 0xffffffff) },
+    timbre: { amount: num(isObj(v.timbre) ? v.timbre.amount : undefined, 0.5, 0, 1), seed: timbreSeed, ...seedPart(timbreSeed, isObj(v.timbre) ? v.timbre.seedText : undefined, seedHash) },
     quantize: oneOf(v.quantize, ['step', 'beat', 'bar', 'pattern'] as const, 'bar'),
     ...(isObj(v.wildcard) ? { wildcard: repairWild(v.wildcard) } : {}),
     master: { volume: num(master.volume, 0.8, 0, 1), clip: bool(master.clip, true), chain: master.chain ?? null, ...(repairOutputFx(master.out) ? { out: repairOutputFx(master.out) } : {}) },

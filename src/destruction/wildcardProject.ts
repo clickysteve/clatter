@@ -36,6 +36,7 @@ import { generate } from '../rhythm/generate';
 import { mutate, summariseOps } from '../rhythm/mutate';
 import { setHit, setSounds, setStepTrig, shiftTrack, sourceGrid } from '../rhythm/pattern';
 import { hash32, Rng, SALT, strCode } from '../rhythm/rng';
+import { checkedSeedText } from '../rhythm/seed';
 import { styleById } from '../rhythm/styles';
 import { distributeSounds, generateVariations, mutateSounds } from '../sound/soundgen';
 import { mutateKit, voiceRolesOf } from '../sound/kitgen';
@@ -79,6 +80,8 @@ export const wildAffects = (scope: WildScope, cat: WildCat): boolean => SCOPE_CA
 
 export interface WildSettings {
   seed: number;
+  /** the phrase that named the seed (absent: a plain number) */
+  seedText?: string;
   /** 0-100 */
   intensity: number;
   scope: WildScope;
@@ -92,8 +95,11 @@ export function repairWild(v: unknown): WildSettings {
   if (!v || typeof v !== 'object') return d;
   const o = v as Record<string, unknown>;
   const n = (x: unknown, dv: number, lo: number, hi: number) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(clamp(x, lo, hi)) : dv);
+  const seed = n(o.seed, d.seed, 0, 0xffffffff);
+  const seedText = checkedSeedText(seed, o.seedText);
   return {
-    seed: n(o.seed, d.seed, 0, 0xffffffff),
+    seed,
+    ...(seedText ? { seedText } : {}),
     intensity: n(o.intensity, d.intensity, 0, 100),
     scope: WILD_SCOPES.includes(o.scope as WildScope) ? (o.scope as WildScope) : d.scope,
     cats: Array.isArray(o.cats) ? WILD_CATS.filter((c) => (o.cats as unknown[]).includes(c)) : d.cats,
@@ -186,6 +192,7 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
           if (w.regenerate && r.chance(0.3 + 0.7 * k)) {
             pat.settings = { ...w.gen };
             pat.seed = hash32(s.seed, SALT.wild, strCode(pat.id), 92);
+            delete pat.seedText; // a derived number has no phrase
             const keep = Object.fromEntries(p.tracks.filter((t) => t.lock || !ids.includes(t.id)).map((t) => [t.id, sourceGrid(pat, t.id)]));
             pat.gen = generate(p.tracks, pat.settings, pat.seed, { steps: pat.steps, res: pat.res }, { ...pat.gen, ...keep });
             for (const id of ids) delete pat.edits[id];
@@ -289,6 +296,7 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
       const amount = 0.08 + 0.55 * k;
       p.kit.synth = mutateKit(p.kit.synth, { ...kitOpts, seed: hash32(s.seed, SALT.wild, 95), amount, voices });
       p.kit.seed = hash32(s.seed, 96);
+      delete p.kit.seedText;
       bump('sound', voices.length);
       parts.push(`KIT MUTATED ${Math.round(amount * 100)}% (${voices.length} VOICES)`);
     }

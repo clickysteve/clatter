@@ -15,6 +15,7 @@ import { defaultRolls } from '../destruction/rolls';
 import { defaultGen } from '../rhythm/generate';
 import { defaultOutputFx } from '../audio/mixfx';
 import { newPattern } from '../rhythm/pattern';
+import { GENERATOR_VERSION, SEED_HASH_VERSION } from '../rhythm/seed';
 import { GM_NOTE, ROLE_LABEL, SNAPSHOTS, type Project, type Role, type SynthKit, type Track, type TrackMix, type TrackPlay, type TrackSound } from './types';
 
 export const defaultSound = (over: Partial<TrackSound> = {}): TrackSound => ({
@@ -75,11 +76,13 @@ export function defaultProject(): Project {
   const pattern = newPattern('p1', 'A', gen);
   return {
     format: 'clatter-project',
-    version: 4,
+    version: 5,
     name: 'UNTITLED',
     tempo: 124,
     swing: 50,
     seed: 1,
+    seedHash: SEED_HASH_VERSION,
+    generator: GENERATOR_VERSION,
     tracks: defaultTracks(),
     kit: { name: 'INIT', seed: 0, synth: emptySynthKit() },
     soundLocks: { voices: [false, false, false, false, false, false], params: [] },

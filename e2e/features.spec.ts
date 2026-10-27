@@ -146,3 +146,49 @@ test('EXPORT KIT is also on SOUND > KITS, and the pattern EXPORT keeps its place
   await expect(page.locator('[data-test=export-kit].dialog')).toBeVisible();
   await page.keyboard.press('Escape');
 });
+
+test('seed fields: a typed phrase is held, GENERATE repeats it, the dice and CLEAR work, and the phrase survives a reload', async ({ page }) => {
+  const errors = await bootAt(page);
+  await page.click('[data-test=ws-generate]');
+  const field = page.locator('[data-test=gen-seed]');
+  await expect(field).toBeVisible();
+  await field.fill('Velvet Orbit');
+  await field.press('Enter');
+  await expect(field).toHaveValue('velvet-orbit');
+  const grids = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.gen));
+  await page.click('[data-test=generate]');
+  const first = await grids();
+  await page.click('[data-test=generate]');
+  expect(await grids()).toEqual(first);
+  expect(await page.evaluate(() => (window as unknown as W).clatter.pattern.seedText)).toBe('velvet-orbit');
+  // the dice holds a new two-word phrase
+  await page.click('[data-test=gen-seed-roll]');
+  await expect(field).toHaveValue(/^[a-z]+-[a-z]+$/);
+  await expect(field).not.toHaveValue('velvet-orbit');
+  // CLEAR frees the seed: the next GENERATE draws a phrase and shows it
+  await page.click('[data-test=gen-seed-clear]');
+  await expect(field).toHaveValue('');
+  await page.click('[data-test=generate]');
+  await expect(field).toHaveValue(/^[a-z]+-[a-z]+$/);
+  // a number is a plain number seed
+  await field.fill('12345');
+  await field.press('Enter');
+  await page.click('[data-test=generate]');
+  expect(await page.evaluate(() => (window as unknown as W).clatter.pattern.seed)).toBe(12345);
+  // typing in the field plays no shortcut (G would GENERATE)
+  const before = await grids();
+  await field.fill('gold');
+  await field.press('Escape');
+  expect(await grids()).toEqual(before);
+  // the phrase is saved with the project
+  await field.fill('silver-moth');
+  await field.press('Enter');
+  await page.click('[data-test=generate]');
+  await page.waitForTimeout(1200);
+  await page.reload();
+  await page.waitForSelector('#transport', { timeout: 30_000 });
+  expect(await page.evaluate(() => (window as unknown as W).clatter.pattern.seedText)).toBe('silver-moth');
+  await page.click('[data-test=ws-generate]');
+  await expect(page.locator('[data-test=gen-seed]')).toHaveValue('silver-moth');
+  expect(errors).toEqual([]);
+});

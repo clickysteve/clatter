@@ -23,6 +23,7 @@ import { repairKit } from './project';
 import { repairMod } from '../mod/config';
 import { repairChannelFx, repairOutputFx, type ChannelFx, type OutputFx } from '../audio/mixfx';
 import type { TrackMod } from '../mod/types';
+import { checkedSeedText } from '../rhythm/seed';
 import { ROLE_LABEL, ROLES, VARIATION_SLOTS, clamp, clone, type Kit, type Project, type Role, type SampleOverrides, type SourceMode, type SynthKit, type TrackMix, type TrackSound, type Variation } from './types';
 import { repairVariation } from '../sound/stepSound';
 import { CLATTER_EXT, CORE_ROLE, SET_SCHEMA, clatterExt } from '../samples/sets';
@@ -52,6 +53,8 @@ export interface VoiceConfig {
 export interface SynthKitData {
   name: string;
   seed: number;
+  /** the phrase that named the seed (absent: a plain number) */
+  seedText?: string;
   synth: SynthKit;
   /** by track role */
   voices: Record<string, VoiceConfig>;
@@ -72,7 +75,7 @@ export function synthKitOf(p: Project): SynthKitData {
   for (const t of firstOfRole(p)) {
     voices[t.role] = { trigger: t.sound.trigger, note: t.sound.note, mod: t.sound.mod ? clone(t.sound.mod) : null, ...(t.sound.variations ? { variations: t.sound.variations.map(withoutSample) } : {}) };
   }
-  return { name: p.kit.name, seed: p.kit.seed, synth: clone(p.kit.synth), voices };
+  return { name: p.kit.name, seed: p.kit.seed, ...(p.kit.seedText ? { seedText: p.kit.seedText } : {}), synth: clone(p.kit.synth), voices };
 }
 
 /**
@@ -127,7 +130,9 @@ function repairVoices(v: unknown): Record<string, VoiceConfig> {
 
 export function repairSynthKit(v: unknown, init?: SynthKit): SynthKitData {
   const o = isObj(v) ? v : {};
-  return { name: name24(o.name, 'KIT'), seed: Math.round(num(o.seed, 0, 0, 0xffffffff)), synth: repairKit(o.synth, init), voices: repairVoices(o.voices) };
+  const seed = Math.round(num(o.seed, 0, 0, 0xffffffff));
+  const seedText = checkedSeedText(seed, o.seedText);
+  return { name: name24(o.name, 'KIT'), seed, ...(seedText ? { seedText } : {}), synth: repairKit(o.synth, init), voices: repairVoices(o.voices) };
 }
 
 export function serializeSynthKit(k: SynthKitData): string {
@@ -304,6 +309,6 @@ export function legacyToFullKit(old: Kit, nameOf: (id: string) => string | undef
   const sources = sourcesOf(sounds);
   const extra = variationSampleIds(sources);
   if (extra.length) instruments.push({ role: VARIATION_ROLE, label: 'VARIATION SAMPLES', samples: extra.map((sample) => ({ sample })) });
-  const ext: FullKitExt = { schema: FULL_KIT_SCHEMA, kind: 'full-kit', synth: { name: old.name, seed: old.seed, synth: old.synth, voices }, sources };
+  const ext: FullKitExt = { schema: FULL_KIT_SCHEMA, kind: 'full-kit', synth: { name: old.name, seed: old.seed, ...(old.seedText ? { seedText: old.seedText } : {}), synth: old.synth, voices }, sources };
   return { name: old.name, instruments, ext: { [CLATTER_EXT]: ext } };
 }

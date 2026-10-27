@@ -10,6 +10,8 @@
 import type { App } from '../../app/app';
 import type { TrigCond } from '../../model/types';
 import { defaultTrig, describeTrig, TRIG_HELP, TRIG_KINDS, TRIG_LABEL } from '../../rhythm/trigger';
+import { randomSeedPhrase } from '../../rhythm/seed';
+import { seedField } from '../seedField';
 import { button, group, h, num, Panel, range, select } from '../widgets';
 
 const QUICK: { label: string; cond: TrigCond; title: string }[] = [
@@ -152,6 +154,17 @@ export function triggerEditor(app: App, pane: HTMLElement, panel: Panel): void {
     pnote.textContent = app.ui.playing
       ? 'PLAYING: THE GRID FOLLOWS THE PASS THAT IS SOUNDING. LAST CYCLE NEEDS A KNOWN LENGTH, SO IT PLAYS IN AN EXPORT, NOT LIVE.'
       : 'THE GRID SHOWS THIS PASS WHILE STOPPED. PASSES COUNT FROM THE START OF THE PATTERN: A DIFFERENT PATTERN STARTS AT 1 AGAIN.';
+  });
+  const sr = h('div', 'row', pg);
+  h('div', 'lbl', sr, 'SEED').title = 'The project seed: the same seed, pattern and settings make the same choices in every conditional step, probability, fill and export';
+  const ps = h('div', 'grow', sr);
+  seedField(panel, ps, {
+    get: () => ({ seed: app.project.seed, ...(app.project.seedText ? { text: app.project.seedText } : {}) }),
+    onInput: (text) => app.setProjectSeed(text),
+    onRoll: () => app.setProjectSeed(randomSeedPhrase()),
+    onClear: () => app.resetProjectSeed(),
+    title: 'The seed of every conditional step, step-sound probability and fill. Changing it changes which steps play, so pick one that sounds right and keep it.',
+    test: 'project-seed',
   });
   const cr = h('div', 'row wrap', pg);
   button(panel, cr, 'CLEAR THIS TRACK', () => app.clearTriggers(false), { cls: 'grow', disabled: () => !Object.keys(app.pattern.trig?.[app.ui.track] ?? {}).length, title: 'Every step of the selected track plays on every pass again' }).dataset.test = 'trig-clear-track';

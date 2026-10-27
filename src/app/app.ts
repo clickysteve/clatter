@@ -30,11 +30,12 @@ import { generate, stepsPerBar } from '../rhythm/generate';
 import { mutate, summariseOps } from '../rhythm/mutate';
 import { clearTrack, commitEdits, copyRegion, editCount, newPattern, pasteRegion, setHit, setLength, setResolution, setSounds, setStepSound, setStepTrig, setTrigs, trigAt, shiftTrack, soundCount, sourceGrid, stepSoundAt, type Clip } from '../rhythm/pattern';
 import { hash32, randomSeed, Rng } from '../rhythm/rng';
+import { assignSeed, parseSeedInput, randomSeedValue, seedLabel, type SeedValue } from '../rhythm/seed';
 import { applyVelOp, clampVel, VEL_LABEL, type VelOp } from '../rhythm/velocity';
 import type { GestureHost } from '../ui/stepGesture';
 import { styleById } from '../rhythm/styles';
 import type { Realization } from '../rhythm/realize';
-import { applyWildcard, repairWild, SCOPE_LABEL, type WildSettings } from '../destruction/wildcardProject';
+import { applyWildcard, defaultWild, repairWild, SCOPE_LABEL, type WildSettings } from '../destruction/wildcardProject';
 import type { TrigCond } from '../model/types';
 import { bpmAt, tempoActive, type TempoAuto } from '../transport/tempo';
 import { ExportRunner, type ExportFile, type ExportKind } from './exportJob';
@@ -56,7 +57,7 @@ import { ModLibrary } from '../mod/library';
 import { typeOfSource, type ModRoute, type SourceDef, type SourceId, type TrackMod } from '../mod/types';
 import { defaultChannelFx, defaultOutputFx, type ChannelFx, type OutputFx } from '../audio/mixfx';
 import { History } from './history';
-import { loadPrefs, savePrefs, type Prefs, type SoundTab, type Workspace } from './prefs';
+import { loadPrefs, savePrefs, type Prefs, type SeedSlot, type SoundTab, type Workspace } from './prefs';
 import { setScale } from '../ui/scale';
 import { Scheduler, startTicker } from '../transport/scheduler';
 import { PAR } from '../sound/lxrParamIds';
@@ -629,7 +630,7 @@ export class App {
         }
         const p: Pattern = copy ? { ...clone(this.pattern), id: `p${n}`, name } : newPattern(`p${n}`, name, this.project.gen, this.pattern.res);
         if (!copy) {
-          p.seed = randomSeed();
+          assignSeed(p, randomSeedValue());
           p.gen = generate(this.project.tracks, this.project.gen, p.seed, { steps: p.steps, res: p.res });
         }
         this.project.patterns.push(p);
@@ -690,18 +691,95 @@ export class App {
     return { steps: Math.min(MAX_STEPS, stepsPerBar(res) * this.project.gen.bars), res };
   }
 
+  // ---------------------------------------------------------------- seeds (src/rhythm/seed.ts, docs/SEEDS.md)
+
+  /** The seed field of a generator: its seed, and whether every press uses it (FIXED) or draws a new one. */
+  seedSlot(slot: SeedSlot): { value: SeedValue | null; fixed: boolean } {
+    if (slot === 'wildcard') {
+      const w = this.prefs.wildcard;
+      // a wildcard that has never been pressed shows an empty field
+      const blank = !w.fixed && !w.seedText && w.seed === defaultWild().seed;
+      return { value: blank ? null : { seed: w.seed, ...(w.seedText ? { text: w.seedText } : {}) }, fixed: w.fixed };
+    }
+    return this.prefs.seeds[slot];
+  }
+
+  private writeSlot(slot: SeedSlot, value: SeedValue | null, fixed: boolean): void {
+    if (slot === 'wildcard') {
+      const w = this.prefs.wildcard;
+      w.fixed = fixed;
+      if (value) assignSeed(w, value);
+      else if (!fixed) {
+        w.seed = defaultWild().seed;
+        delete w.seedText;
+      }
+    } else this.prefs.seeds[slot] = { value, fixed };
+    savePrefs(this.prefs);
+    this.emit(['transport', 'gen']);
+  }
+
+  /** The seed for a generator's next press: the fixed one, or a new memorable phrase (shown in the field afterwards). */
+  drawSeed(slot: SeedSlot): SeedValue {
+    const cur = this.seedSlot(slot);
+    if (cur.fixed && cur.value) return cur.value;
+    const v = randomSeedValue();
+    this.writeSlot(slot, v, false);
+    return v;
+  }
+
+  /** A phrase or number typed or pasted into a seed field: the next press (and every one after) uses it. Empty: free again. */
+  setSeedInput(slot: SeedSlot, input: string): boolean {
+    const v = parseSeedInput(input);
+    if (!v) {
+      this.clearSeed(slot);
+      return false;
+    }
+    this.writeSlot(slot, v, true);
+    return true;
+  }
+
+  /** The dice: a new memorable phrase, held for the next press. */
+  rollSeed(slot: SeedSlot): void {
+    this.writeSlot(slot, randomSeedValue(), true);
+  }
+
+  /** Back to a new phrase on every press. */
+  clearSeed(slot: SeedSlot): void {
+    this.writeSlot(slot, null, false);
+  }
+
+  setSeedFixed(slot: SeedSlot, fixed: boolean): void {
+    const cur = this.seedSlot(slot);
+    this.writeSlot(slot, cur.value, fixed && !!cur.value);
+  }
+
+  /** The performance seed of the project (conditional triggers, step-sound probabilities, FILL, export). One undo step. */
+  setProjectSeed(input: string): boolean {
+    const v = parseSeedInput(input);
+    if (!v) return false;
+    this.change('SEED', () => assignSeed(this.project, v), ['project']);
+    this.say(`PERFORMANCE SEED ${seedLabel(v)}`);
+    return true;
+  }
+
+  /** Back to the seed a new project has. */
+  resetProjectSeed(): void {
+    this.change('SEED', () => assignSeed(this.project, { seed: defaultProject().seed }), ['project']);
+  }
+
   /** GENERATE: a new arrangement from the generator settings (locked tracks and hand edits kept). */
   generatePattern(quantise = false): void {
-    const seed = randomSeed();
+    const sv = this.drawSeed('pattern');
+    const seed = sv.seed;
     const fn = () => {
       const p = this.pattern;
       const geo = this.genGeometry();
       if (p.steps !== geo.steps) setLength(p, geo.steps);
-      p.seed = seed;
+      assignSeed(p, sv);
       p.settings = { ...this.project.gen };
       p.gen = generate(this.project.tracks, this.project.gen, seed, geo, p.gen);
       p.generation = 0;
-      this.say(`GENERATED ${styleById(this.project.gen.style).label} · SEED ${seed}`);
+      this.say(`GENERATED ${styleById(this.project.gen.style).label} · SEED ${seedLabel(sv)}`);
     };
     if (quantise) this.quantised('GENERATE', fn, ['pattern']);
     else this.change('GENERATE', fn, ['pattern']);
@@ -1062,11 +1140,8 @@ export class App {
    */
   wildcard(quantise = false): void {
     const w = this.prefs.wildcard;
-    const settings: WildSettings = { seed: w.fixed ? w.seed : randomSeed(), intensity: w.intensity, scope: w.scope, cats: [...w.cats] };
-    if (!w.fixed) {
-      w.seed = settings.seed;
-      savePrefs(this.prefs);
-    }
+    const sv = this.drawSeed('wildcard');
+    const settings: WildSettings = { seed: sv.seed, ...(sv.text ? { seedText: sv.text } : {}), intensity: w.intensity, scope: w.scope, cats: [...w.cats] };
     const fn = () => {
       const r = applyWildcard(this.project, settings, { track: this.ui.track, pool: this.library.list().map((x) => ({ id: x.id, role: x.role })) });
       this.project.wildcard = { ...settings, cats: [...settings.cats] };
@@ -1076,7 +1151,7 @@ export class App {
       this.scheduler.setTempo(this.project.tempo);
       this.scheduler.retempo();
       this.live.setBpm(this.effectiveBpm());
-      this.say(`WILDCARD ${settings.intensity}% ${SCOPE_LABEL[settings.scope]} · SEED ${settings.seed} · ${r.report.join(' · ')}`);
+      this.say(`WILDCARD ${settings.intensity}% ${SCOPE_LABEL[settings.scope]} · SEED ${seedLabel(sv)} · ${r.report.join(' · ')}`);
     };
     const topics: Topic[] = ['pattern', 'gen', 'destruction', 'kit', 'transport', 'tracks', 'mix', 'master', 'mod'];
     if (quantise) this.quantised('WILDCARD', fn, topics);
@@ -1323,14 +1398,15 @@ export class App {
 
   /** GENERATE KIT: a new set of synthesised drums designed for the style. */
   async generateKit(quantise = false): Promise<void> {
-    const seed = randomSeed();
+    const sv = this.drawSeed('kit');
+    const seed = sv.seed;
     const kit = await this.checkedKit(generateKit(this.project.kit.synth, this.kitOpts(seed)), seed);
     const fn = () => {
       this.applyKitChange(kit);
-      this.project.kit.seed = seed;
-      this.project.kit.name = `KIT ${seed.toString(36).toUpperCase().slice(0, 5)}`;
+      assignSeed(this.project.kit, sv);
+      this.project.kit.name = `KIT ${sv.text ?? seed.toString(36)}`.toUpperCase().slice(0, 24);
       this.evolveHome = clone(kit);
-      this.say(`NEW ${styleById(this.project.gen.style).kitFlavour.toUpperCase()} KIT · SEED ${seed}`);
+      this.say(`NEW ${styleById(this.project.gen.style).kitFlavour.toUpperCase()} KIT · SEED ${seedLabel(sv)}`);
     };
     if (quantise) this.quantised('GENERATE KIT', fn, ['kit']);
     else this.change('GENERATE KIT', fn, ['kit']);
@@ -2082,18 +2158,21 @@ export class App {
     return { steps: p.steps, perBeat: p.res, perBar: p.res * 4 };
   }
 
+  /** The seed of a run of the sound generators (the SOUND seed field), recorded in the project's TIMBRE. */
   private newSoundSeed(): number {
-    const seed = randomSeed();
-    this.project.timbre.seed = seed;
-    return seed;
+    const sv = this.drawSeed('sound');
+    assignSeed(this.project.timbre, sv);
+    return sv.seed;
   }
 
   /** GENERATE VARIATIONS: fill the free slots A-D of the tracks in scope with related timbres. */
   generateVariationsFor(tracks = this.soundScope().tracks, force = false): void {
-    const seed = randomSeed();
+    const sv = this.drawSeed('sound');
+    const seed = sv.seed;
     this.change(
       'GENERATE VARIATIONS',
       () => {
+        assignSeed(this.project.timbre, sv);
         let n = 0;
         for (const t of tracks) {
           const next = generateVariations(t.sound, t.role, this.project.kit.synth.params, { seed, amount: this.project.timbre.amount, locks: this.project.soundLocks, force });
@@ -2328,7 +2407,7 @@ export class App {
     this.history.push('NEW PROJECT');
     const p = defaultProject();
     p.kit = { name: 'INIT', seed: 0, synth: clone(this.initKit) };
-    p.patterns[0]!.seed = randomSeed();
+    assignSeed(p.patterns[0]!, randomSeedValue());
     p.patterns[0]!.gen = generate(p.tracks, p.gen, p.patterns[0]!.seed, { steps: p.patterns[0]!.steps, res: 4 });
     this.project = p;
     this.afterLoad(false);

@@ -24,6 +24,7 @@ import { readKitFile } from '../model/kitFile';
 import { applyJoin, applyVoices, fullKitExtOf, fullKitOf, legacyToFullKit, parseSynthKit, serializeSynthKit, synthKitOf, SYNTH_KIT_EXT, type SynthKitData } from '../model/kits';
 import { projectSamples } from '../model/project';
 import { clone, ROLE_LABEL, type Role } from '../model/types';
+import { assignSeed } from '../rhythm/seed';
 import { CLATTER_EXT, CORE_ROLE, NEUTRAL, SET_SCHEMA, applyPlan, captureSet, defaultApply, planSet, setSignature, targetsOf, type ApplyOptions, type SetPlan } from '../samples/sets';
 import { baseName, stem } from '../samples/names';
 import { readArchive, intakeFromEntries, type Candidate, type Intake } from '../samples/intake';
@@ -307,7 +308,7 @@ export class KitManager {
       () => {
         this.app.applyKitChange(clone(full.synth.synth));
         p.kit.name = full.synth.name;
-        p.kit.seed = full.synth.seed;
+        assignSeed(p.kit, { seed: full.synth.seed, text: full.synth.seedText });
         applyVoices(p, full.synth.voices);
         applyPlan(p, plan);
         applyJoin(p, full, (id) => !!this.app.library.get(id));
@@ -365,7 +366,7 @@ export class KitManager {
       () => {
         this.app.applyKitChange(clone(data.synth));
         p.kit.name = data.name;
-        p.kit.seed = data.seed;
+        assignSeed(p.kit, { seed: data.seed, text: data.seedText });
         applyVoices(p, data.voices);
       },
       ['kit', 'tracks'],

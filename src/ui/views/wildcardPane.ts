@@ -10,7 +10,8 @@
 import type { App } from '../../app/app';
 import { CAT_HELP, CAT_LABEL, SCOPE_HELP, SCOPE_LABEL, WILD_CATS, WILD_SCOPES, wildAffects } from '../../destruction/wildcardProject';
 import { bpmAt, tempoActive } from '../../transport/tempo';
-import { button, group, h, num, Panel, range } from '../widgets';
+import { seedField } from '../seedField';
+import { button, group, h, Panel, range } from '../widgets';
 
 const feel = (i: number): string => (i < 15 ? 'A NUDGE' : i < 35 ? 'SUBTLE' : i < 60 ? 'ADVENTUROUS' : i < 85 ? 'WILD' : 'UNHINGED');
 
@@ -63,12 +64,21 @@ export function wildcardPane(app: App, pane: HTMLElement, panel: Panel): void {
 
   const sd = h('div', 'row wrap', card);
   h('div', 'lbl', sd, 'SEED').title = 'The same project and seed always make the same WILDCARD: undo, then press again with FIXED SEED on';
-  num(panel, sd, { get: () => w().seed, set: (v) => app.setWildcard({ seed: v }), min: 0, max: 4294967295, title: 'The seed of the last press. Type one to reproduce a result.' }).dataset.test = 'wildcard-seed';
-  button(panel, sd, 'FIXED SEED', () => app.setWildcard({ fixed: !w().fixed }), { on: () => w().fixed, title: 'On: every press uses this seed (undo, press again: the same result). Off: every press draws a new seed and shows it here.' }).dataset.test = 'wildcard-fixed';
+  const sdh = h('div', 'grow', sd);
+  seedField(panel, sdh, {
+    get: () => app.seedSlot('wildcard').value,
+    fixed: () => w().fixed,
+    onFixed: (on) => app.setSeedFixed('wildcard', on),
+    onInput: (t) => void app.setSeedInput('wildcard', t),
+    onRoll: () => app.rollSeed('wildcard'),
+    onClear: () => app.clearSeed('wildcard'),
+    title: 'The seed of the last press. Type a phrase (or a number) to reproduce a result; FIXED holds it for every press.',
+    test: 'wildcard-seed',
+  });
   const rec = h('div', 'hint', sd);
   panel.add(() => {
     const last = app.project.wildcard;
-    rec.textContent = last ? `LAST IN THIS PROJECT: SEED ${last.seed} · ${last.intensity}% · ${SCOPE_LABEL[last.scope]}` : '';
+    rec.textContent = last ? `LAST IN THIS PROJECT: SEED ${(last.seedText ?? String(last.seed)).toUpperCase()} · ${last.intensity}% · ${SCOPE_LABEL[last.scope]}` : '';
   });
 
   // ---------------------------------------------------------------- the tempo curve

@@ -11,8 +11,8 @@ One button that varies the whole instrument. PATTERN > WILDCARD (key W).
   kit: sound, samples, modulation, fx, mixer (not patterns, tempo or output).
   project: everything, including tempo, swing and the output stage.
 - **Seed**: the result is a pure function of the project, the settings, the seed and the track.
-  Each press draws a new seed unless FIXED SEED is on; the seed of the last press is shown and
-  can be typed to reproduce a result. TRY ANOTHER undoes the last WILDCARD and presses again.
+  Each press draws a new memorable phrase (`velvet-orbit`) unless FIXED is on; the seed of the last press is shown and
+  can be typed (a phrase or a number) to reproduce a result. See `docs/SEEDS.md`. TRY ANOTHER undoes the last WILDCARD and presses again.
 - **Undo**: one undo step, tempo included, and redo brings it forward.
 
 ## Tempo

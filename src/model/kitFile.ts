@@ -8,6 +8,7 @@
  */
 import { createZip, readZip } from '@slopfactory/core/export';
 import type { StoredSample } from '@slopfactory/core/storage';
+import { checkedSeedText } from '../rhythm/seed';
 import { clone, type Kit, type Project, type SynthKit, type TrackSound } from './types';
 import { repairKit } from './project';
 
@@ -19,6 +20,7 @@ interface KitJson {
   version: 1;
   name: string;
   seed: number;
+  seedText?: string;
   synth: SynthKit;
   /** per track role */
   sounds: Record<string, TrackSound>;
@@ -28,13 +30,13 @@ interface KitJson {
 export function kitOf(p: Project): Kit {
   const sounds: Record<string, TrackSound> = {};
   for (const t of p.tracks) if (!(t.role in sounds)) sounds[t.role] = clone(t.sound);
-  return { name: p.kit.name, seed: p.kit.seed, synth: p.kit.synth, sounds };
+  return { name: p.kit.name, seed: p.kit.seed, ...(p.kit.seedText ? { seedText: p.kit.seedText } : {}), synth: p.kit.synth, sounds };
 }
 
 export function writeKitFile(kit: Kit, samples: StoredSample[]): Uint8Array {
   const enc = new TextEncoder();
   const files = samples.map((s, i) => ({ s, file: `samples/${String(i + 1).padStart(2, '0')}-${s.id.slice(0, 12)}.wav` }));
-  const json: KitJson = { format: KIT_FORMAT, version: 1, name: kit.name, seed: kit.seed, synth: kit.synth, sounds: kit.sounds, samples: files.map(({ s, file }) => ({ id: s.id, name: s.name, file })) };
+  const json: KitJson = { format: KIT_FORMAT, version: 1, name: kit.name, seed: kit.seed, ...(kit.seedText ? { seedText: kit.seedText } : {}), synth: kit.synth, sounds: kit.sounds, samples: files.map(({ s, file }) => ({ id: s.id, name: s.name, file })) };
   return createZip([{ name: 'kit.json', data: enc.encode(JSON.stringify(json, null, 1)) }, ...files.map(({ s, file }) => ({ name: file, data: new Uint8Array(s.bytes) }))]);
 }
 
@@ -54,5 +56,7 @@ export async function readKitFile(bytes: Uint8Array): Promise<ReadKitResult> {
     const e = entries.find((x) => x.name === s.file);
     if (e) samples.push({ id: s.id, name: s.name, bytes: e.data.slice().buffer });
   }
-  return { kit: { name: String(v.name ?? 'KIT').slice(0, 24), seed: Number(v.seed) || 0, synth: repairKit(v.synth), sounds: (v.sounds ?? {}) as Record<string, TrackSound> }, samples };
+  const kseed = Number(v.seed) || 0;
+  const kseedText = checkedSeedText(kseed, v.seedText);
+  return { kit: { name: String(v.name ?? 'KIT').slice(0, 24), seed: kseed, ...(kseedText ? { seedText: kseedText } : {}), synth: repairKit(v.synth), sounds: (v.sounds ?? {}) as Record<string, TrackSound> }, samples };
 }

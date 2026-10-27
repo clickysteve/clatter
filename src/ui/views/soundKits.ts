@@ -12,6 +12,7 @@ import { synthKitOf } from '../../model/kits';
 import { VOICES } from '../../sound/lxrParams';
 import { kitLibraryDialog, openKitFile } from '../kitDialogs';
 import { exportKitDialog } from '../kitExportDialog';
+import { seedField } from '../seedField';
 import { button, chooseFiles, download, group, h, num, Panel } from '../widgets';
 import { viewVoice } from './soundControls';
 import { subscribe } from './patternView';
@@ -31,8 +32,12 @@ export function kitsPane(app: App, pane: HTMLElement): PaneParts {
   button(kp, top, 'MUTATE KIT', () => void app.mutateKit(mutAmt), { cls: 'med', disabled: () => app.ui.busy, title: 'Controlled changes to every unlocked voice (⇧K)' }).dataset.test = 'mutate-kit';
   h('div', 'lbl', top, 'AMOUNT');
   num(kp, top, { get: () => Math.round(mutAmt * 100), set: (v) => ((mutAmt = v / 100), kp.refresh()), min: 5, max: 100, format: (v) => v + '%', title: 'How far MUTATE goes' });
+  const sr = h('div', 'row sndtop', pane);
+  h('div', 'lbl', sr, 'SEED').title = 'The seed of GENERATE KIT. Type a phrase (or a number) to hold it: the same seed, style and locks make the same kit.';
+  const sh = h('div', 'grow', sr);
+  seedField(kp, sh, { get: () => app.seedSlot('kit').value, fixed: () => app.seedSlot('kit').fixed, onFixed: (on) => app.setSeedFixed('kit', on), onInput: (t) => void app.setSeedInput('kit', t), onRoll: () => app.rollSeed('kit'), onClear: () => app.clearSeed('kit'), test: 'kit-seed' });
   const kn = h('div', 'report grow', top);
-  kp.add(() => (kn.textContent = `${app.project.kit.name} · SEED ${app.project.kit.seed}${app.ui.busy ? ' · CHECKING THE KIT IN THE ENGINE…' : ''} · ${app.project.soundLocks.params.length} PARAMS LOCKED`));
+  kp.add(() => (kn.textContent = `${app.project.kit.name} · SEED ${(app.project.kit.seedText ?? String(app.project.kit.seed)).toUpperCase()}${app.ui.busy ? ' · CHECKING THE KIT IN THE ENGINE…' : ''} · ${app.project.soundLocks.params.length} PARAMS LOCKED`));
 
   const body = h('div', 'kitws sndscroll', pane);
   const cards = h('div', 'kitcards', body);

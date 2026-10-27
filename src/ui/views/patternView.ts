@@ -92,11 +92,7 @@ export function patternView(app: App, screen: HTMLElement): View {
   h('div', 'lbl', tb, 'NEW HIT VELOCITY');
   num(pp, tb, { get: () => app.ui.paintVel, set: (v) => ((app.ui.paintVel = v), pp.refresh(), grid.redrawOverlay()), min: 1, max: 127, title: 'Velocity of the hits you add by clicking' });
   h('div', 'grow', tb);
-  button(pp, tb, 'SOURCE', null, { on: () => app.ui.sourceOnly, hold: (d) => app.setSourceOnly(d), title: 'Hold: hear and see only the written pattern (no density, fills, CHOP, ROLLS, DESTROY)' });
-  button(pp, tb, 'SHOW ORIGINAL', () => app.setShowOriginal(!app.ui.showOriginal), { on: () => app.ui.showOriginal, title: 'Also show the edit history: hand-edited hits (corner flag) and generated hits you deleted (crossed outline). Off: the grid shows only what plays.' }).dataset.test = 'show-original';
-  button(pp, tb, 'SOUND LANE', () => app.setSoundLane(!app.prefs.soundLane), { on: () => app.prefs.soundLane, title: 'Show the variation and condition of every step of the selected track under the grid' }).dataset.test = 'sound-lane';
-  button(pp, tb, 'KEEP EDITS', () => app.keepEdits(), { disabled: () => app.editCount() === 0, title: 'Bake the hand edits into the pattern (generation and mutation then work on them)' });
-  button(pp, tb, 'RESET', () => app.reset(), { title: 'Back to the generated pattern: hand edits cleared, CHOP/ROLLS/DESTROY off' });
+  button(pp, tb, 'CLEAR PATTERN', () => app.clearPattern(), { title: 'Remove every note of this pattern (UNDO brings them back)' }).dataset.test = 'clear-pattern';
   button(pp, tb, '? KEY', () => gridKeyDialog(), { title: 'How to read the grid, and how to edit it' }).dataset.test = 'grid-key';
 
   // the grid takes the height that is left above the workspace
@@ -113,8 +109,8 @@ export function patternView(app: App, screen: HTMLElement): View {
   const foot = h('div', 'gridfoot', pb);
   const where = h('div', 'tiny where grow', foot);
   where.style.color = 'var(--ink)';
-  const gestures = h('div', 'hint', foot, 'CLICK: ADD / REMOVE · DRAG ↕: VELOCITY · DRAG ↔: PAINT · SHIFT-DRAG: ERASE · SHIFT-CLICK / ALT-DRAG: SELECT · RIGHT-CLICK: EDIT');
-  gestures.style.flex = '0 1 auto';
+  const gestures = h('div', 'hint', foot, 'CLICK ADD · DOUBLE-CLICK DELETE · DRAG ↕ VELOCITY · DRAG ↔ PAINT · ? KEY: ALL GESTURES');
+  gestures.title = 'Click an empty step to add a note, click a note to select it, double-click to delete it, drag up or down for velocity, drag sideways to paint. The ? KEY button lists every gesture.';
   let hovered: Cell | null = null;
   const showWhere = () => {
     const c = hovered ?? (() => {
@@ -255,7 +251,7 @@ export function patternView(app: App, screen: HTMLElement): View {
   pp.add(() => {
     const p = app.pattern;
     pw.setTitle(`PATTERN ${p.name}`);
-    pw.info.textContent = `${p.steps} STEPS · ${RESOLUTION_LABEL[p.res]} · ${app.editCount()} HAND EDITS`;
+    pw.info.textContent = `${p.steps} STEPS · ${RESOLUTION_LABEL[p.res]} · ${app.noteCount()} NOTES`;
   });
   subscribe(app, ['pattern', 'destruction'], () => {
     grid.draw();
@@ -351,29 +347,29 @@ export function patternView(app: App, screen: HTMLElement): View {
     test: 'gen-seed',
   });
   const ginfo = h('div', 'report', gb);
-  gp.add(() => (ginfo.textContent = `SEED ${(app.pattern.seedText ?? String(app.pattern.seed)).toUpperCase()} · GENERATION ${app.pattern.generation} · ${app.editCount()} HAND EDITS`));
+  gp.add(() => (ginfo.textContent = `SEED ${(app.pattern.seedText ?? String(app.pattern.seed)).toUpperCase()} · GENERATION ${app.pattern.generation} · ${app.noteCount()} NOTES`));
   const gc = card(gpane);
   pctRange(gp, gc, app, 'DENSITY', () => app.project.gen.density, (v) => app.setGen({ density: v }, 'DENSITY'), 'How many hits');
   pctRange(gp, gc, app, 'COMPLEXITY', () => app.project.gen.complexity, (v) => app.setGen({ complexity: v }, 'COMPLEXITY'), 'Syncopation, off-grid emphasis, ghost notes');
   pctRange(gp, gc, app, 'VARIATION', () => app.project.gen.variation, (v) => app.setGen({ variation: v }, 'VARIATION'), 'How much the bars differ from each other');
   pctRange(gp, gc, app, 'ACCENT', () => app.project.gen.accent, (v) => app.setGen({ accent: v }, 'ACCENT'), 'Velocity contrast between strong and weak hits');
   pctRange(gp, gc, app, 'FILLS', () => app.project.gen.fills, (v) => app.setGen({ fills: v }, 'FILLS'), 'Fills into the end of the phrase');
-  const evo = group(card(gpane), 'EVOLVE');
+  const evo = group(card(gpane), 'LIVE REGEN');
   evo.classList.add('col');
-  const et = ctl(evo, 'TARGET', 'What changes on its own while playing: the rhythm mutates, the kit drifts, or both');
-  select(gp, et.slot, {
-    options: () => (['off', 'rhythm', 'sound', 'both'] as const).map((v) => ({ value: v, label: v.toUpperCase() })),
-    get: () => app.project.evolve.target,
-    set: (v) => app.setEvolve({ target: v }),
-    title: 'What changes on its own while playing: the rhythm mutates, the kit drifts, or both',
-  }).dataset.test = 'evolve';
-  const ee = ctl(evo, 'EVERY', 'Every n bars');
-  num(gp, ee.slot, { get: () => app.project.evolve.every, set: (v) => app.setEvolve({ every: v }), min: 1, max: 32, title: 'Every n bars' });
-  pctRange(gp, evo, app, 'AMOUNT', () => app.project.evolve.amount, (v) => app.setEvolve({ amount: v }), 'How far each step goes');
-  const er = ctl(evo, 'RETURN', 'Rhythm: back to the written pattern after this many generations (0 never)');
+  const hasRhythm = () => app.project.evolve.target === 'rhythm' || app.project.evolve.target === 'both';
+  const hasSound = () => app.project.evolve.target === 'sound' || app.project.evolve.target === 'both';
+  const setTarget = (rhythm: boolean, sound: boolean) => app.setEvolve({ target: rhythm && sound ? 'both' : rhythm ? 'rhythm' : sound ? 'sound' : 'off' });
+  const et = ctl(evo, 'WHILE PLAYING', 'Playback only: every n bars the pattern as it stands is mutated, and the grid shows the result. The pattern itself is never changed; STOP and it is as you left it. Playback and export agree.');
+  const etr = h('div', 'row', et.slot);
+  button(gp, etr, 'RHYTHM', () => setTarget(!hasRhythm(), hasSound()), { cls: 'grow', on: hasRhythm, title: 'Regenerate the rhythm while playing: the current pattern, locked tracks left alone, the same every time for the same seed' }).dataset.test = 'live-rhythm';
+  button(gp, etr, 'SOUND', () => setTarget(hasRhythm(), !hasSound()), { cls: 'grow', on: hasSound, title: 'Let the kit drift while playing' }).dataset.test = 'live-sound';
+  const ee = ctl(evo, 'EVERY', 'Regenerate every n bars');
+  num(gp, ee.slot, { get: () => app.project.evolve.every, set: (v) => app.setEvolve({ every: v }), min: 1, max: 32, format: (v) => `${v} BAR${v === 1 ? '' : 'S'}`, title: 'Regenerate every n bars' }).dataset.test = 'live-every';
+  pctRange(gp, evo, app, 'AMOUNT', () => app.project.evolve.amount, (v) => app.setEvolve({ amount: v }), 'How far each regeneration goes from the pattern');
+  const er = ctl(evo, 'RETURN', 'Rhythm: back to the pattern as written after this many regenerations (0 never)');
   const erow = h('div', 'row', er.slot);
-  num(gp, erow, { get: () => app.project.evolve.returnEvery, set: (v) => app.setEvolve({ returnEvery: v }), min: 0, max: 32, format: (v) => (v ? String(v) : 'OFF'), title: 'Rhythm: back to the written pattern after this many generations (0 never)' });
-  button(gp, erow, 'KIT HOME', () => app.evolveReturn(), { title: 'Sound: back to the kit the evolution started from' });
+  num(gp, erow, { get: () => app.project.evolve.returnEvery, set: (v) => app.setEvolve({ returnEvery: v }), min: 0, max: 32, format: (v) => (v ? String(v) : 'OFF'), title: 'Rhythm: back to the pattern as written after this many regenerations (0 never)' });
+  button(gp, erow, 'KIT HOME', () => app.evolveReturn(), { title: 'Sound: back to the kit the drift started from' });
   infos.generate = () => `${styleById(app.project.gen.style).label} · ${Math.round(app.project.gen.density * 100)}% DENSITY`;
   subscribe(app, ['gen', 'pattern', 'transport'], () => {
     gp.refresh();

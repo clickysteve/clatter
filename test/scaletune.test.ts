@@ -419,7 +419,7 @@ describe('sound variations', () => {
     const plan = pitchPlanOf(p, t)!;
     expect(plan).toBeTruthy();
     const coarse = PAR.COARSE2;
-    t.sound.variations = generateVariations(t.sound, t.role, p.kit.synth.params, { seed: 11, amount: 0.9, locks: p.soundLocks, force: true, pitch: plan });
+    t.sound.variations = generateVariations(t.sound, t.role, p.kit.synth.params, { seed: 11, amount: 0.9, locks: p.soundLocks, pitch: plan });
     const filled = t.sound.variations.filter(Boolean).length;
     expect(filled).toBeGreaterThan(1);
     // the parameter-level pitch of every variation is a scale note
@@ -442,8 +442,8 @@ describe('sound variations', () => {
     t.sound.mode = 'synth';
     p.scale = { on: true, root: 0, type: 'minor' };
     const plan = pitchPlanOf(p, t)!;
-    const free = generateVariations(t.sound, t.role, p.kit.synth.params, { seed: 5, amount: 0.7, locks: p.soundLocks, force: true });
-    const snapped = generateVariations(t.sound, t.role, p.kit.synth.params, { seed: 5, amount: 0.7, locks: p.soundLocks, force: true, pitch: plan });
+    const free = generateVariations(t.sound, t.role, p.kit.synth.params, { seed: 5, amount: 0.7, locks: p.soundLocks });
+    const snapped = generateVariations(t.sound, t.role, p.kit.synth.params, { seed: 5, amount: 0.7, locks: p.soundLocks, pitch: plan });
     for (let i = 0; i < 4; i++) {
       const a = free[i]?.params ?? {};
       const b = snapped[i]?.params ?? {};

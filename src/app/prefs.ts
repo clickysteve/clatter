@@ -40,8 +40,6 @@ export interface Prefs {
   workspace: Workspace;
   /** the tab open in the SOUND view */
   soundTab: SoundTab;
-  /** the sound lane under the selected track in the pattern grid */
-  soundLane: boolean;
   /** interface scale (1 = 100 %); see src/ui/scale.ts */
   uiScale: number;
   editMode: 'basic' | 'advanced';
@@ -62,7 +60,7 @@ export interface Prefs {
 
 const KEY = 'clatter.prefs';
 
-export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', soundTab: 'synth', soundLane: false, uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: EXPORT_DEFAULTS.bars, exportTail: EXPORT_DEFAULTS.tail, wildcard: { ...defaultWild(), fixed: false }, seeds: { pattern: { value: null, fixed: false }, kit: { value: null, fixed: false }, sound: { value: null, fixed: false }, discover: { value: null, fixed: false } }, discover: { character: 'style', wildness: WILDNESS_DEFAULT }, seenHelp: false, collapsed: {} });
+export const defaultPrefs = (): Prefs => ({ view: 'pattern', workspace: 'sequence', soundTab: 'synth', uiScale: DEFAULT_SCALE, editMode: 'basic', midi: defaultMidiPrefs(), exportBars: EXPORT_DEFAULTS.bars, exportTail: EXPORT_DEFAULTS.tail, wildcard: { ...defaultWild(), fixed: false }, seeds: { pattern: { value: null, fixed: false }, kit: { value: null, fixed: false }, sound: { value: null, fixed: false }, discover: { value: null, fixed: false } }, discover: { character: 'style', wildness: WILDNESS_DEFAULT }, seenHelp: false, collapsed: {} });
 
 function repairSlot(v: unknown): SeedSlotPref {
   const o = v && typeof v === 'object' ? (v as { value?: { seed?: unknown; text?: unknown }; fixed?: unknown }) : {};
@@ -82,7 +80,6 @@ export function loadPrefs(): Prefs {
       view: v.view === 'sound' || v.view === 'perform' ? v.view : 'pattern',
       workspace: WORKSPACES.find((w) => w === v.workspace) ?? 'sequence',
       soundTab: SOUND_TABS.find((w) => w === v.soundTab) ?? ((v.soundTab as string) === 'kit' ? 'kits' : 'synth'),
-      soundLane: v.soundLane === true,
       uiScale: snapScale(v.uiScale),
       editMode: v.editMode === 'advanced' ? 'advanced' : 'basic',
       midi: { ...d.midi, ...(v.midi ?? {}) },

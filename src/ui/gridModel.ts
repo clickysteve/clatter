@@ -1,11 +1,10 @@
 /**
  * What the pattern grid shows, as plain data (no drawing, no DOM): for every step of every track,
- * does something sound there, how loud, how likely, and where did it come from. The grid shows
+ * does something sound there, how loud, how likely. The grid shows
  * what will PLAY in the cycle being displayed (the realisation: probability, density, CHOP,
  * ROLLS, DESTROY, fills and evolution applied), so the picture is the audible rhythm. What is
- * written but silent this pass is drawn as an outline, and nothing else needs a symbol; the
- * provenance (generated, hand-edited, added by a transformation) goes to the tooltip and the
- * step editor.
+ * written but silent this pass is drawn as an outline, and nothing else needs a symbol; what a
+ * transformation added goes to the tooltip and the step editor. A written note is just a note.
  *
  *   state 'hit'     a block (its height is the loudest event's velocity)
  *   state 'silent'  a hit is written here but does not sound this pass (outline)
@@ -17,7 +16,7 @@ import type { Hit, Pattern, Resolution, Track } from '../model/types';
 import { describeCond, describeStepSound } from '../sound/stepSound';
 import type { EventKind, PerfEvent } from '../rhythm/events';
 import { stepsPerBar } from '../rhythm/generate';
-import { cellOrigin, sourceGrid, type CellOrigin } from '../rhythm/pattern';
+import { trackGrid } from '../rhythm/pattern';
 import { describeTrig } from '../rhythm/trigger';
 import { CELL_CONDITION, CELL_DESTROYED, CELL_EVOLVED, CELL_MOVED, CELL_SUPPRESSED, type Realization } from '../rhythm/realize';
 
@@ -56,15 +55,12 @@ export type SilentWhy = 'chance' | 'density' | 'moved' | 'evolved' | 'condition'
 
 export interface CellView {
   state: CellState;
-  /** the written hit (baseline with hand edits laid over it) */
+  /** the written hit */
   hit: Hit | null;
-  origin: CellOrigin;
   /** the velocity drawn: the loudest sounding event, else the written hit's */
   vel: number;
   /** sounding events in the cell, grace notes excluded (rolls, stutters, ratchets: more than one) */
   strokes: number;
-  /** the generated baseline hit under a hand edit or a hand deletion (the pattern before editing) */
-  base: Hit | null;
   /** the written hit's chance, 1-100 */
   prob: number;
   /** a grace note sounds before the hit */
@@ -102,14 +98,14 @@ export interface CellSound {
   text: string;
 }
 
-const EMPTY: CellView = { state: 'empty', hit: null, origin: 'empty', vel: 0, strokes: 0, base: null, prob: 100, flam: false, added: false, why: null, kinds: [], destroyed: false, evolved: false, outside: false, snd: null, trig: null };
+const EMPTY: CellView = { state: 'empty', hit: null, vel: 0, strokes: 0, prob: 100, flam: false, added: false, why: null, kinds: [], destroyed: false, evolved: false, outside: false, snd: null, trig: null };
 
 /**
  * The cells of one track. `real` is the realisation being displayed (null: nothing is known about
  * this pass, so every written hit counts as sounding).
  */
 export function trackCells(p: Pattern, t: Track, real: Realization | null): CellView[] {
-  const src = sourceGrid(p, t.id);
+  const src = trackGrid(p, t.id);
   const flags = real?.cells[t.id];
   const byStep = new Map<number, PerfEvent[]>();
   if (real) {
@@ -129,9 +125,7 @@ export function trackCells(p: Pattern, t: Track, real: Realization | null): Cell
     }
     const hit = src[s] ?? null;
     const f = flags?.[s] ?? 0;
-    const origin = cellOrigin(p, t.id, s);
     const prob = hit?.prob ?? 100;
-    const base = origin === 'gen' || origin === 'empty' ? null : (p.gen[t.id]?.[s] ?? null);
     const evolved = (f & CELL_EVOLVED) !== 0;
     const evs = byStep.get(s) ?? [];
     const main = evs.filter((e) => e.kind !== 'flam');
@@ -162,12 +156,12 @@ export function trackCells(p: Pattern, t: Track, real: Realization | null): Cell
     const kinds = [...new Set(main.map((e) => e.kind))];
     const destroyed = main.some((e) => e.destroyed) || (f & CELL_DESTROYED) !== 0;
     if (sounds) {
-      out.push({ state: 'hit', hit, origin, vel, strokes, base, prob, flam: flam || (!!hit?.flam && poly), added: !hit, why: null, kinds, destroyed, evolved, outside: false, snd, trig });
+      out.push({ state: 'hit', hit, vel, strokes, prob, flam: flam || (!!hit?.flam && poly), added: !hit, why: null, kinds, destroyed, evolved, outside: false, snd, trig });
     } else if (hit) {
       const why: SilentWhy = f & CELL_CONDITION ? 'condition' : f & CELL_SUPPRESSED ? (prob < 100 || t.play.chance < 100 ? 'chance' : 'density') : evolved ? 'evolved' : 'moved';
-      out.push({ state: 'silent', hit, origin, vel, strokes: 0, base, prob, flam: false, added: false, why, kinds: [], destroyed: false, evolved, outside: false, snd, trig });
+      out.push({ state: 'silent', hit, vel, strokes: 0, prob, flam: false, added: false, why, kinds: [], destroyed: false, evolved, outside: false, snd, trig });
     } else {
-      out.push({ ...EMPTY, origin, evolved, base, snd, trig });
+      out.push({ ...EMPTY, evolved, snd, trig });
     }
   }
   return out;
@@ -182,13 +176,6 @@ const KIND_TEXT: Record<EventKind, string> = {
   retrig: 'a CHOP retrigger',
   roll: 'a ROLLS stroke',
   stutter: 'a DESTROY stutter',
-};
-
-const ORIGIN_TEXT: Record<CellOrigin, string> = {
-  empty: 'nothing written',
-  gen: 'generated',
-  edit: 'written by hand (a hand edit)',
-  deleted: 'a generated hit you deleted',
 };
 
 /** The tooltip's words for a cell (the grid's footer and the step editor say the same). */
@@ -211,7 +198,7 @@ export function describeCell(name: string, step: number, v: CellView, m: GridMet
   } else {
     lines.push('**Empty. Click to add a hit.');
   }
-  lines.push(`Source: ${v.added ? 'not written here; ' + (v.kinds.map((k) => KIND_TEXT[k]).join(', ') || 'a transformation') : ORIGIN_TEXT[v.origin]}`);
+  if (v.added) lines.push(`Not written here: ${v.kinds.map((k) => KIND_TEXT[k]).join(', ') || 'a transformation'}`);
   const fx: string[] = [];
   if (v.added && v.state === 'hit') fx.push('made by a transformation or fill');
   if (v.kinds.some((k) => k === 'chop' || k === 'retrig')) fx.push('CHOP');
@@ -226,13 +213,10 @@ export function describeCell(name: string, step: number, v: CellView, m: GridMet
 
 const KIND_SHORT: Partial<Record<EventKind, string>> = { fill: 'FILL', chop: 'CHOP', retrig: 'CHOP', roll: 'ROLLS', stutter: 'DESTROY' };
 
-/** Where a cell's content came from, in a few words (for the grid's footer). */
+/** What added a sounding cell that is not written (for the grid's footer), else nothing. */
 export function sourceLabel(v: CellView): string {
-  if (v.state === 'hit' && v.added) return 'ADDED BY ' + ([...new Set([...(v.evolved ? ['EVOLVE'] : []), ...v.kinds.map((k) => KIND_SHORT[k]).filter(Boolean)])].join(' + ') || 'A TRANSFORMATION');
-  if (v.origin === 'edit') return 'HAND EDIT';
-  if (v.origin === 'deleted') return 'GENERATED HIT DELETED BY HAND';
-  if (v.origin === 'gen') return 'GENERATED';
-  return 'NOTHING WRITTEN';
+  if (v.state === 'hit' && v.added) return ' · ADDED BY ' + ([...new Set([...(v.evolved ? ['EVOLVE'] : []), ...v.kinds.map((k) => KIND_SHORT[k]).filter(Boolean)])].join(' + ') || 'A TRANSFORMATION');
+  return '';
 }
 
 /** One line about a cell for the grid's footer (hover, or the cursor). */
@@ -241,9 +225,9 @@ export function summaryLine(name: string, step: number, v: CellView, m: GridMetr
   const where = `${name} · STEP ${step + 1} (BAR ${pos.bar} BEAT ${pos.beat})`;
   if (v.outside) return `${where} · OUTSIDE THIS TRACK'S LOOP`;
   const snd = (v.trig ? ` · PLAYS: ${v.trig}` : '') + (v.snd ? ` · SOUND: ${v.snd.text}` : '');
-  if (v.state === 'hit') return `${where} · SOUNDS · VELOCITY ${v.vel}${v.hit ? ` · CHANCE ${v.prob}%` : ''}${v.strokes > 1 ? ` · ${v.strokes} STROKES` : ''} · ${sourceLabel(v)}${snd}`;
-  if (v.state === 'silent') return `${where} · WRITTEN, SILENT THIS PASS (${v.why === 'condition' ? 'CONDITION' : v.why === 'chance' ? 'CHANCE' : v.why === 'density' ? 'DENSITY' : v.why === 'evolved' ? 'EVOLVE' : 'MOVED OR SKIPPED'}) · VELOCITY ${v.vel} · ${sourceLabel(v)}${snd}`;
-  return `${where} · EMPTY${v.origin === 'deleted' ? ' (A GENERATED HIT WAS DELETED)' : ''}`;
+  if (v.state === 'hit') return `${where} · SOUNDS · VELOCITY ${v.vel}${v.hit ? ` · CHANCE ${v.prob}%` : ''}${v.strokes > 1 ? ` · ${v.strokes} STROKES` : ''}${sourceLabel(v)}${snd}`;
+  if (v.state === 'silent') return `${where} · WRITTEN, SILENT THIS PASS (${v.why === 'condition' ? 'CONDITION' : v.why === 'chance' ? 'CHANCE' : v.why === 'density' ? 'DENSITY' : v.why === 'evolved' ? 'EVOLVE' : 'MOVED OR SKIPPED'}) · VELOCITY ${v.vel}${snd}`;
+  return `${where} · EMPTY${snd}`;
 }
 
 /**

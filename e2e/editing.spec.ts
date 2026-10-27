@@ -58,13 +58,13 @@ test('sideways paints, Shift-drag erases, and neighbouring tracks are untouched'
   const g = await geo(page);
   const id = await emptyTrack(page, 6);
   const above = await page.evaluate(() => (window as unknown as W).clatter.project.tracks[5]!.id);
-  const before = await page.evaluate((i) => JSON.stringify((window as unknown as W).clatter.pattern.gen[i]), above);
+  const before = await page.evaluate((i) => JSON.stringify((window as unknown as W).clatter.pattern.grids[i]), above);
   await page.mouse.move(...g.at(6, 2));
   await page.mouse.down();
   await page.mouse.move(...g.at(5, 8), { steps: 8 }); // drifts up onto the next row
   await page.mouse.up();
   for (let s = 2; s <= 8; s++) expect(await hitAt(page, id, s)).not.toBeNull();
-  expect(await page.evaluate((i) => JSON.stringify((window as unknown as W).clatter.pattern.gen[i]), above)).toBe(before);
+  expect(await page.evaluate((i) => JSON.stringify((window as unknown as W).clatter.pattern.grids[i]), above)).toBe(before);
   await page.keyboard.down('Shift');
   await page.mouse.move(...g.at(6, 4));
   await page.mouse.down();
@@ -85,11 +85,22 @@ test('Shift-click and Alt-drag select, the velocity tools act on the selection, 
     for (const s of [0, 2, 4, 6]) a.paintCell(i, s, true);
     a.setCursor({ track: i, step: 0 });
   }, id);
-  // Shift-click: from the step being edited to the one clicked
+  // Shift-click adds steps to the selection one by one, and takes them out again
+  await page.keyboard.down('Shift');
+  await page.mouse.click(...g.at(6, 4));
+  await page.mouse.click(...g.at(6, 2));
+  await page.keyboard.up('Shift');
+  expect(await page.evaluate(() => (window as unknown as W).clatter.ui.picks.map((p) => p.step))).toEqual([0, 4, 2]);
   await page.keyboard.down('Shift');
   await page.mouse.click(...g.at(6, 4));
   await page.keyboard.up('Shift');
-  expect(await page.evaluate(() => (window as unknown as W).clatter.ui.sel)).toMatchObject({ s0: 0, s1: 4 });
+  expect(await page.evaluate(() => (window as unknown as W).clatter.ui.picks.map((p) => p.step))).toEqual([0, 2]);
+  await page.keyboard.press('Delete');
+  expect(await hitAt(page, id, 0)).toBeNull();
+  expect(await hitAt(page, id, 2)).toBeNull();
+  expect(await hitAt(page, id, 4)).not.toBeNull();
+  await page.keyboard.press('Control+z');
+  expect(await hitAt(page, id, 0)).not.toBeNull();
   // Alt-drag: a region
   await page.keyboard.down('Alt');
   await page.mouse.move(...g.at(6, 0));
@@ -122,8 +133,7 @@ test('conditional steps are marked as the playhead passes them: played solid, sk
   await page.evaluate(() => {
     const a = (window as unknown as W).clatter;
     const id = a.project.tracks[0]!.id;
-    a.pattern.gen[id] = Array.from({ length: a.pattern.steps }, (_, i) => (i === 0 || i === 4 ? { vel: 100 } : null));
-    a.pattern.edits = {};
+    a.pattern.grids[id] = Array.from({ length: a.pattern.steps }, (_, i) => (i === 0 || i === 4 ? { vel: 100 } : null));
     a.pattern.trig = { [id]: { 0: { k: 'first' }, 4: { k: 'every', n: 2, at: 2 } } };
     a.select(null);
   });

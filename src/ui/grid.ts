@@ -13,7 +13,7 @@
  * Structure: a hairline between steps, a heavier line between beats, the heaviest between bars,
  * every other beat lightly dotted, bar and beat numbers in the header (all derived from the
  * pattern's resolution). The playhead is a tinted column, the cursor a ring, the pointer a hover
- * outline. SHOW ORIGINAL adds the edit history (hand-edited hits, deleted generated hits).
+ * outline.
  *
  * Pointer (the gestures are in stepGesture.ts, each one undo step): click an empty step adds a hit,
  * drag up / down from it (or from a hit) sets the velocity and shows it, drag sideways paints,
@@ -139,7 +139,7 @@ function drawTrigMark(g: CanvasRenderingContext2D, x: number, y: number, h: numb
  * One cell: the hit as it sounds. (x, y) is the cell's top-left corner, w × h its size.
  * Shared by the grid and the grid key.
  */
-export function drawCell(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, v: CellView, c: GridColors, showOriginal = false): void {
+export function drawCell(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, v: CellView, c: GridColors): void {
   const pad = 3;
   const bx = x + pad;
   const bw = w - pad * 2;
@@ -198,35 +198,6 @@ export function drawCell(g: CanvasRenderingContext2D, x: number, y: number, w: n
   }
   if (v.snd && v.state !== 'empty') drawSoundMark(g, x, y, w, v.snd, c);
   if (v.trig && v.state !== 'empty') drawTrigMark(g, x, y, h, c);
-  if (showOriginal) {
-    if (v.origin === 'edit' && v.hit) {
-      // a hand edit: a corner flag
-      g.fillStyle = c.paper;
-      g.beginPath();
-      g.moveTo(x, y);
-      g.lineTo(x + 11, y);
-      g.lineTo(x, y + 11);
-      g.fill();
-      g.fillStyle = c.ink;
-      g.beginPath();
-      g.moveTo(x + 1, y + 1);
-      g.lineTo(x + 9, y + 1);
-      g.lineTo(x + 1, y + 9);
-      g.fill();
-    } else if (v.origin === 'deleted' && v.base) {
-      // a generated hit you deleted: the outline it had, crossed out
-      const bh = blockH(v.base.vel);
-      const by = bottom - bh;
-      dashed(bx, by, bw, bh, true);
-      g.strokeStyle = c.ink;
-      g.beginPath();
-      g.moveTo(bx + 3, by + 3);
-      g.lineTo(bx + bw - 3, by + bh - 3);
-      g.moveTo(bx + bw - 3, by + 3);
-      g.lineTo(bx + 3, by + bh - 3);
-      g.stroke();
-    }
-  }
 }
 
 export class PatternGrid {
@@ -296,11 +267,6 @@ export class PatternGrid {
     this.build();
   }
 
-  /** the sound lane: one more row under the tracks, for the selected track's step sounds */
-  private get laneOn(): boolean {
-    return !this.o.compact && !this.o.readonly && this.app.prefs.soundLane;
-  }
-
   private get labelW(): number {
     if (this.o.compact) return sz(LABELS.compact);
     return sz(logicalWidth() < 1300 ? LABELS.narrow : LABELS.wide);
@@ -322,7 +288,7 @@ export class PatternGrid {
     const lo = hit(ROW.min);
     const hi = sz(ROW.max);
     const fit = this.o.fit;
-    const n = this.app.project.tracks.length + (this.laneOn ? 1 : 0);
+    const n = this.app.project.tracks.length;
     if (!fit || !n) return hi;
     const room = fit.room();
     if (room <= 0) return hi; // not laid out yet
@@ -381,12 +347,6 @@ export class PatternGrid {
       const hear = button(this.panel, r, '▶', () => void app.audition(t.id), { cls: 'small', title: 'Hear this track' });
       hear.dataset.hideNarrow = '1';
     });
-    if (this.laneOn) {
-      const r = h('div', 'trackrow lane', this.rows);
-      const name = h('div', 'tname', r);
-      r.title = 'The sound lane: the variation and condition of each step of the selected track';
-      this.panel.add(() => (name.textContent = 'SOUND · ' + app.track.name));
-    }
     this.applyRowHeight();
     this.draw();
   }
@@ -428,7 +388,7 @@ export class PatternGrid {
     // cells share the width exactly (their edges snap to whole pixels); never narrower than the minimum: scroll instead
     this.cellW = Math.max(lo, Math.min(hi, (avail - 1) / p.steps));
     const cw = this.X(p.steps);
-    const ch = this.headH + this.rowH * (tracks.length + (this.laneOn ? 1 : 0));
+    const ch = this.headH + this.rowH * (tracks.length);
     const dpr = window.devicePixelRatio || 1;
     this.inner.style.width = cw + 'px';
     this.inner.style.height = ch + 'px';
@@ -499,7 +459,6 @@ export class PatternGrid {
     g.fillStyle = c.ink;
     for (let ti = 0; ti < tracks.length - 1; ti++) g.fillRect(0, H + (ti + 1) * R - 1, cw, 1);
     g.globalAlpha = 1;
-    const showOriginal = app.ui.showOriginal;
     tracks.forEach((t, ti) => {
       const y = H + ti * R;
       const row = this.views[ti]!;
@@ -516,7 +475,7 @@ export class PatternGrid {
           }
           continue;
         }
-        drawCell(g, x, y, cwid, R - 1, v, c, showOriginal);
+        drawCell(g, x, y, cwid, R - 1, v, c);
       }
       if (dimmedRows[ti]) {
         g.globalAlpha = 0.62;
@@ -525,8 +484,6 @@ export class PatternGrid {
         g.globalAlpha = 1;
       }
     });
-
-    if (this.laneOn) this.drawLane(g, c, cw, H + rowsH, R);
 
     // step lines, then beat lines, then bar lines (the later and heavier on top)
     for (let s = 1; s < p.steps; s++) {
@@ -551,37 +508,6 @@ export class PatternGrid {
     this.drawOverlay(this.lastHead);
   }
 
-  /** The sound lane: variation plate on top, condition below, for the selected track. */
-  private drawLane(g: CanvasRenderingContext2D, c: GridColors, cw: number, y0: number, R: number): void {
-    const ti = this.app.project.tracks.findIndex((t) => t.id === this.app.ui.track);
-    const row = this.views[ti];
-    g.fillStyle = c.ink;
-    g.fillRect(0, y0 - 2, cw, 2);
-    if (!row) return;
-    const half = Math.floor(R / 2);
-    g.textBaseline = 'middle';
-    for (let s = 0; s < this.steps; s++) {
-      const v = row[s]!;
-      if (!v.snd || v.outside) continue;
-      const x = this.X(s);
-      const w = this.X(s + 1) - x;
-      const text = (v.snd.letter ?? '·') + (v.snd.voice ? '>' : '');
-      g.font = 'bold 12px VT323, monospace';
-      const tw = Math.ceil(g.measureText(text).width) + 6;
-      const bw = Math.min(w - 4, Math.max(tw, 14));
-      g.fillStyle = c.ink;
-      g.fillRect(x + Math.round((w - bw) / 2), y0 + 2, bw, half - 3);
-      g.fillStyle = c.paper;
-      g.fillText(text, x + Math.round((w - bw) / 2) + 3, y0 + 2 + Math.round((half - 3) / 2) + 1);
-      g.fillStyle = c.ink;
-      const ct = v.snd.condText ? v.snd.condText.replace('EVERY ', '1/').replace('FIRST OF ', 'F').replace('LAST OF ', 'L').replace('ALTERNATE', 'ALT') : v.snd.edits ? 'LCK' : '';
-      if (ct) {
-        g.font = '10px VT323, monospace';
-        g.fillText(ct.slice(0, Math.max(2, Math.floor(w / 6))), x + 3, y0 + half + Math.round((R - half) / 2));
-      }
-    }
-  }
-
   private lastHead = -1;
 
   /** Redraw the overlay now (the selection or the pointer changed), keeping the playhead where it is. */
@@ -595,7 +521,7 @@ export class PatternGrid {
     const app = this.app;
     const sel = app.ui.sel;
     const cur = this.o.readonly ? null : app.cursorCell();
-    const key = `${Math.floor(step)}|${this.hover ? this.hover.track + ':' + this.hover.step : ''}|${sel ? `${sel.t0},${sel.t1},${sel.s0},${sel.s1}` : ''}|${cur ? cur.track + ':' + cur.step : ''}|${app.ui.track}|${this.cellW}|${app.ui.paintVel}|${this.gesture.dragging?.vel ?? ''}|${app.ui.playing ? app.playhead()?.cycle : ''}`;
+    const key = `${Math.floor(step)}|${this.hover ? this.hover.track + ':' + this.hover.step : ''}|${sel ? `${sel.t0},${sel.t1},${sel.s0},${sel.s1}` : ''}|${cur ? cur.track + ':' + cur.step : ''}|${app.ui.picks.map((x) => x.track + ':' + x.step).join(',')}|${app.ui.track}|${this.cellW}|${app.ui.paintVel}|${this.gesture.dragging?.vel ?? ''}|${app.ui.playing ? app.playhead()?.cycle : ''}`;
     this.lastHead = step;
     if (key === this.lastKey) return;
     this.lastKey = key;
@@ -650,6 +576,25 @@ export class PatternGrid {
           g.strokeStyle = c.selection;
           g.strokeRect(x + 3.5, H + ti2 * R + 3.5, this.X(st + 1) - x - 7, R - 8);
         }
+      }
+    }
+
+    // steps picked one by one (Shift-click): a frame round each
+    if (app.ui.picks.length && !this.o.readonly) {
+      g.lineWidth = 2;
+      for (const pk of app.ui.picks) {
+        const pi = app.trackIndexOf(pk.track);
+        if (pi < 0 || pk.step >= this.steps) continue;
+        const x = this.X(pk.step);
+        const w = this.X(pk.step + 1) - x;
+        g.fillStyle = c.selection;
+        g.globalAlpha = 0.1;
+        g.fillRect(x, H + pi * R, w, R - 1);
+        g.globalAlpha = 1;
+        g.strokeStyle = c.paper;
+        g.strokeRect(x + 2.5, H + pi * R + 2.5, w - 5, R - 6);
+        g.strokeStyle = c.selection;
+        g.strokeRect(x + 3.5, H + pi * R + 3.5, w - 7, R - 8);
       }
     }
 
@@ -851,9 +796,7 @@ export class PatternGrid {
     // the drawn edges are snapped to whole pixels: test against them, so a click is always in the cell it lands on
     if (step + 1 <= this.steps && x >= this.X(step + 1)) step++;
     else if (step > 0 && x < this.X(step)) step--;
-    let track = Math.floor((y - this.headH) / this.rowH);
-    // a click in the sound lane is a click on the selected track's step
-    if (this.laneOn && track === this.app.project.tracks.length) track = this.app.project.tracks.findIndex((t) => t.id === this.app.ui.track);
+    const track = Math.floor((y - this.headH) / this.rowH);
     if (step < 0 || step >= this.steps || track < 0 || track >= this.app.project.tracks.length) return null;
     return { track, step };
   }
@@ -890,12 +833,6 @@ export class PatternGrid {
       }
     }
     this.canvas.style.cursor = cur;
-  }
-
-  private inLane(e: PointerEvent | MouseEvent): boolean {
-    if (!this.laneOn) return false;
-    const r = this.canvas.getBoundingClientRect();
-    return Math.floor((e.clientY - r.top - this.headH) / this.rowH) === this.app.project.tracks.length;
   }
 
   /** The tooltip words for a cell. */
@@ -937,6 +874,7 @@ export class PatternGrid {
       if (!cell) return;
       const t = app.project.tracks[cell.track]!;
       app.ui.cursor = { track: t.id, step: cell.step };
+      app.ui.picks = [];
       app.selectTrack(t.id);
       app.select({ t0: cell.track, t1: cell.track, s0: cell.step, s1: cell.step });
       this.drawOverlay(this.lastHead);
@@ -957,21 +895,19 @@ export class PatternGrid {
       }
       const cell = this.cellAt(e);
       if (!cell) return;
-      if (this.inLane(e)) {
-        // the sound lane edits no hits: it selects the step and opens its sound
-        const t = app.project.tracks[cell.track]!;
-        app.ui.cursor = { track: t.id, step: cell.step };
-        app.select({ t0: cell.track, t1: cell.track, s0: cell.step, s1: cell.step });
-        app.setWorkspace('sound');
-        this.drawOverlay(this.lastHead);
-        return;
-      }
       hideTip();
       c.setPointerCapture(e.pointerId);
       c.focus({ preventScroll: true });
       this.gesture.down(press(e, cell));
       this.setCursorStyle(e);
       this.redrawOverlay();
+    });
+    // double-click an existing note: delete it (the first click only selected it)
+    c.addEventListener('dblclick', (e) => {
+      if (e.shiftKey || e.altKey || this.o.readonly) return;
+      const cell = this.cellAt(e);
+      if (!cell) return;
+      app.deleteNote(app.project.tracks[cell.track]!.id, cell.step);
     });
     c.addEventListener('pointermove', (e) => {
       if (this.columns !== null) {

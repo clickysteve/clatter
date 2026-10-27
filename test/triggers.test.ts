@@ -21,13 +21,12 @@ function blank(p: Project, steps: number, hits: Record<string, number[]>): Patte
   p.current = pat.id;
   pat.steps = steps;
   pat.res = 4;
-  pat.gen = {};
-  pat.edits = {};
+  pat.grids = {};
   delete pat.sounds;
   delete pat.trig;
   for (const t of p.tracks) {
     t.play = { density: 100, fill: 0, humanize: 0, chance: 100, length: 0 };
-    pat.gen[t.id] = Array.from({ length: steps }, (_, i) => ((hits[t.id] ?? []).includes(i) ? { vel: 110 } : null));
+    pat.grids[t.id] = Array.from({ length: steps }, (_, i) => ((hits[t.id] ?? []).includes(i) ? { vel: 110 } : null));
   }
   p.destruction.chop.on = false;
   p.destruction.rolls.on = false;
@@ -259,14 +258,6 @@ describe('probability, fills and the previous step in the realisation', () => {
     expect(seq.realization(1, pat.id).cells['t1']![0]! & CELL_CONDITION).toBe(0);
   });
 
-  it('the source view ignores conditions (SOURCE shows what is written)', async () => {
-    const { p } = await project();
-    const pat = blank(p, 16, { t1: [0] });
-    setStepTrig(pat, 't1', 0, { k: 'even' });
-    const seq = new Sequence({ project: () => p, sourceOnly: () => true });
-    expect(playedIn(seq, 0)).toEqual(['t1|0']);
-  });
-
   it('a project without conditions realises exactly as before', async () => {
     const { p } = await project();
     const a = new Sequence({ project: () => p });
@@ -362,14 +353,14 @@ describe('projects and files', () => {
     setStepTrig(pat, 't1', 3, { k: 'alt', run: 3 });
     setStepTrig(pat, 't2', 4, { k: 'noprev' });
     const back = parseProject(serialize(p));
-    expect(back.version).toBe(7);
+    expect(back.version).toBe(8);
     expect(back.patterns[0]!.trig).toEqual(pat.trig);
     const old = JSON.parse(serialize(p));
     old.version = 3;
     delete old.patterns[0].trig;
     const loaded = parseProject(JSON.stringify(old));
     expect(loaded.patterns[0]!.trig).toBeUndefined();
-    expect(loaded.version).toBe(7);
+    expect(loaded.version).toBe(8);
     // damaged entries are dropped, steps beyond the pattern too
     old.patterns[0].trig = { t1: { 2: { k: 'bogus' }, 3: { k: 'prob', p: 40 }, 9999: { k: 'odd' } }, nope: { 1: { k: 'odd' } } };
     expect(parseProject(JSON.stringify(old)).patterns[0]!.trig).toEqual({ t1: { 3: { k: 'prob', p: 40 } } });

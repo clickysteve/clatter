@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { App } from '../src/app/app';
 import { History } from '../src/app/history';
-import { sourceGrid } from '../src/rhythm/pattern';
+import { trackGrid } from '../src/rhythm/pattern';
 import { applyVelOp, dragVelocity } from '../src/rhythm/velocity';
 import { trackCells, trigOutcome } from '../src/ui/gridModel';
 import { DRAG_THRESHOLD, StepGesture, type Press } from '../src/ui/stepGesture';
@@ -15,13 +15,12 @@ function setup() {
   const p = app.pattern;
   p.steps = 16;
   p.res = 4;
-  p.gen = {};
-  p.edits = {};
+  p.grids = {};
   delete p.sounds;
   delete p.trig;
   for (const t of app.project.tracks) {
     t.play = { density: 100, fill: 0, humanize: 0, chance: 100, length: 0 };
-    p.gen[t.id] = Array.from({ length: 16 }, () => null);
+    p.grids[t.id] = Array.from({ length: 16 }, () => null);
   }
   app.history.clear();
   app.ui.paintVel = 100;
@@ -34,7 +33,7 @@ function setup() {
   const press = (ti: number, step: number, o: Partial<Press> = {}): Press => ({ track: ids[ti]!, trackIndex: ti, step, x: step * 40 + 20, y: ti * 30 + 15, shift: false, alt: false, ...o });
   const mv = (ti: number, step: number, dy = 0, dx = 0) => ({ x: step * 40 + 20 + dx, y: ti * 30 + 15 + dy, step, trackIndex: ti });
   const hit = (ti: number, step: number) => app.hitAt(ids[ti]!, step);
-  const row = (ti: number) => sourceGrid(app.pattern, ids[ti]!).map((h) => (h ? 1 : 0)).join('');
+  const row = (ti: number) => trackGrid(app.pattern, ids[ti]!).map((h) => (h ? 1 : 0)).join('');
   return { app, g, ids, press, mv, hit, row };
 }
 
@@ -52,14 +51,20 @@ describe('step creation and deletion', () => {
     expect(hit(2, 5)?.vel).toBe(90);
   });
 
-  it('a click on a hit removes it; a click that wanders less than the threshold still counts as a click', () => {
+  it('a click on a hit only selects it; a double-click (deleteNote) removes it, and undo brings it back', () => {
     const { app, g, press, mv, hit } = setup();
     g.down(press(0, 3));
     g.up(mv(0, 3));
     expect(hit(0, 3)).not.toBeNull();
+    app.select(null);
+    app.ui.cursor = null;
     g.down(press(0, 3));
     g.move(mv(0, 3, DRAG_THRESHOLD - 1, 0));
     g.up(mv(0, 3));
+    expect(hit(0, 3)).not.toBeNull();
+    expect(app.cursorCell()).toEqual({ track: app.project.tracks[0]!.id, step: 3 });
+    expect(app.history.undoLabel).toBe('ADD HIT');
+    app.deleteNote(app.project.tracks[0]!.id, 3);
     expect(hit(0, 3)).toBeNull();
     expect(app.history.undoLabel).toBe('DELETE HIT');
     app.undo();
@@ -91,7 +96,7 @@ describe('velocity dragging', () => {
 
   it('keeps every other property of an existing hit, and one undo restores the velocity', () => {
     const { app, g, ids, press, mv, hit } = setup();
-    app.pattern.gen[ids[0]!]![6] = { vel: 80, prob: 50, note: 3, ratchet: 2, flam: true };
+    app.pattern.grids[ids[0]!]![6] = { vel: 80, prob: 50, note: 3, ratchet: 2, flam: true };
     g.down(press(0, 6));
     g.move(mv(0, 6, -10));
     g.move(mv(0, 6, -30));
@@ -149,7 +154,7 @@ describe('step painting', () => {
 
   it('painting leaves the hits that are there as they are, and sweeping backwards works', () => {
     const { g, app, ids, press, mv, row, hit } = setup();
-    app.pattern.gen[ids[0]!]![5] = { vel: 33 };
+    app.pattern.grids[ids[0]!]![5] = { vel: 33 };
     g.down(press(0, 8));
     g.move(mv(0, 7, 0, -20));
     g.move(mv(0, 3));
@@ -176,7 +181,7 @@ describe('step painting', () => {
 
   it('Shift-drag erases along the track, Shift-click selects, and neither touches other tracks', () => {
     const { app, g, ids, press, mv, row } = setup();
-    for (const ti of [0, 1]) for (let s = 0; s < 8; s++) app.pattern.gen[ids[ti]!]![s] = { vel: 90 };
+    for (const ti of [0, 1]) for (let s = 0; s < 8; s++) app.pattern.grids[ids[ti]!]![s] = { vel: 90 };
     g.down(press(0, 1, { shift: true }));
     g.move(mv(0, 1, 0, 12));
     expect(g.mode).toBe('erase');
@@ -195,16 +200,25 @@ describe('step painting', () => {
 });
 
 describe('selection', () => {
-  it('Shift-click selects from the cursor to the step; a second one extends from the same anchor', () => {
+  it('Shift-click adds a step to the selection and a second Shift-click on it takes it out', () => {
     const { app, g, press, mv } = setup();
+    const id = (ti: number) => app.project.tracks[ti]!.id;
     g.down(press(1, 2));
     g.up(mv(1, 2));
     g.down(press(3, 6, { shift: true }));
     g.up(mv(3, 6));
-    expect(app.ui.sel).toEqual({ t0: 1, t1: 3, s0: 2, s1: 6 });
+    expect(app.ui.picks).toEqual([{ track: id(1), step: 2 }, { track: id(3), step: 6 }]);
     g.down(press(2, 9, { shift: true }));
     g.up(mv(2, 9));
-    expect(app.ui.sel).toEqual({ t0: 1, t1: 2, s0: 2, s1: 9 });
+    expect(app.ui.picks.length).toBe(3);
+    g.down(press(3, 6, { shift: true }));
+    g.up(mv(3, 6));
+    expect(app.ui.picks).toEqual([{ track: id(1), step: 2 }, { track: id(2), step: 9 }]);
+    expect(app.history.undoLabel).toBe('ADD HIT'); // picking is not an edit
+    // a plain click starts over
+    g.down(press(0, 0));
+    g.up(mv(0, 0));
+    expect(app.ui.picks).toEqual([]);
   });
 
   it('Alt-drag selects a region and a plain click clears it', () => {
@@ -221,7 +235,7 @@ describe('selection', () => {
 
   it('DELETE clears the hits of the selection in one undo step; Select All covers the pattern', () => {
     const { app, ids, row } = setup();
-    for (let s = 0; s < 16; s++) app.pattern.gen[ids[0]!]![s] = { vel: 80 };
+    for (let s = 0; s < 16; s++) app.pattern.grids[ids[0]!]![s] = { vel: 80 };
     app.select({ t0: 0, t1: 0, s0: 4, s1: 7 });
     expect(app.selectedHitCount()).toBe(4);
     app.clearSelection();
@@ -238,8 +252,8 @@ describe('copy and paste', () => {
   it('carries velocity, chance, pitch, ratchet, step sounds and trigger conditions, and selects what it pasted', () => {
     const { app, ids } = setup();
     const t = ids[0]!;
-    app.pattern.gen[t]![1] = { vel: 70, prob: 60, note: 2, ratchet: 3, flam: true };
-    app.pattern.gen[t]![2] = { vel: 111 };
+    app.pattern.grids[t]![1] = { vel: 70, prob: 60, note: 2, ratchet: 3, flam: true };
+    app.pattern.grids[t]![2] = { vel: 111 };
     app.pattern.sounds = { [t]: { 1: { v: 2, locks: { 5: 40 } } } };
     app.pattern.trig = { [t]: { 2: { k: 'every', n: 4, at: 2 } } };
     app.select({ t0: 0, t1: 0, s0: 1, s1: 2 });
@@ -263,7 +277,7 @@ describe('copy and paste', () => {
   it('pastes at the step being edited when nothing is selected', () => {
     const { app, ids } = setup();
     const t = ids[2]!;
-    app.pattern.gen[t]![0] = { vel: 50 };
+    app.pattern.grids[t]![0] = { vel: 50 };
     app.select({ t0: 2, t1: 2, s0: 0, s1: 1 });
     app.copy();
     app.select(null);
@@ -277,10 +291,10 @@ describe('copy and paste', () => {
 describe('velocity tools', () => {
   function seeded() {
     const s = setup();
-    for (const [ti, steps] of [[0, [0, 4, 8, 12]], [1, [2, 6]]] as const) for (const st of steps) s.app.pattern.gen[s.ids[ti]!]![st] = { vel: 64, prob: 70 };
+    for (const [ti, steps] of [[0, [0, 4, 8, 12]], [1, [2, 6]]] as const) for (const st of steps) s.app.pattern.grids[s.ids[ti]!]![st] = { vel: 64, prob: 70 };
     return s;
   }
-  const vels = (app: App, id: string) => sourceGrid(app.pattern, id).flatMap((h) => (h ? [h.vel] : []));
+  const vels = (app: App, id: string) => trackGrid(app.pattern, id).flatMap((h) => (h ? [h.vel] : []));
 
   it('SET gives every selected hit a velocity, and leaves the rest of the hit alone', () => {
     const { app, ids } = seeded();
@@ -361,7 +375,7 @@ describe('conditional trigger feedback', () => {
   function cells(pass: number) {
     const { app, ids } = setup();
     const t = ids[0]!;
-    for (const s of [0, 4, 8, 12]) app.pattern.gen[t]![s] = { vel: 100 };
+    for (const s of [0, 4, 8, 12]) app.pattern.grids[t]![s] = { vel: 100 };
     app.pattern.trig = { [t]: { 0: { k: 'first' }, 4: { k: 'every', n: 2, at: 2 }, 8: { k: 'always' } } };
     const tr = app.project.tracks[0]!;
     const real = realize({ seed: app.project.seed, swing: 50, pattern: app.pattern, tracks: app.project.tracks, destruction: clone(app.project.destruction), evolve: app.project.evolve, trig: { pass, last: false } }, pass);

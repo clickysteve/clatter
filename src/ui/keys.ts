@@ -105,7 +105,7 @@ export function bindKeys(app: App): void {
         break;
       case 'delete':
       case 'backspace':
-        app.clearSelection();
+        app.deleteSelected();
         break;
       case '[':
         app.shiftTrack(app.ui.track, -1);

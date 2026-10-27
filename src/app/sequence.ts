@@ -18,8 +18,6 @@ export interface SequenceOptions {
   takeQueued?: () => string | null;
   /** tracks playing a momentary FILL */
   fills?: () => ReadonlySet<string>;
-  /** play only the written source */
-  sourceOnly?: () => boolean;
   /** the length of the run in ticks when it is known (an export), so LAST CYCLE can be decided */
   lengthTicks?: () => number | null;
   /** a cycle began with this pattern (the app makes it current) */
@@ -101,7 +99,7 @@ export class Sequence implements CycleSource {
     const proj = this.o.project();
     const fills = this.o.fills?.();
     const tracks: Track[] = fills && fills.size ? proj.tracks.map((t) => (fills.has(t.id) ? { ...t, play: { ...t.play, fill: Math.max(t.play.fill, 85) } } : t)) : proj.tracks;
-    const r = realize({ seed: proj.seed, swing: proj.swing, pattern: this.pattern(patternId), tracks, destruction: proj.destruction, evolve: proj.evolve, sourceOnly: this.o.sourceOnly?.(), trig: this.trigAt(k, patternId, fills, preview) }, k);
+    const r = realize({ seed: proj.seed, swing: proj.swing, pattern: this.pattern(patternId), tracks, destruction: proj.destruction, evolve: proj.evolve, trig: this.trigAt(k, patternId, fills, preview) }, k);
     if (this.cache.size > 16) this.cache.clear();
     this.cache.set(key, r);
     this.latest = r;

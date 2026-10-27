@@ -10,7 +10,7 @@ function setup(style = 'breaks', seed = 21) {
   const proj = defaultProject();
   const gen = { ...defaultGen(), style };
   const p = newPattern('p1', 'A', gen);
-  p.gen = generate(proj.tracks, gen, seed, { steps: p.steps, res: p.res });
+  p.grids = generate(proj.tracks, gen, seed, { steps: p.steps, res: p.res });
   const input: RealizeInput = { seed: 3, swing: 50, pattern: p, tracks: proj.tracks, destruction: clone(proj.destruction), evolve: proj.evolve };
   return { proj, p, input };
 }
@@ -79,17 +79,13 @@ describe('DESTROY', () => {
     expect(r.events.some((e) => e.crush)).toBe(true);
     expect(sig(realize(with_(on, (d) => (d.destroy.take = 9)), 0).events)).not.toBe(sig(r.events));
   });
-  it('never destroys hand-edited hits', () => {
+  it('destroys any note alike: a placed note has no protection a generated one lacks', () => {
     const { input, p, proj } = setup('machine', 5);
     const id = proj.tracks[0]!.id;
-    for (let i = 0; i < p.steps; i++) setHit(p, id, i, { vel: 3 }); // a velocity the generator never writes, so every cell is an edit
+    for (let i = 0; i < p.steps; i++) setHit(p, id, i, { vel: 3 });
     const on = with_(input, (d) => Object.assign(d.destroy, { on: true, amount: 1, skip: 1, pitch: 1, gate: 1, stutter: 1 }));
     const mine = realize(on, 0).events.filter((e) => e.track === id && e.kind === 'source');
-    expect(mine.length).toBe(p.steps);
-    for (const e of mine) {
-      expect(e.destroyed).toBeFalsy();
-      expect(e.pitch).toBe(0);
-    }
+    expect(mine.length).toBeLessThan(p.steps);
   });
   it('switching every layer off returns the source exactly (non-destructive)', () => {
     const { input } = setup();

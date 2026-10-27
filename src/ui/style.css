@@ -923,14 +923,30 @@ input.mtext:focus {
   opacity: 0.55;
 }
 .gridfoot {
+  /* one line, one height, whatever the window or the interface scale: the grid never jumps */
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: calc(6 * var(--px)) calc(18 * var(--px));
+  gap: calc(18 * var(--px));
+  height: calc(28 * var(--px));
   min-height: calc(28 * var(--px));
+  max-height: calc(28 * var(--px));
+  overflow: hidden;
+  white-space: nowrap;
 }
-.gridfoot .where {
+.gridfoot .where,
+.gridfoot .hint {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* the selected step comes first: the hints give way before it does */
+.gridfoot .where {
+  flex: 1 1 auto;
+}
+.gridfoot .hint {
+  flex: 0 100000 auto;
 }
 
 /* sample waveform */

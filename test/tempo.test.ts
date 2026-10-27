@@ -169,12 +169,11 @@ async function kickOnly(bars: number, auto?: TempoAuto) {
   p.current = pat.id;
   pat.steps = 16;
   pat.res = 4;
-  pat.edits = {};
   delete pat.sounds;
   delete pat.trig;
   for (const t of p.tracks) {
     t.play = { density: 100, fill: 0, humanize: 0, chance: 100, length: 0 };
-    pat.gen[t.id] = Array.from({ length: 16 }, (_, i) => (t.id === 't1' && i % 4 === 0 ? { vel: 120 } : null));
+    pat.grids[t.id] = Array.from({ length: 16 }, (_, i) => (t.id === 't1' && i % 4 === 0 ? { vel: 120 } : null));
   }
   p.destruction.chop.on = p.destruction.rolls.on = p.destruction.destroy.on = false;
   p.evolve.target = 'off';
@@ -225,7 +224,7 @@ describe('offline export follows the curve', () => {
   it('conditions and a curve together: every cycle is evaluated at its own tempo', async () => {
     const { lib, p } = await kickOnly(4, stepUp);
     p.patterns[0]!.trig = { t1: { 4: { k: 'even' } } };
-    p.patterns[0]!.gen['t1']![4] = { vel: 120 };
+    p.patterns[0]!.grids['t1']![4] = { vel: 120 };
     const r = await renderProject(lxrModule(), p, lib, { bars: 4, tail: 0, stems: true });
     // a bar per cycle: all four beats play, except beat 2 (step 4, EVEN) which sounds in the 2nd and 4th bars only
     const on = onsets(r.stems['t1']![0]!, r.rate);

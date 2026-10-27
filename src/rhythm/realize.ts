@@ -25,7 +25,7 @@ import { clamp, PPQ, stepTicks, type DestructionSettings, type EvolveSettings, t
 import { byTime, type PerfEvent } from './events';
 import { stepsPerBar } from './generate';
 import { mutate } from './mutate';
-import { sourceGrids } from './pattern';
+import { trackGrids } from './pattern';
 import { hash32, rand, Rng, SALT, strCode } from './rng';
 import { needsPrev, trigRow } from './trigger';
 
@@ -43,8 +43,6 @@ export interface RealizeInput {
   tracks: readonly RealizeTrack[];
   destruction: DestructionSettings;
   evolve: EvolveSettings;
-  /** play only the source (no evolution, transformations or performance randomness) */
-  sourceOnly?: boolean;
   /**
    * Where this cycle sits for trigger conditions (see src/rhythm/trigger.ts): the pass of its
    * pattern (0 = the first), whether it is the final one of a run whose length is known, and
@@ -92,7 +90,7 @@ export function swingTick(tick: number, swing: number): number {
 /** The evolved source for a cycle (rhythm evolution), or the source itself. */
 export function evolvedGrids(input: RealizeInput, cycle: number, src: Record<string, Grid>): { grids: Record<string, Grid>; generation: number } {
   const ev = input.evolve;
-  if (input.sourceOnly || (ev.target !== 'rhythm' && ev.target !== 'both') || ev.amount <= 0) return { grids: src, generation: 0 };
+  if ((ev.target !== 'rhythm' && ev.target !== 'both') || ev.amount <= 0) return { grids: src, generation: 0 };
   const p = input.pattern;
   const bars = Math.max(1, p.steps / stepsPerBar(p.res));
   let gen = Math.floor((cycle * bars) / Math.max(1, ev.every));
@@ -115,11 +113,9 @@ export function realize(input: RealizeInput, cycle: number): Realization {
   const ids = input.tracks.map((t) => t.id);
   const roles: Record<string, string> = {};
   for (const t of input.tracks) roles[t.id] = t.role;
-  const src = sourceGrids(p, ids);
+  const src = trackGrids(p, ids);
   const { grids, generation } = evolvedGrids(input, cycle, src);
   const cells: Record<string, Uint8Array> = {};
-  const edited = new Set<string>();
-  for (const [id, e] of Object.entries(p.edits)) for (const k of Object.keys(e)) edited.add(`${id}:${k}`);
 
   // 1. events of the (evolved) source; polymeter: a track with its own length runs across cycles
   let events: PerfEvent[] = [];
@@ -131,7 +127,7 @@ export function realize(input: RealizeInput, cycle: number): Realization {
     const row = new Uint8Array(steps);
     cells[t.id] = row;
     // trigger conditions first: which of the written steps play on this pass
-    const conds = input.sourceOnly ? undefined : p.trig?.[t.id];
+    const conds = p.trig?.[t.id];
     let plays: boolean[] | null = null;
     if (conds && Object.keys(conds).length) {
       const base = { seed, pattern: p.id, pass: tinfo.pass, cycle, last: tinfo.last, fill: !!tinfo.fills?.has(t.id), track: t.id };
@@ -164,15 +160,13 @@ export function realize(input: RealizeInput, cycle: number): Realization {
     destroy: { hits: 0, counts: { stutter: 0, pitch: 0, reverse: 0, gate: 0, crush: 0, skip: 0 } } as DestroyReport,
   };
 
-  if (!input.sourceOnly) {
-    // 2. CHOP, 3. ROLLS
-    const c = chop(events, d.chop, ctx);
-    events = c.events;
-    reports.chop = c.report;
-    const r = rolls(events, d.rolls, ctx);
-    events = r.events;
-    reports.rolls = r.report;
-  }
+  // 2. CHOP, 3. ROLLS
+  const c = chop(events, d.chop, ctx);
+  events = c.events;
+  reports.chop = c.report;
+  const r = rolls(events, d.rolls, ctx);
+  events = r.events;
+  reports.rolls = r.report;
 
   // 4. performance
   const performed: PerfEvent[] = [];
@@ -183,11 +177,6 @@ export function realize(input: RealizeInput, cycle: number): Realization {
     const tc = strCode(t.id);
     const x = e.tick / T;
     const row = cells[t.id]!;
-    if (input.sourceOnly) {
-      performed.push(e);
-      if (e.kind === 'source') row[e.origin]! |= CELL_PLAYED;
-      continue;
-    }
     // probability: the hit's own, scaled by the track's CHANCE
     const prob = ((e.prob ?? 100) / 100) * (t.play.chance / 100);
     if (prob < 1 && rand(seed, SALT.prob, tc, cycle, x) >= prob) {
@@ -214,44 +203,40 @@ export function realize(input: RealizeInput, cycle: number): Realization {
   }
 
   // fills into the gaps of the last bar
-  if (!input.sourceOnly) {
-    const fromStep = Math.max(0, steps - perBar);
-    for (const t of input.tracks) {
-      if (t.play.fill <= 0) continue;
-      const tc = strCode(t.id);
-      const mine = performed.filter((e) => e.track === t.id).map((e) => e.tick / T);
-      for (let i = fromStep; i < steps; i++) {
-        if (mine.some((m) => Math.abs(m - i) < 0.99)) continue;
-        const k = (i - fromStep) / Math.max(1, steps - fromStep);
-        if (rand(seed, SALT.fill, tc, cycle, i) >= (t.play.fill / 100) * (0.25 + 0.75 * k)) continue;
-        const vel = Math.round(40 + rand(seed, SALT.fillVel, tc, cycle, i) * 45 + k * 25);
-        performed.push({ key: `${t.id}|F${i}`, tick: i * T, track: t.id, vel, pitch: 0, kind: 'fill', origin: -1, step: i });
-        cells[t.id]![posOf(t, i)]! |= CELL_ADDED;
-      }
+  const fromStep = Math.max(0, steps - perBar);
+  for (const t of input.tracks) {
+    if (t.play.fill <= 0) continue;
+    const tc = strCode(t.id);
+    const mine = performed.filter((e) => e.track === t.id).map((e) => e.tick / T);
+    for (let i = fromStep; i < steps; i++) {
+      if (mine.some((m) => Math.abs(m - i) < 0.99)) continue;
+      const k = (i - fromStep) / Math.max(1, steps - fromStep);
+      if (rand(seed, SALT.fill, tc, cycle, i) >= (t.play.fill / 100) * (0.25 + 0.75 * k)) continue;
+      const vel = Math.round(40 + rand(seed, SALT.fillVel, tc, cycle, i) * 45 + k * 25);
+      performed.push({ key: `${t.id}|F${i}`, tick: i * T, track: t.id, vel, pitch: 0, kind: 'fill', origin: -1, step: i });
+      cells[t.id]![posOf(t, i)]! |= CELL_ADDED;
     }
   }
 
   // 5. DESTROY
   let final = performed;
-  if (!input.sourceOnly) {
-    const ds = destroy(performed, d.destroy, { seed: ctx.seed, stepTicks: T, edited });
-    final = ds.events;
-    reports.destroy = ds.report;
-    for (const e of final) {
-      if (!e.destroyed || e.step < 0 || e.step >= steps) continue;
-      const t = byId.get(e.track);
-      if (t) cells[t.id]![posOf(t, e.step)]! |= CELL_DESTROYED;
-    }
-    // a source hit that no longer plays at its own place (chopped away, skipped)
-    for (const t of input.tracks) {
-      const row = cells[t.id]!;
-      const g = grids[t.id] ?? [];
-      for (let i = 0; i < steps; i++) {
-        const pos = posOf(t, i);
-        if (!g[pos] || row[pos]! & CELL_SUPPRESSED) continue;
-        const here = final.some((e) => e.track === t.id && e.step === i);
-        if (!here) row[pos]! |= CELL_MOVED;
-      }
+  const ds = destroy(performed, d.destroy, { seed: ctx.seed, stepTicks: T });
+  final = ds.events;
+  reports.destroy = ds.report;
+  for (const e of final) {
+    if (!e.destroyed || e.step < 0 || e.step >= steps) continue;
+    const t = byId.get(e.track);
+    if (t) cells[t.id]![posOf(t, e.step)]! |= CELL_DESTROYED;
+  }
+  // a source hit that no longer plays at its own place (chopped away, skipped)
+  for (const t of input.tracks) {
+    const row = cells[t.id]!;
+    const g = grids[t.id] ?? [];
+    for (let i = 0; i < steps; i++) {
+      const pos = posOf(t, i);
+      if (!g[pos] || row[pos]! & CELL_SUPPRESSED) continue;
+      const here = final.some((e) => e.track === t.id && e.step === i);
+      if (!here) row[pos]! |= CELL_MOVED;
     }
   }
 

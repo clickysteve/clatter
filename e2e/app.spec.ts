@@ -70,7 +70,7 @@ test('a click inside a grid cell edits exactly that cell', async ({ page }) => {
   expect(undone).toBe(before);
 });
 
-test('click adds, click removes, right-click opens the step editor, Escape closes it', async ({ page }) => {
+test('click adds, a second click only selects, double-click removes, right-click opens the step editor, Escape closes it', async ({ page }) => {
   await boot(page);
   const g = await gridGeo(page);
   const tr = 6;
@@ -81,6 +81,8 @@ test('click adds, click removes, right-click opens the step editor, Escape close
   await page.mouse.click(...at(3));
   expect(await has(3)).toBe(true);
   await page.mouse.click(...at(3));
+  expect(await has(3)).toBe(true); // a click on a note selects it, nothing is deleted
+  await page.mouse.dblclick(...at(3));
   expect(await has(3)).toBe(false);
   await page.mouse.click(...at(3));
   // the step editor under the grid shows the step
@@ -116,7 +118,7 @@ test('the grid draws a boundary for every step, heavier at beats, heaviest at ba
     const cellw = Number(c.dataset.cellw);
     const a = (window as unknown as W).clatter;
     // an empty row (the second-to-last track plays nothing on beats 1..4 of the preset?) use the row with fewest hits
-    const grids = a.project.tracks.map((t) => a.pattern.gen[t.id] ?? []);
+    const grids = a.project.tracks.map((t) => a.pattern.grids[t.id] ?? []);
     let row = 0;
     let fewest = 1e9;
     grids.forEach((gr, i) => {
@@ -144,44 +146,24 @@ test('the grid draws a boundary for every step, heavier at beats, heaviest at ba
   expect(g.cellw).toBeGreaterThanOrEqual(28);
 });
 
-test('a deleted generated hit is an empty cell; SHOW ORIGINAL reveals it', async ({ page }) => {
+test('there is one pattern: no SOURCE, SHOW ORIGINAL, KEEP EDITS or SOUND LANE; a deleted note leaves nothing behind', async ({ page }) => {
   await boot(page);
-  const g = await gridGeo(page);
+  for (const label of ['SOURCE', 'SHOW ORIGINAL', 'KEEP EDITS', 'SOUND LANE', 'RESET']) await expect(page.locator('#pattern .toolbar .btn', { hasText: new RegExp(`^${label}$`) })).toHaveCount(0);
+  await expect(page.locator('#pattern .toolbar .btn', { hasText: 'CLEAR PATTERN' })).toHaveCount(1);
+  await expect(page.locator('#pattern .trackrow.lane')).toHaveCount(0);
   const found = await page.evaluate(() => {
     const a = (window as unknown as W).clatter;
     const t = a.project.tracks[0]!;
-    const step = (a.pattern.gen[t.id] ?? []).findIndex((h) => !!h);
-    a.toggleCell(t.id, step); // delete the generated hit
-    return { step, hit: !!a.hitAt(t.id, step) };
+    const step = (a.pattern.grids[t.id] ?? []).findIndex((h) => !!h);
+    a.deleteNote(t.id, step);
+    return { step, id: t.id, hit: !!a.hitAt(t.id, step), notes: a.noteCount() };
   });
   expect(found.hit).toBe(false);
-  const cellInk = async () => {
-    await page.mouse.move(5, 5);
-    await page.waitForTimeout(150);
-    return page.evaluate(
-      ([step, head, cellw, rowh]) => {
-        const c = document.querySelector('#pattern .gridwrap canvas') as HTMLCanvasElement;
-        const dpr = window.devicePixelRatio || 1;
-        const ctx = c.getContext('2d')!;
-        const x0 = Math.round((step! * cellw! + 3) * dpr);
-        const w = Math.round((cellw! - 6) * dpr);
-        const y0 = Math.round((head! + 3) * dpr);
-        const h = Math.round((rowh! - 8) * dpr);
-        const d = ctx.getImageData(x0, y0, w, h).data;
-        let dark = 0;
-        for (let i = 0; i < d.length; i += 4) if (d[i]! < 100) dark++;
-        return dark;
-      },
-      [found.step, g.head, g.cellw, g.rowh],
-    );
-  };
-  // nothing to see (a few dither dots at most) ...
-  expect(await cellInk()).toBeLessThan(40);
-  await page.click('[data-test=show-original]');
-  // ... until the overlay is on: a crossed outline appears
-  expect(await cellInk()).toBeGreaterThan(20);
-  await page.click('[data-test=show-original]');
-  expect(await cellInk()).toBeLessThan(40);
+  expect(await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.project.patterns[0]))).not.toMatch(/"edits"|"gen":\{/);
+  await page.click('[data-test=clear-pattern]');
+  expect(await page.evaluate(() => (window as unknown as W).clatter.noteCount())).toBe(0);
+  await page.keyboard.press('Control+z');
+  expect(await page.evaluate(() => (window as unknown as W).clatter.noteCount())).toBe(found.notes);
 });
 
 test('a long pattern scrolls inside the grid; the track names stay put', async ({ page }) => {
@@ -361,7 +343,7 @@ test('every palette keeps the grid and tabs legible', async ({ page }) => {
 
 test('generate, variation, wildcard and a new kit change the music; undo restores it', async ({ page }) => {
   const errors = await boot(page);
-  const snap = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.gen));
+  const snap = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.grids));
   const a = await snap();
   await page.click('[data-test=ws-generate]');
   await page.click('[data-test=generate]');
@@ -423,14 +405,14 @@ test('saves and opens a project; exports a WAV and a MIDI file', async ({ page }
   const saved = await page.evaluate(() => {
     const a = (window as unknown as W).clatter;
     const f = a.projectFile();
-    return { text: new TextDecoder().decode(f.data), gen: JSON.stringify(a.pattern.gen) };
+    return { text: new TextDecoder().decode(f.data), gen: JSON.stringify(a.pattern.grids) };
   });
   await page.click('[data-test=ws-generate]');
   await page.click('[data-test=generate]');
   const reopened = await page.evaluate(async (text) => {
     const a = (window as unknown as W).clatter;
     await a.openFile(new File([text], 'x.clatter.json'));
-    return JSON.stringify(a.pattern.gen);
+    return JSON.stringify(a.pattern.grids);
   }, saved.text);
   expect(reopened).toEqual(saved.gen);
   const wav = await page.evaluate(async () => {
@@ -595,7 +577,7 @@ test('GENERATE SOUND makes variations and step sounds; MUTATE SOUND keeps the rh
   const errors = await boot(page);
   await page.click('[data-test=view-sound]');
   await page.click('[data-test=sound-tab-variations]');
-  const rhythm = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.project.patterns.map((p) => [p.gen, p.edits])));
+  const rhythm = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.project.patterns.map((p) => p.grids)));
   const sounds = () => page.evaluate(() => (window as unknown as W).clatter.soundCount());
   const r0 = await rhythm();
   expect(await sounds()).toBe(0);
@@ -612,25 +594,13 @@ test('GENERATE SOUND makes variations and step sounds; MUTATE SOUND keeps the rh
   expect(errors).toEqual([]);
 });
 
-test('the sound lane shows under the grid and a click on it edits no hit', async ({ page }) => {
-  await boot(page);
-  await page.click('[data-test=sound-lane]');
-  const g = await gridGeo(page);
-  const n = await page.evaluate(() => (window as unknown as W).clatter.project.tracks.length);
-  const before = await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.gen) + JSON.stringify((window as unknown as W).clatter.pattern.edits));
-  await page.mouse.click(g.box.x + 2.5 * g.cellw, g.box.y + g.head + (n + 0.5) * g.rowh);
-  expect(await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.pattern.gen) + JSON.stringify((window as unknown as W).clatter.pattern.edits))).toBe(before);
-  expect(await page.evaluate(() => (window as unknown as W).clatter.ui.workspace)).toBe('sound');
-  await page.click('[data-test=sound-lane]');
-});
-
 test('snapshots keep variations and step sounds; recall restores them; PERFORM has the sound pads', async ({ page }) => {
   const errors = await boot(page);
   await page.evaluate(() => (window as unknown as W).clatter.generateSound());
   const mine = await page.evaluate(() => JSON.stringify([(window as unknown as W).clatter.pattern.sounds, (window as unknown as W).clatter.project.tracks.map((t) => t.sound.variations ?? null)]));
   await page.evaluate(() => (window as unknown as W).clatter.storeSnapshot(0));
-  await page.evaluate(() => (window as unknown as W).clatter.clearSoundsInScope(true));
-  await page.evaluate(() => (window as unknown as W).clatter.resetGeneratedVariations());
+  await page.evaluate(() => (window as unknown as W).clatter.clearSoundsInScope());
+  await page.evaluate(() => (window as unknown as W).clatter.clearVariations());
   expect(await page.evaluate(() => (window as unknown as W).clatter.soundCount())).toBe(0);
   await page.evaluate(() => (window as unknown as W).clatter.recallSnapshot(0));
   expect(await page.evaluate(() => JSON.stringify([(window as unknown as W).clatter.pattern.sounds, (window as unknown as W).clatter.project.tracks.map((t) => t.sound.variations ?? null)]))).toBe(mine);

@@ -348,7 +348,7 @@ export interface KitManifest {
     sound: Omit<Track['sound'], 'variations'>;
     /** the instrument's scale setting in the project and the scale it resolved to (null: none in force) */
     scale?: { mode: string; active: { root: string; name: string; label: string; steps: number[] } | null };
-    variations: { slot: string; name: string; params: Variation['params']; generated: boolean; empty: boolean }[];
+    variations: { slot: string; name: string; params: Variation['params']; empty: boolean }[];
     analysis: Record<string, PitchSummary>;
   }[];
   files: FileEntry[];
@@ -647,7 +647,7 @@ export async function exportKit(project: Project, options: KitExportOptions, dep
         })(),
         variations: [0, 1, 2, 3].map((i) => {
           const v = variations?.[i] ?? null;
-          return { slot: 'ABCD'[i]!, name: v?.name ?? '', params: v?.params ?? {}, generated: !!v?.gen, empty: !v };
+          return { slot: 'ABCD'[i]!, name: v?.name ?? '', params: v?.params ?? {}, empty: !v };
         }),
         analysis: Object.fromEntries(targets.filter((x) => x.track.id === t.id).map((x) => [slotLabel(x.slot), summarise(x.analysis)])),
       };

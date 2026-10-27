@@ -124,7 +124,7 @@ export function configureEngine(target: EngineTarget, p: Project, lib: SampleLib
   if (lib) {
     const used = new Set<string>();
     for (const t of p.tracks) for (const id of soundSampleIds(t.sound)) used.add(id);
-    for (const pat of p.patterns) for (const e of Object.values(pat.edits)) for (const h of Object.values(e)) if (h?.sample) used.add(h.sample);
+    for (const pat of p.patterns) for (const g of Object.values(pat.grids)) for (const h of g) if (h?.sample) used.add(h.sample);
     for (const id of used) {
       const s = lib.get(id);
       if (s) target.setSample(id, { rate: s.rate, channels: s.channels });

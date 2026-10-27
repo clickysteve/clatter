@@ -187,14 +187,14 @@ export function buildPreset(spec: PresetSpec, initKit: SynthKit): Project {
   }
   const a = newPattern('p1', 'A', p.gen);
   a.seed = spec.seed;
-  a.gen = generate(p.tracks, p.gen, spec.seed, { steps: Math.min(64, stepsPerBar(4) * p.gen.bars), res: 4 });
+  a.grids = generate(p.tracks, p.gen, spec.seed, { steps: Math.min(64, stepsPerBar(4) * p.gen.bars), res: 4 });
   a.steps = Math.min(64, stepsPerBar(4) * p.gen.bars);
   p.patterns = [a];
   if (spec.variation) {
     const b = newPattern('p2', 'B', p.gen);
     b.steps = a.steps;
     b.seed = a.seed;
-    b.gen = mutate(a.gen, p.tracks.map((t) => t.id), 4, new Rng(spec.seed ^ 0xb), spec.variation).grids;
+    b.grids = mutate(a.grids, p.tracks.map((t) => t.id), 4, new Rng(spec.seed ^ 0xb), spec.variation).grids;
     b.generation = 1;
     p.patterns.push(b);
     p.chain = { on: false, entries: [{ pattern: 'p1', repeats: 3 }, { pattern: 'p2', repeats: 1 }] };

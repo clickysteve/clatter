@@ -2,7 +2,7 @@
  * CLATTER's data model.
  *
  * Three systems, kept apart:
- *   RHYTHM       what is played: patterns of hits per track (generated baseline + manual edits)
+ *   RHYTHM       what is played: patterns of hits per track (one editable grid per track)
  *   SOUND        what makes the sound: the LXR kit (synthesis parameters) and each track's
  *                sound source (SYNTH, SAMPLE or HYBRID)
  *   DESTRUCTION  how rhythm (and sound, per hit) is transformed: CHOP, ROLLS, DESTROY
@@ -125,8 +125,6 @@ export interface Variation {
   sample?: SampleOverrides;
   /** sparse override of the track's base modulation (absent: the variation modulates as the base does) */
   mod?: ModPatch;
-  /** made by a generator and not edited by hand since (generators may replace it) */
-  gen?: boolean;
   /** protected from the sound generators */
   lock?: boolean;
 }
@@ -160,8 +158,6 @@ export interface StepSound {
   /** fixed parameter values: PAR_* → 0-127 */
   locks?: Record<number, number>;
   rules?: ParamRule[];
-  /** made by a generator and not touched by hand since (generators may replace it) */
-  gen?: boolean;
 }
 
 /** Track roles: what a track is for musically (generation and default sounds). */
@@ -313,18 +309,16 @@ export interface GenSettings {
   bars: number;
 }
 
-/** A pattern: the generated baseline plus the hand edits made over it. */
+/** A pattern: one editable grid per track. Generation, mutation, transforms and hand edits all write it directly. */
 export interface Pattern {
   id: string;
   name: string;
   /** length in steps */
   steps: number;
   res: Resolution;
-  /** baseline per track (generated, varied or captured) */
-  gen: Record<string, Grid>;
-  /** hand edits over the baseline: step → hit (placed or changed) or null (deleted) */
-  edits: Record<string, Record<number, Hit | null>>;
-  /** the seed and settings that made the baseline */
+  /** the notes: one grid per track, the single authoritative pattern */
+  grids: Record<string, Grid>;
+  /** the seed and settings of the last generation (the next GENERATE starts from them) */
   seed: number;
   /** the phrase that named the seed (absent: a plain number, as in every project before 0.5) */
   seedText?: string;
@@ -472,7 +466,7 @@ export interface MasterSettings {
 
 export interface Project {
   format: 'clatter-project';
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   /** the four performance macros 0-1 (absent: 0) */
   macros?: number[];
   name: string;

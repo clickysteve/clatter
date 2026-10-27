@@ -2,7 +2,7 @@
  * DESTROY: event-level destruction of the finished pattern, hit by hit. Every effect has a
  * PROBABILITY (how many hits) scaled by AMOUNT; whether an effect takes a hit is a fixed draw
  * per (seed, take, effect, hit), so raising a probability destroys the same hits and more,
- * and RE-DESTROY (take + 1) draws again. Hand-edited hits are never destroyed.
+ * and RE-DESTROY (take + 1) draws again.
  *
  *   STUTTER  the hit repeated 2-4 times at 1/32 or 1/64, fading, before the next hit
  *   PITCH    transposed by up to an octave (synth: the LXR note; samples: playback rate)
@@ -24,8 +24,6 @@ import type { PerfEvent } from '../rhythm/events';
 export interface DestroyContext {
   seed: number;
   stepTicks: number;
-  /** "trackId:step" of hand-edited cells */
-  edited: Set<string>;
 }
 
 export interface DestroyReport {
@@ -48,10 +46,6 @@ export function destroy(source: readonly PerfEvent[], s: DestroySettings, ctx: D
     return n;
   };
   for (const e of source) {
-    if (ctx.edited.has(`${e.track}:${e.origin}`) && (e.kind === 'source' || e.kind === 'flam' || e.kind === 'ratchet')) {
-      out.push(e);
-      continue;
-    }
     const k = strCode(e.key);
     const takes = (fx: (typeof EFFECTS)[number], i: number) => rand(ctx.seed, SALT.destroy, s.take, i, k) < clamp(s[fx] * s.amount * 1.3, 0, 1);
     if (takes('skip', 0)) {

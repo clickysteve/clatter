@@ -155,8 +155,11 @@ interfaces. Nothing from the LXR firmware is in Core, and CLATTER does not chang
   drum hits, the MIDI file.
 - `test/gridmodel.test.ts`: what the grid shows is what plays (sounding, silent, added, deleted
   cells; beat and bar structure from the resolution).
-- `e2e/sound.spec.ts`: the seven SOUND tabs (modulation editing, variations table, ten mixer
-  channels, FX, KITS).
+- `test/pitch.test.ts`, `test/pitchlxr.test.ts`: the pitch analysis against sines, sweeps, kick
+  envelopes, harmonic, FM and inharmonic signals, noise and silence, and against real LXR and
+  sample renders, variations, HYBRID layers and cache invalidation (see `docs/TUNER.md`).
+- `e2e/sound.spec.ts`: the eight SOUND tabs (modulation editing, variations table, ten mixer
+  channels, FX, TUNER, KITS).
 - `e2e/app.spec.ts` (Playwright, Chromium): start-up and audio, grid hit-testing, editing by
   click, drag and right-click, cell boundaries and the SHOW ORIGINAL overlay, sideways scrolling,
   type sizes and overflow at 1920 × 1080, 1440 × 900 and 1366 × 768, palette legibility,

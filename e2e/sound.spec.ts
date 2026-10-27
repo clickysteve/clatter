@@ -23,10 +23,10 @@ const clatter = (page: Page) => ({
   slotMod: (i: number) => page.evaluate((n) => JSON.stringify((window as unknown as W).clatter.track.sound.variations?.[n]?.mod ?? null), i),
 });
 
-test('the seven tabs are there, one is open, and the old KIT & FX name is gone', async ({ page }) => {
+test('the eight tabs are there, one is open, and the old KIT & FX name is gone', async ({ page }) => {
   const errors = await boot(page);
   const labels = await page.locator('.sound-main .wstab').allTextContents();
-  expect(labels).toEqual(['SYNTH', 'SAMPLE', 'MODULATION', 'VARIATIONS', 'MIXER', 'FX', 'KITS']);
+  expect(labels).toEqual(['SYNTH', 'SAMPLE', 'MODULATION', 'VARIATIONS', 'MIXER', 'FX', 'TUNER', 'KITS']);
   await page.click('[data-test=sound-tab-modulation]');
   await expect(page.locator('.sndpane.show')).toHaveCount(1);
   expect(errors).toEqual([]);
@@ -141,5 +141,45 @@ test('FX and KITS: the LXR FX bus is its own tab; the three kit kinds sit side b
   await page.click('[data-test=sound-tab-kits]');
   for (const k of ['synth', 'set', 'full']) await expect(page.locator(`[data-test=kit-card-${k}]`)).toBeVisible();
   await expect(page.locator('[data-test=generate-kit]')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('TUNER: analyses the selected sound, shows the note, follows a variation, says so for a hat', async ({ page }) => {
+  const errors = await boot(page);
+  const snapshot = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.project));
+  const project0 = await snapshot();
+  await page.click('[data-test=sound-tab-tuner]');
+  // opening the tab analyses a sound that has none yet
+  await expect(page.locator('[data-test=tuner-note]')).not.toHaveText(/^[·…]?$/, { timeout: 20_000 });
+  const first = await page.locator('[data-test=tuner-readout]').innerText();
+  expect(first).toMatch(/HZ/);
+  expect(first).toMatch(/CENTS/);
+  expect(await page.evaluate(() => (window as unknown as W).clatter.pitch.size)).toBe(1);
+  // the project was not touched by analysing
+  expect(await snapshot()).toBe(project0);
+  // a pitch-less sound gives no note
+  await page.evaluate(() => {
+    const a = (window as unknown as W).clatter;
+    a.selectTrack(a.project.tracks.find((t) => t.name === 'CL HAT')!.id);
+  });
+  await page.click('[data-test=tuner-analyse]');
+  await expect(page.locator('[data-test=tuner-kind]')).toHaveText(/INHARMONIC|UNPITCHED/, { timeout: 20_000 });
+  await expect(page.locator('[data-test=tuner-hz]')).toHaveText('NO NOTE');
+  // changing the sound marks the result stale; REANALYSE refreshes it
+  await page.evaluate(() => {
+    const a = (window as unknown as W).clatter;
+    a.selectTrack(a.project.tracks.find((t) => t.name === 'KICK')!.id);
+  });
+  await page.click('[data-test=tuner-reanalyse]');
+  await expect(page.locator('[data-test=tuner-stale]')).not.toHaveText(/CHANGED/, { timeout: 20_000 });
+  const before = await page.locator('[data-test=tuner-hz]').innerText();
+  await page.evaluate(() => {
+    const a = (window as unknown as W).clatter;
+    a.setTrackSound(a.track.id, { trigger: 1 }, 'TRIGGER');
+  });
+  await expect(page.locator('[data-test=tuner-stale]')).toHaveText(/CHANGED/);
+  await page.click('[data-test=tuner-reanalyse]');
+  await expect(page.locator('[data-test=tuner-stale]')).not.toHaveText(/CHANGED/, { timeout: 20_000 });
+  expect(await page.locator('[data-test=tuner-hz]').innerText()).not.toBe(before);
   expect(errors).toEqual([]);
 });

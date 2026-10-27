@@ -1,6 +1,6 @@
 /**
  * SOUND: what makes the sound. A track sidebar that is always there (name, voice, source, mute
- * and solo) and seven workspaces:
+ * and solo) and eight workspaces:
  *
  *   SYNTH       source (SYNTH, SAMPLE or HYBRID), BASE / A-D, the LXR voice's parameters
  *   SAMPLE      the sample layer (of the base sound, or of the variation being edited), sample sets
@@ -8,6 +8,7 @@
  *   VARIATIONS  BASE against A-D, overrides, step usage, the sound generators (soundVar.ts)
  *   MIXER       channels with processing, bus processing, master (soundMix.ts)
  *   FX          the LXR FX bus and who feeds it (soundMix.ts)
+ *   TUNER       the audible pitch of the selected sound, found in the rendered audio (soundTuner.ts)
  *   KITS        synth kits, sample sets, full kits, generation, voice locks (soundKits.ts)
  *
  * The page does not scroll: each tab scrolls inside its own pane when it needs to. Switching tabs
@@ -27,11 +28,12 @@ import { editingText, editVoice, paramCtl, slotBar, sourceStrip, viewVoice } fro
 import { kitsPane } from './soundKits';
 import { fxPane, mixerPane } from './soundMix';
 import { modulationPane } from './soundMod';
+import { tunerPane } from './soundTuner';
 import { db, type PaneParts } from './soundUi';
 import { variationsPane } from './soundVar';
 import { font } from '../scale';
 
-const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', variations: 'VARIATIONS', mixer: 'MIXER', fx: 'FX', kits: 'KITS' };
+const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', variations: 'VARIATIONS', mixer: 'MIXER', fx: 'FX', tuner: 'TUNER', kits: 'KITS' };
 const TAB_TITLE: Record<SoundTab, string> = {
   synth: 'The selected track’s source, BASE / A-D and the LXR voice parameters',
   sample: 'The sample layer of the base sound or of the variation being edited, and sample sets',
@@ -39,6 +41,7 @@ const TAB_TITLE: Record<SoundTab, string> = {
   variations: 'The base sound beside variations A-D: overrides, step usage, conditional steps, the sound generators',
   mixer: 'Every channel with its processing, the bus processing and the master',
   fx: 'The LXR FX bus and which tracks feed it',
+  tuner: 'The audible pitch of the selected sound: note, frequency, cents, confidence and pitch movement, measured in the rendered audio',
   kits: 'Synth kits, sample sets and full kits: save, load, import, export, generate, lock voices',
 };
 const MODE_TAG = { synth: 'SYN', sample: 'SMP', hybrid: 'HYB' } as const;
@@ -414,6 +417,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   parts.set('variations', variationsPane(app, panes.variations));
   parts.set('mixer', mixerPane(app, panes.mixer));
   parts.set('fx', fxPane(app, panes.fx));
+  parts.set('tuner', tunerPane(app, panes.tuner));
   parts.set('kits', kitsPane(app, panes.kits));
   tp.refresh();
 

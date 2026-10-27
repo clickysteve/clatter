@@ -14,7 +14,7 @@ export const WORKSPACES = ['sequence', 'trigger', 'sound', 'generate', 'transfor
 export type Workspace = (typeof WORKSPACES)[number];
 
 /** The tabs of the SOUND view. (Before the overhaul the last one was 'kit': KIT & FX.) */
-export const SOUND_TABS = ['synth', 'sample', 'modulation', 'variations', 'mixer', 'fx', 'kits'] as const;
+export const SOUND_TABS = ['synth', 'sample', 'modulation', 'variations', 'mixer', 'fx', 'tuner', 'kits'] as const;
 export type SoundTab = (typeof SOUND_TABS)[number];
 
 export interface Prefs {

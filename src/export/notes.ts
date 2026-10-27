@@ -6,6 +6,7 @@
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import { noteName } from '../analysis/pitch';
+import { SCALE_TYPES } from '../music/scale';
 
 export { noteName };
 
@@ -36,23 +37,11 @@ export function parseNote(text: string): number | null {
 /** The note as a file-name part: "F#2" becomes "Fs2". */
 export const fileNote = (n: number): string => noteName(n).replace('#', 's');
 
-/** Scales as semitone offsets from the root. */
-export const SCALES: Record<string, { label: string; steps: number[] }> = {
-  major: { label: 'MAJOR', steps: [0, 2, 4, 5, 7, 9, 11] },
-  minor: { label: 'MINOR', steps: [0, 2, 3, 5, 7, 8, 10] },
-  harmonicMinor: { label: 'HARMONIC MINOR', steps: [0, 2, 3, 5, 7, 8, 11] },
-  melodicMinor: { label: 'MELODIC MINOR', steps: [0, 2, 3, 5, 7, 9, 11] },
-  dorian: { label: 'DORIAN', steps: [0, 2, 3, 5, 7, 9, 10] },
-  phrygian: { label: 'PHRYGIAN', steps: [0, 1, 3, 5, 7, 8, 10] },
-  lydian: { label: 'LYDIAN', steps: [0, 2, 4, 6, 7, 9, 11] },
-  mixolydian: { label: 'MIXOLYDIAN', steps: [0, 2, 4, 5, 7, 9, 10] },
-  locrian: { label: 'LOCRIAN', steps: [0, 1, 3, 5, 6, 8, 10] },
-  majorPentatonic: { label: 'MAJOR PENTATONIC', steps: [0, 2, 4, 7, 9] },
-  minorPentatonic: { label: 'MINOR PENTATONIC', steps: [0, 3, 5, 7, 10] },
-  blues: { label: 'BLUES', steps: [0, 3, 5, 6, 7, 10] },
-  wholeTone: { label: 'WHOLE TONE', steps: [0, 2, 4, 6, 8, 10] },
-  diminished: { label: 'DIMINISHED', steps: [0, 2, 3, 5, 6, 8, 9, 11] },
-};
+/**
+ * Scales as semitone offsets from the root: the shared table of src/music/scale.ts (the USER scale
+ * is a project's own and has no name to export by).
+ */
+export const SCALES: Record<string, { label: string; steps: number[] }> = Object.fromEntries(SCALE_TYPES.filter((t) => t.id !== 'user').map((t) => [t.id, { label: t.label, steps: t.steps.slice() }]));
 
 /** Every note from `lo` to `hi` inclusive (either order). */
 export function chromaticRange(lo: number, hi: number): number[] {

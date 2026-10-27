@@ -17,6 +17,8 @@ import type { ChannelFx, OutputFx } from '../audio/mixfx';
 import type { ModPatch, TrackMod } from '../mod/types';
 import type { TempoAuto } from '../transport/tempo';
 import type { WildSettings } from '../destruction/wildcardProject';
+import type { CandidateOrigin } from '../sound/discover';
+import type { GlobalScale, TrackScale } from '../music/scale';
 
 /** Ticks per quarter note (musical time unit; 24 per sixteenth). */
 export const PPQ = 96;
@@ -248,6 +250,37 @@ export interface TrackPlay {
   length: number;
 }
 
+/**
+ * What the pitch analysis found in the UNTUNED sound of one layer of one slot. Only a record of
+ * a measurement: the scale move itself is computed from it (src/music/tuning.ts).
+ */
+export interface PitchMeasure {
+  kind: 'stable' | 'swept' | 'inharmonic' | 'unpitched' | 'silent';
+  /** the settled fundamental in Hz (absent: the sound has none) */
+  hz?: number;
+  /** 0-1 */
+  conf: number;
+  /** what makes the pitch of the sound it was measured from (changes when the sound's character changes) */
+  shape: string;
+  /** the sound's pitch offset in semitones when it was measured (later COARSE/FINE/NOTE/TUNE edits are added to the measurement) */
+  off: number;
+  /** a correction in cents found by measuring the tuned sound, valid for the scale note it was found at */
+  adj?: { target: number; cents: number };
+  /** milliseconds since 1970 */
+  at: number;
+}
+
+export interface SlotMeasure {
+  synth?: PitchMeasure;
+  sample?: PitchMeasure;
+}
+
+/** Measurements by slot: the base sound and variations A-D. */
+export interface TrackPitch {
+  base?: SlotMeasure;
+  vars?: (SlotMeasure | null)[];
+}
+
 export interface Track {
   id: string;
   name: string;
@@ -258,6 +291,10 @@ export interface Track {
   midi: { channel: number; note: number };
   /** LOCK: generation and mutation leave this track's rhythm alone */
   lock: boolean;
+  /** scale quantisation: OFF, GLOBAL or CUSTOM (absent: GLOBAL for pitched roles, OFF for the rest; see src/music/scale.ts) */
+  scale?: TrackScale;
+  /** measurements of the untuned sound that scale quantisation corrects (see src/music/tuning.ts) */
+  pitch?: TrackPitch;
 }
 
 /** Rhythm generation settings. */
@@ -352,6 +389,12 @@ export interface DestructionSettings {
   destroy: DestroySettings;
 }
 
+/** Where a voice's sound came from when it was applied from SOUND DISCOVERY. */
+export interface DiscoveredSound {
+  name: string;
+  origin: CandidateOrigin;
+}
+
 /** The LXR kit: every sound parameter value (0-127) and the modulation targets. */
 export interface SynthKit {
   params: number[];
@@ -429,7 +472,7 @@ export interface MasterSettings {
 
 export interface Project {
   format: 'clatter-project';
-  version: 1 | 2 | 3 | 4 | 5;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   /** the four performance macros 0-1 (absent: 0) */
   macros?: number[];
   name: string;
@@ -438,6 +481,8 @@ export interface Project {
   tempoAuto?: TempoAuto;
   /** swing 50-75 % */
   swing: number;
+  /** the global scale (absent in projects older than 0.7: none; see src/music/scale.ts) */
+  scale?: GlobalScale;
   /** the project seed (performance randomness) */
   seed: number;
   /** the phrase that named the project seed (absent: a plain number) */
@@ -451,6 +496,8 @@ export interface Project {
   /** the sample set the tracks' samples came from or were saved as (display; the samples themselves are on the tracks) */
   sampleSet?: string;
   soundLocks: SoundLocks;
+  /** the candidate last applied to each voice from SOUND DISCOVERY (voice 0-5 → its name and the seed metadata that makes it again; record only) */
+  discovered?: Record<number, DiscoveredSound>;
   patterns: Pattern[];
   current: string;
   chain: { on: boolean; entries: ChainEntry[] };

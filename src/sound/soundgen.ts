@@ -28,7 +28,7 @@
  */
 import { clamp, VARIATION_SLOTS, type Grid, type ParamRule, type SampleOverrides, type SoundCond, type SoundLocks, type StepSound, type TrackSound, type Variation } from '../model/types';
 import { hash32, Rng, SALT, strCode } from '../rhythm/rng';
-import { archetypeFor, voiceKeys, type Archetype, type Key } from './kitgen';
+import { archetypeFor, snapCoarse, voiceKeys, type Archetype, type Key, type VoicePitchPlan } from './kitgen';
 import { isEmptyStepSound, lockableParam } from './stepSound';
 
 // ---------------------------------------------------------------------------- recipes
@@ -126,6 +126,8 @@ export interface GenOptions {
   /** TIMBRE 0-1 */
   amount: number;
   locks: SoundLocks;
+  /** the track is scale-locked: pitch moves (COARSE) land on notes of the scale, so a variation does not leave it */
+  pitch?: VoicePitchPlan | null;
 }
 
 /** Intensity of a variation at a TIMBRE: subtle at the bottom, full at 1. */
@@ -207,6 +209,8 @@ export function generateVariations(sound: TrackSound, role: string, kit: readonl
           params[id] = moved(m.key, from, m.d * w * jitter, extreme);
         }
       }
+      // the variation's oscillator pitch is a note of the scale, as the base's is
+      if (o.pitch && keys.coarse !== undefined && params[keys.coarse] !== undefined) params[keys.coarse] = snapCoarse(o.pitch, params[keys.coarse]!);
       for (const id of Object.keys(params).map(Number)) if (params[id] === (kit[id] ?? 0)) delete params[id];
     }
     const v: Variation = { name: recipe.name.slice(0, 10), params, gen: true };
@@ -339,6 +343,7 @@ export function distributeSounds(sound: TrackSound, role: string, grid: Grid, ex
         const span = key === 'coarse' ? 1 + Math.round(amount * 4) : 4 + amount * 26;
         const d = (r(i, 20 + q) * 2 - 1) * span;
         locks[id] = moved(key, kit[id] ?? 0, d, amount > 0.9);
+        if (key === 'coarse' && o.pitch) locks[id] = snapCoarse(o.pitch, locks[id]!);
       }
       if (Object.keys(locks).length) ss.locks = locks;
     }

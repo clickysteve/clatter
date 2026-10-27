@@ -22,6 +22,7 @@ import type { SoundLocks, SynthKit } from '../model/types';
 import type { KitFlavour } from '../rhythm/styles';
 import { hash32, Rng, SALT } from '../rhythm/rng';
 import { PAR } from './lxrParamIds';
+import { nearestInScale, type ScaleSpec } from '../music/scale';
 
 export type Archetype = 'kick' | 'tom' | 'perc' | 'zap' | 'snare' | 'clap' | 'hat' | 'cymbal';
 
@@ -424,6 +425,32 @@ function lfoTarget(voice: number, a: Archetype, rng: Rng): number {
   return ok.length ? rng.pick(ok) : 0;
 }
 
+/** The LFO target a voice of this archetype would get (SOUND DISCOVERY draws it for its candidates). */
+export const lfoTargetFor = lfoTarget;
+
+/** Is this parameter a menu (a waveform, a filter type) rather than a continuous control? Blends take the one or the other, never a value between. */
+export function isMenuKey(archetype: Archetype, key: Key): boolean {
+  const spec = ARCHETYPES[archetype][key];
+  return spec ? !isRange(spec) : MENU_KEYS.has(key);
+}
+const MENU_KEYS: ReadonlySet<Key> = new Set<Key>(['wave', 'fmWave', 'fmMode', 'm1wave', 'm2wave', 'tWave', 'ftype', 'lfoWave', 'lfoSync', 'lfoRetrig']);
+
+/**
+ * Where a voice's pitch must land when its track is scale-locked: the scale and the track's synth
+ * note (60 plays the voice's own pitch). Only the tom-like voices (0-2) get one: for the others
+ * the oscillator is not the pitch you hear (see src/music/tuning.ts).
+ */
+export interface VoicePitchPlan {
+  spec: ScaleSpec;
+  note: number;
+}
+
+/** COARSE as the oscillator's MIDI note put on the nearest scale note, counting the synth note. */
+export function snapCoarse(plan: VoicePitchPlan, coarse: number): number {
+  const nominal = coarse + (plan.note - 60);
+  return clamp127(coarse + nearestInScale(plan.spec, nominal) - nominal);
+}
+
 export interface KitGenOptions {
   seed: number;
   flavour: KitFlavour;
@@ -432,6 +459,8 @@ export interface KitGenOptions {
   locks: SoundLocks;
   /** also design the FX bus */
   fx?: boolean;
+  /** scale-locked voices: their oscillator pitch is chosen from (or kept on) the scale */
+  pitch?: (voice: number) => VoicePitchPlan | null;
 }
 
 /** Write a design into a kit (respecting parameter locks). */
@@ -453,6 +482,8 @@ export function generateKit(base: SynthKit, o: KitGenOptions): SynthKit {
     const rng = new Rng(hash32(o.seed, SALT.kit, v));
     const a = archetypeFor(v, o.voiceRoles[v] ?? []);
     const d = designVoice(v, a, o.flavour, rng);
+    const plan = o.pitch?.(v);
+    if (plan && d.values.coarse !== undefined) d.values.coarse = snapCoarse(plan, d.values.coarse);
     apply(kit, v, d, locked);
     kit.lfoTarget[v] = (d.values.lfoDepth ?? 0) > 0 ? lfoTarget(v, a, rng) : 0;
     kit.velTarget[v] = 0;
@@ -495,6 +526,7 @@ export function mutateKit(base: SynthKit, o: KitGenOptions & { amount: number; v
     const a = archetypeFor(v, o.voiceRoles[v] ?? []);
     const recipe = ARCHETYPES[a];
     const keys = voiceKeys(v);
+    const plan = o.pitch?.(v);
     for (const [k, spec] of Object.entries(recipe) as [Key, Spec][]) {
       const p = keys[k];
       if (p === undefined || locked.has(p)) continue;
@@ -507,6 +539,8 @@ export function mutateKit(base: SynthKit, o: KitGenOptions & { amount: number; v
       } else if (rng.chance(amount * 0.35)) {
         kit.params[p] = rng.pick(spec.pick);
       }
+      // a scale-locked voice keeps its pitch on the scale: only a COARSE that moved is snapped
+      if (plan && k === 'coarse' && kit.params[p] !== base.params[p]) kit.params[p] = snapCoarse(plan, kit.params[p]!);
     }
   }
   if (voices.length === 6 && rng01(o.seed) < amount * 0.25 && !locked.has(PAR.FX_TYPE)) {
@@ -530,6 +564,12 @@ export function evolveKit(current: SynthKit, home: SynthKit, o: KitGenOptions & 
     const h = home.params[p]!;
     const d = step.params[p]! - h;
     if (Math.abs(d) > maxDrift) step.params[p] = clamp127(h + Math.sign(d) * maxDrift);
+  }
+  // a pull back towards HOME can leave a scale-locked voice's pitch between notes: put it back on one
+  for (let v = 0; v < 6; v++) {
+    const plan = o.pitch?.(v);
+    const par = voiceKeys(v).coarse;
+    if (plan && par !== undefined && !o.locks.params.includes(par) && !o.locks.voices[v] && step.params[par] !== current.params[par]) step.params[par] = snapCoarse(plan, step.params[par]!);
   }
   return step;
 }

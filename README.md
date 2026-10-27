@@ -80,6 +80,8 @@ paths are relative, the same build also works at `https://clickysteve.github.io/
 - [docs/SEEDS.md](docs/SEEDS.md): human-readable seeds: phrases, the documented hash, the seed fields, what is seeded, legacy numbers and the project schema.
 - [docs/TUNER.md](docs/TUNER.md): the TUNER tab and the pitch analysis of rendered sounds: method, result format, limits.
 - [docs/KIT_EXPORT.md](docs/KIT_EXPORT.md): EXPORT KIT: every instrument as WAV files (variations, velocity layers, pitch ranges, automatic note names) with a kit.json; how pitch is retuned and verified, and the limits.
+- [docs/SCALE.md](docs/SCALE.md): SOUND > SCALE: global and per-track scale quantisation, what is and is not quantised, measured vs estimated pitch, modulation, exporter modes, limits.
+- [docs/DISCOVERY.md](docs/DISCOVERY.md): SOUND DISCOVERY: eight candidate sounds for an instrument, audition through the engine, A/B, mutation, the sound library, pitch and seeds.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the three systems, the engine, timing, state,
   files and tests.
 

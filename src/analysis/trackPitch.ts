@@ -13,6 +13,7 @@ import { ENGINE_RATE } from '../audio/engine';
 import type { SampleLibrary } from '../audio/library';
 import { renderHit } from '../audio/render';
 import { clone, type Project } from '../model/types';
+import { engineTunes, untuned } from '../music/tuning';
 import { analysePitch, PITCH_ANALYSIS_VERSION, PITCH_METHOD, type PitchAnalysis } from './pitch';
 
 export type PitchLayer = 'mix' | 'synth' | 'sample';
@@ -22,6 +23,8 @@ export interface PitchTarget {
   trackId: string;
   slot: number | null;
   layer: PitchLayer;
+  /** analyse the sound as it is before scale quantisation moves it (the natural pitch); absent: as it plays */
+  raw?: boolean;
 }
 
 /** A stored result: the analysis plus what it was made from. */
@@ -34,14 +37,14 @@ export interface PitchRecord {
   at: number;
 }
 
-export const targetKey = (t: PitchTarget): string => `${t.trackId}|${t.slot ?? 'base'}|${t.layer}`;
+export const targetKey = (t: PitchTarget): string => `${t.trackId}|${t.slot ?? 'base'}|${t.layer}${t.raw ? '|raw' : ''}`;
 
 /** The layer only means something on a HYBRID track; a variation that is empty is the base sound. */
 export function normalizeTarget(p: Project, t: PitchTarget): PitchTarget {
   const tr = p.tracks.find((x) => x.id === t.trackId);
   const layer = tr?.sound.mode === 'hybrid' ? t.layer : 'mix';
   const slot = t.slot != null && tr?.sound.variations?.[t.slot] ? t.slot : null;
-  return { trackId: t.trackId, slot, layer };
+  return { trackId: t.trackId, slot, layer, ...(t.raw ? { raw: true } : {}) };
 }
 
 function fnv(s: string): string {
@@ -79,6 +82,8 @@ export function soundFingerprint(p: Project, target: PitchTarget): string {
       vel: k.velTarget,
       macros: p.macros ?? null,
       seed: p.seed,
+      // the scale tuning moves the sound, so a result for the tuned sound belongs to that tuning
+      tune: t.raw ? null : (engineTunes(p, tr) ?? null),
     }),
   );
 }
@@ -86,7 +91,7 @@ export function soundFingerprint(p: Project, target: PitchTarget): string {
 /** Render the target alone and analyse it. */
 export async function analyseTarget(module: WebAssembly.Module, live: Project, lib: SampleLibrary | null, target: PitchTarget): Promise<PitchRecord> {
   // work on a snapshot: the fingerprint must describe the sound that was rendered, even if the user keeps editing meanwhile
-  const project = clone(live);
+  const project = target.raw ? untuned(live) : clone(live);
   const t = normalizeTarget(project, target);
   if (!project.tracks.some((x) => x.id === t.trackId)) throw new Error('that track no longer exists');
   const audio = await renderHit(module, project, lib, t.trackId, 127, 3, { slot: t.slot, layer: t.layer, dry: true });

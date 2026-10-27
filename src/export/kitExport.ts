@@ -23,13 +23,25 @@ import { analyseTarget, type PitchRecord, type PitchTarget } from '../analysis/t
 import type { SampleLibrary } from '../audio/library';
 import { renderKitHit } from '../audio/render';
 import { clone, type Project, type Track, type Variation } from '../model/types';
+import { describeScale, notesInRange, rootName, scaleSteps, trackScaleState, type ScaleSpec } from '../music/scale';
+import { untuned } from '../music/tuning';
 import { chromaticRange, fileNote, MIDI_MAX, MIDI_MIN, parseNote, parseNoteList, scaleNotes, SCALES } from './notes';
 import { encodeWav, WAV_FORMATS, type WavFormat } from './wavFile';
 
 export const KIT_EXPORT_VERSION = 1;
 export const KIT_EXPORT_FORMAT = 'clatter-kit-export';
 
-export type PitchMode = 'original' | 'chromatic' | 'scale' | 'custom';
+/**
+ * What pitch the files are rendered at:
+ *   original   the sound as it is before any scale tuning, at the pitch it has (no note is forced)
+ *   project    each instrument as the project plays it: scale-tuned where it is scale-locked, named by what was measured
+ *   global     the project's global scale, every note of it in the range
+ *   track      each instrument's own scale (its GLOBAL or CUSTOM setting), every note of it in the range
+ *   scale      a scale chosen here (root and type), every note of it in the range
+ *   chromatic  every semitone in the range
+ *   custom     a list of notes
+ */
+export type PitchMode = 'original' | 'project' | 'global' | 'track' | 'chromatic' | 'scale' | 'custom';
 export type Processing = 'dry' | 'wet' | 'both';
 export type VariationMode = 'base' | 'all' | 'selected';
 export const LAYER_CHOICES = [1, 4, 8, 16] as const;
@@ -142,6 +154,10 @@ export interface ResolvedOptions {
   /** MIDI notes to render, or null for the original pitch */
   notes: number[] | null;
   scaleInfo: { root: number; rootName: string; scale: string; label: string; steps: number[]; notes: number[] } | null;
+  /** TRACK mode: the notes of each instrument's own scale (an instrument without one is absent and exports at its original pitch) */
+  perTrack?: Map<string, { spec: ScaleSpec; notes: number[] }>;
+  /** the sounds are rendered as the project plays them (scale tuning included) */
+  tuned: boolean;
   processing: ('dry' | 'wet')[];
 }
 
@@ -164,8 +180,27 @@ export function resolveOptions(p: Project, o: KitExportOptions): ResolvedOptions
 
   let notes: number[] | null = null;
   let scaleInfo: ResolvedOptions['scaleInfo'] = null;
+  let perTrack: ResolvedOptions['perTrack'];
   const pm = o.pitch;
-  if (pm.mode === 'chromatic' || pm.mode === 'scale') {
+  if (pm.mode === 'global' || pm.mode === 'track') {
+    const lo = parseNote(pm.lo);
+    const hi = parseNote(pm.hi);
+    if (lo === null) return { error: `NOT A NOTE: "${pm.lo}" (USE C2 OR A NUMBER 0-127)` };
+    if (hi === null) return { error: `NOT A NOTE: "${pm.hi}" (USE C3 OR A NUMBER 0-127)` };
+    if (pm.mode === 'global') {
+      const g = p.scale;
+      if (!g) return { error: 'THE PROJECT HAS NO GLOBAL SCALE: SET ONE IN SOUND > SCALE' };
+      notes = notesInRange(g, lo, hi);
+      scaleInfo = { root: g.root, rootName: rootName(g.root), scale: g.type, label: describeScale(g).replace(/^\S+ /, ''), steps: scaleSteps(g).slice(), notes };
+    } else {
+      perTrack = new Map();
+      for (const t of tracks) {
+        const st = trackScaleState(p, t);
+        if (st.spec) perTrack.set(t.id, { spec: st.spec, notes: notesInRange(st.spec, lo, hi) });
+      }
+      if (!perTrack.size) return { error: 'NO SELECTED INSTRUMENT HAS A SCALE IN FORCE' };
+    }
+  } else if (pm.mode === 'chromatic' || pm.mode === 'scale') {
     const lo = parseNote(pm.lo);
     const hi = parseNote(pm.hi);
     if (lo === null) return { error: `NOT A NOTE: "${pm.lo}" (USE C2 OR A NUMBER 0-127)` };
@@ -184,7 +219,8 @@ export function resolveOptions(p: Project, o: KitExportOptions): ResolvedOptions
     notes = r.notes;
   }
   if (notes && !notes.length) return { error: 'NO NOTES IN THAT RANGE' };
-  return { tracks, slots, notes, scaleInfo, processing };
+  if (perTrack && [...perTrack.values()].some((x) => !x.notes.length)) return { error: 'AN INSTRUMENT\'S SCALE HAS NO NOTES IN THAT RANGE' };
+  return { tracks, slots, notes, scaleInfo, ...(perTrack ? { perTrack } : {}), tuned: pm.mode === 'project', processing };
 }
 
 /** Velocity layers: N layers split 1-127 evenly; each is rendered at the top of its range (the last at 127). */
@@ -298,6 +334,8 @@ export interface KitManifest {
   kit: { name: string; project: string; seed: number; seedText?: string; projectSeed: number; projectSeedText?: string; tempo: number; sampleSet: string | null };
   settings: KitExportOptions & { sampleRate: number; bitDepth: number; layerRanges: { layer: number; velocity: number; low: number; high: number }[]; verification: string };
   scale: { root: string; name: string; label: string; steps: number[]; notes: string[] } | null;
+  /** the project's global scale and whether it was in force (absent: none was set) */
+  projectScale?: { on: boolean; root: string; name: string; label: string; steps: number[] };
   /** the kit's synthesis settings as they were when exported */
   synth: { params: number[]; lfoTarget: number[]; velTarget: number[] };
   instruments: {
@@ -308,6 +346,8 @@ export interface KitManifest {
     mode: string;
     trigger: number;
     sound: Omit<Track['sound'], 'variations'>;
+    /** the instrument's scale setting in the project and the scale it resolved to (null: none in force) */
+    scale?: { mode: string; active: { root: string; name: string; label: string; steps: number[] } | null };
     variations: { slot: string; name: string; params: Variation['params']; generated: boolean; empty: boolean }[];
     analysis: Record<string, PitchSummary>;
   }[];
@@ -365,9 +405,11 @@ function variationOf(t: Track, slot: number): Variation | null {
 }
 
 export async function exportKit(project: Project, options: KitExportOptions, deps: KitExportDeps): Promise<KitExportResult> {
-  const snapshot = clone(project);
-  const r = resolveOptions(snapshot, options);
-  if ('error' in r) throw new Error(r.error);
+  const r0 = resolveOptions(project, options);
+  if ('error' in r0) throw new Error(r0.error);
+  const r = r0;
+  // ORIGINAL and the retuned modes start from the sound before scale tuning; PROJECT renders it as the project plays it
+  const snapshot = r.tuned ? clone(project) : untuned(project);
   const warnings: string[] = [];
   const skipped: { file: string; reason: string }[] = [];
   const yieldUi = deps.yieldToUi ?? tick;
@@ -416,7 +458,8 @@ export async function exportKit(project: Project, options: KitExportOptions, dep
       continue;
     }
     const ok = reliable(a);
-    let notes = r.notes;
+    let notes = r.perTrack ? (r.perTrack.get(j.track.id)?.notes ?? null) : r.notes;
+    if (r.perTrack && !notes) warnings.push(`${label}: NO SCALE IN FORCE ON THIS INSTRUMENT: EXPORTED AT ITS ORIGINAL PITCH`);
     if (notes && !ok) {
       warnings.push(`${label}: ${a.kind === 'stable' || a.kind === 'swept' ? 'PITCH NOT RELIABLE ENOUGH TO RETUNE' : a.kind === 'inharmonic' ? 'INHARMONIC, HAS NO SINGLE PITCH' : 'UNPITCHED'}: EXPORTED AT ITS ORIGINAL PITCH ONLY, WITHOUT A NOTE NAME`);
       notes = null;
@@ -586,6 +629,7 @@ export async function exportKit(project: Project, options: KitExportOptions, dep
     kit: { name: snapshot.kit.name, project: snapshot.name, seed: snapshot.kit.seed, ...(snapshot.kit.seedText ? { seedText: snapshot.kit.seedText } : {}), projectSeed: snapshot.seed, ...(snapshot.seedText ? { projectSeedText: snapshot.seedText } : {}), tempo: snapshot.tempo, sampleSet: snapshot.sampleSet ?? null },
     settings: { ...clone(options), sampleRate: 44100, bitDepth: WAV_FORMATS[options.format].bits, layerRanges: layers.map((l) => ({ layer: l.index + 1, velocity: l.vel, low: l.lo, high: l.hi })), verification: verifyAll ? 'every file measured' : 'the loudest layer of each note measured; softer layers share its tuning' },
     scale: r.scaleInfo ? { root: r.scaleInfo.rootName, name: r.scaleInfo.scale, label: r.scaleInfo.label, steps: r.scaleInfo.steps, notes: r.scaleInfo.notes.map(noteName) } : null,
+    ...(project.scale ? { projectScale: { on: project.scale.on, root: rootName(project.scale.root), name: project.scale.type, label: describeScale(project.scale).replace(/^\S+ /, ''), steps: scaleSteps(project.scale).slice() } } : {}),
     synth: clone(snapshot.kit.synth),
     instruments: r.tracks.map((t) => {
       const { variations, ...sound } = clone(t.sound);
@@ -597,6 +641,10 @@ export async function exportKit(project: Project, options: KitExportOptions, dep
         mode: t.sound.mode,
         trigger: t.sound.trigger,
         sound,
+        scale: (() => {
+          const st = trackScaleState(project, t);
+          return { mode: st.mode, active: st.spec ? { root: rootName(st.spec.root), name: st.spec.type, label: describeScale(st.spec).replace(/^\S+ /, ''), steps: scaleSteps(st.spec).slice() } : null };
+        })(),
         variations: [0, 1, 2, 3].map((i) => {
           const v = variations?.[i] ?? null;
           return { slot: 'ABCD'[i]!, name: v?.name ?? '', params: v?.params ?? {}, generated: !!v?.gen, empty: !v };

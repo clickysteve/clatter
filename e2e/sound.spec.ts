@@ -23,10 +23,10 @@ const clatter = (page: Page) => ({
   slotMod: (i: number) => page.evaluate((n) => JSON.stringify((window as unknown as W).clatter.track.sound.variations?.[n]?.mod ?? null), i),
 });
 
-test('the eight tabs are there, one is open, and the old KIT & FX name is gone', async ({ page }) => {
+test('the ten tabs are there, one is open, and the old KIT & FX name is gone', async ({ page }) => {
   const errors = await boot(page);
   const labels = await page.locator('.sound-main .wstab').allTextContents();
-  expect(labels).toEqual(['SYNTH', 'SAMPLE', 'MODULATION', 'VARIATIONS', 'MIXER', 'FX', 'TUNER', 'KITS']);
+  expect(labels).toEqual(['SYNTH', 'SAMPLE', 'MODULATION', 'VARIATIONS', 'MIXER', 'FX', 'TUNER', 'SCALE', 'DISCOVER', 'KITS']);
   await page.click('[data-test=sound-tab-modulation]');
   await expect(page.locator('.sndpane.show')).toHaveCount(1);
   expect(errors).toEqual([]);
@@ -181,5 +181,42 @@ test('TUNER: analyses the selected sound, shows the note, follows a variation, s
   await page.click('[data-test=tuner-reanalyse]');
   await expect(page.locator('[data-test=tuner-stale]')).not.toHaveText(/CHANGED/, { timeout: 20_000 });
   expect(await page.locator('[data-test=tuner-hz]').innerText()).not.toBe(before);
+  expect(errors).toEqual([]);
+});
+
+test('DISCOVER: eight candidates, audition and A/B leave the instrument alone, APPLY is one undo step', async ({ page }) => {
+  const errors = await boot(page);
+  const kit = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.project.kit.synth));
+  await page.click('[data-test=sound-tab-discover]');
+  await expect(page.locator('[data-test=dslot-0]')).toHaveClass(/empty/);
+  const before = await kit();
+  await page.fill('[data-test=discover-seed]', 'velvet-orbit');
+  await page.press('[data-test=discover-seed]', 'Enter');
+  await page.click('[data-test=discover-go]');
+  await expect(page.locator('.dslot:not(.empty)')).toHaveCount(8, { timeout: 30_000 });
+  await expect(page.locator('[data-test=discover-seed]')).toHaveValue('velvet-orbit');
+  // audition and A/B: rendered by the engine, the instrument is untouched
+  await page.click('[data-test=dslot-play-2]');
+  await expect(page.locator('[data-test=ab-now]')).toContainText('B · 3', { timeout: 15_000 });
+  await page.click('[data-test=ab-a]');
+  await expect(page.locator('[data-test=ab-now]')).toContainText('A · ORIGINAL');
+  await page.click('[data-test=ab-switch]');
+  await expect(page.locator('[data-test=ab-now]')).toContainText('B · 3');
+  await page.click('[data-test=discover-mutate]');
+  await expect(page.locator('.dslot.sel .dname')).toHaveText('KICK M1', { timeout: 15_000 });
+  expect(await kit()).toBe(before);
+  await page.click('[data-test=discover-apply]');
+  await expect(page.locator('.dslot.sel .dtag')).toHaveText('LIVE');
+  expect(await kit()).not.toBe(before);
+  await page.keyboard.press('Control+z');
+  expect(await kit()).toBe(before);
+  // save to the library and load it back into a slot
+  await page.click('[data-test=discover-save]');
+  await page.fill('.namebox', 'my test sound');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-test=lib-row]')).toHaveCount(1);
+  await page.click('[data-test=lib-load]');
+  await expect(page.locator('.dslot.sel .dmeta')).toContainText('LIBRARY');
+  expect(await kit()).toBe(before);
   expect(errors).toEqual([]);
 });

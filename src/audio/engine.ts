@@ -24,6 +24,8 @@ import { PAR } from '../sound/lxrParamIds';
 import { DEST_INDEX, DESTS, parOf } from '../mod/registry';
 import { ModRuntime } from '../mod/runtime';
 import type { TrackMod } from '../mod/types';
+import { FINE_CENTS_PER_STEP, quantiseOffsetMask } from '../music/scale';
+import type { EngineTune } from '../music/tuning';
 import { BusProcessor, ChannelProcessor, MasterProcessor, defaultChannelFx, legacyOutputFx, type ChannelFx, type OutputFx } from './mixfx';
 
 export const ENGINE_RATE = 44100;
@@ -79,6 +81,17 @@ export interface EngineTrack {
    * variation uses the base's). Sent whole; the engine keeps source state across edits.
    */
   mods?: (TrackMod | null)[];
+  /**
+   * Scale quantisation: index 0 is the base sound's tuning, 1-4 variations A-D (null: that slot
+   * plays untouched). A constant offset of the whole sound, see src/music/tuning.ts.
+   */
+  tunes?: (EngineTune | null)[];
+}
+
+/** The scale tuning that applies to a hit of a track, and the hit's pitch offset after the scale has snapped it. */
+function tuneOf(t: EngineTrack, h: HitEvent): { tune: EngineTune | null; pitch: number } {
+  const tune = t.tunes?.[h.mv ?? 0] ?? null;
+  return { tune, pitch: tune?.q && h.pitch ? quantiseOffsetMask(tune.q.mask, tune.q.anchor, h.pitch) : h.pitch };
 }
 
 export const silentTrack = (): EngineTrack => ({
@@ -656,7 +669,8 @@ export class ClatterEngine {
     const hi = Math.max(region0 + 1, Math.min(len, Math.ceil(t.end * len)));
     // modulation of the start position moves the start into the region (read at the trigger)
     const lo = this.tMod[ti] && this.tStart[ti] ? Math.max(0, Math.min(hi - 1, Math.floor(region0 + (hi - region0) * Math.max(0, Math.min(0.95, this.tStart[ti]!))))) : region0;
-    const semis = t.tune + t.fine / 100 + h.pitch;
+    const tn = tuneOf(track, h);
+    const semis = t.tune + t.fine / 100 + tn.pitch + (tn.tune?.smp ?? 0);
     const rate = (s.rate / ENGINE_RATE) * Math.pow(2, semis / 12);
     const reverse = t.reverse !== !!h.reverse;
     const vel = Math.max(1, Math.min(127, h.vel)) / 127;
@@ -695,13 +709,27 @@ export class ClatterEngine {
     });
   }
 
+  /** The step's locks plus the oscillator FINE that carries the cents a whole note cannot reach (scale tuning), around whatever the step or kit has it at. */
+  private withFine(lv: number, sp: number[] | undefined, cents: number): number[] {
+    const par = PAR.FINE1 + 2 * lv;
+    let base = this.base[par] ?? 64;
+    const out: number[] = [];
+    for (let i = 0; sp && i + 1 < sp.length; i += 2) {
+      if (sp[i] === par) base = sp[i + 1]!;
+      else out.push(sp[i]!, sp[i + 1]!);
+    }
+    out.push(par, Math.max(0, Math.min(127, Math.round(base + cents / FINE_CENTS_PER_STEP))));
+    return out;
+  }
+
   private startSynth(ti: number, t: EngineTrack, h: HitEvent): void {
     const trig = Math.max(0, Math.min(6, (h.trig ?? t.trigger) | 0));
     const lv = trig >= 5 ? 5 : trig;
     // whoever played this voice last gives it back its own values before the new owner's
     // step locks and modulation apply (the voice is monophonic: one owner at a time)
     this.releaseMods(lv);
-    this.applyLocks(lv, h.sp);
+    const tn = tuneOf(t, h);
+    this.applyLocks(lv, tn.tune && Math.abs(tn.tune.cents) >= 0.5 ? this.withFine(lv, h.sp, tn.tune.cents) : h.sp);
     this.voiceOwner[lv] = ti;
     if (this.tMod[ti]) this.applyLxrMods(ti, lv, false);
     this.synthGain[lv] = 1;
@@ -709,7 +737,7 @@ export class ClatterEngine {
     this.synthGate[lv] = h.gate && h.gate > 0 ? h.gate : Infinity;
     this.synthLevel[lv] = t.mode === 'hybrid' ? t.synthLevel : 1;
     this.synthChoke[lv] = t.choke;
-    const note = Math.max(0, Math.min(127, Math.round(t.note + h.pitch)));
+    const note = Math.max(0, Math.min(127, Math.round(t.note + tn.pitch + (tn.tune?.note ?? 0))));
     const vel = Math.max(1, Math.min(127, Math.round(h.vel)));
     if (h.locks && h.locks.length >= 2) this.lxr.triggerLocked(trig, vel, note, h.locks[0]! | 0, h.locks[1]! | 0, h.locks[2]! | 0, h.locks[3]! | 0);
     else this.lxr.trigger(trig, vel, note);

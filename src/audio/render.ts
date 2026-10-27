@@ -8,6 +8,7 @@
  */
 import { ClatterEngine, BLOCK, ENGINE_RATE, type EngineSample, type EngineTrack, type HitEvent } from './engine';
 import { resolveStepSound } from '../sound/stepSound';
+import { FINE_CENTS_PER_STEP } from '../music/tuning';
 import { PAR } from '../sound/lxrParamIds';
 import { LxrEngine } from './lxr/lxr';
 import type { SampleLibrary } from './library';
@@ -248,7 +249,7 @@ export interface KitHit {
 }
 
 /** The LXR's oscillator FINE parameter moves the pitch by about this many cents per step (measured; the exporter's tuning loop corrects the rest). */
-export const FINE_CENTS_PER_STEP = 0.9;
+export { FINE_CENTS_PER_STEP };
 
 /** Level under which a sound counts as finished: -80 dBFS. */
 export const SILENCE = 1e-4;

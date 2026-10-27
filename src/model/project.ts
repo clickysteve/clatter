@@ -7,7 +7,7 @@
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import { defaultMix, defaultPlay, defaultProject, defaultSound, defaultTracks, emptySynthKit } from './defaults';
-import { clamp, MAX_PATTERNS, MAX_STEPS, MAX_TRACKS, RESOLUTIONS, ROLES, ROLL_SPEEDS, SNAPSHOTS, VARIATION_SLOTS, type Grid, type Hit, type Pattern, type Project, type Resolution, type Role, type SynthKit, type Track } from './types';
+import { clamp, MAX_PATTERNS, MAX_STEPS, MAX_TRACKS, RESOLUTIONS, ROLES, ROLL_SPEEDS, SNAPSHOTS, VARIATION_SLOTS, type Grid, type Hit, type Pattern, type PitchMeasure, type Project, type SlotMeasure, type TrackPitch, type Resolution, type Role, type SynthKit, type Track } from './types';
 import { defaultGen } from '../rhythm/generate';
 import { STYLES } from '../rhythm/styles';
 import { defaultChop } from '../destruction/chop';
@@ -20,7 +20,9 @@ import { repairTrig } from '../rhythm/trigger';
 import { repairWild } from '../destruction/wildcardProject';
 import { checkedSeedText, GENERATOR_VERSION, SEED_HASH_VERSION } from '../rhythm/seed';
 import { repairTempoAuto } from '../transport/tempo';
+import { repairOrigin } from '../sound/soundLibrary';
 import { repairChannelFx, repairOutputFx } from '../audio/mixfx';
+import { repairGlobalScale, repairTrackScale } from '../music/scale';
 
 export const PROJECT_FORMAT = 'clatter-project';
 export const PROJECT_EXT = '.clatter.json';
@@ -212,14 +214,61 @@ function repairTrack(v: unknown, i: number, def: Track | undefined): Track {
     play: { ...defaultPlay(), density: num(pl.density, 100, 0, 100), fill: num(pl.fill, 0, 0, 100), humanize: num(pl.humanize, 0, 0, 100), chance: num(pl.chance, 100, 0, 100), length: int(pl.length, 0, 0, MAX_STEPS) },
     midi: { channel: int(midi.channel, d.midi.channel, 1, 16), note: int(midi.note, d.midi.note, 0, 127) },
     lock: bool(o.lock, false),
+    ...(repairTrackScale(o.scale) ? { scale: repairTrackScale(o.scale) } : {}),
+    ...(repairTrackPitch(o.pitch) ? { pitch: repairTrackPitch(o.pitch) } : {}),
   };
+}
+
+const MEASURE_KINDS = ['stable', 'swept', 'inharmonic', 'unpitched', 'silent'] as const;
+
+function repairMeasure(v: unknown): PitchMeasure | undefined {
+  if (!isObj(v) || !MEASURE_KINDS.includes(v.kind as never) || typeof v.shape !== 'string') return undefined;
+  const m: PitchMeasure = {
+    kind: v.kind as PitchMeasure['kind'],
+    conf: num(v.conf, 0, 0, 1),
+    shape: v.shape.slice(0, 16),
+    off: num(v.off, 0, -1000, 1000),
+    at: num(v.at, 0, 0),
+  };
+  if (typeof v.hz === 'number' && Number.isFinite(v.hz) && v.hz > 1 && v.hz < 30000) m.hz = v.hz;
+  if (isObj(v.adj) && typeof v.adj.target === 'number') m.adj = { target: int(v.adj.target, 60, 0, 127), cents: num(v.adj.cents, 0, -100, 100) };
+  return m;
+}
+
+function repairSlotMeasure(v: unknown): SlotMeasure | null {
+  if (!isObj(v)) return null;
+  const synth = repairMeasure(v.synth);
+  const sample = repairMeasure(v.sample);
+  return synth || sample ? { ...(synth ? { synth } : {}), ...(sample ? { sample } : {}) } : null;
+}
+
+/** A track's scale measurements (absent in projects before version 7). */
+function repairTrackPitch(v: unknown): TrackPitch | undefined {
+  if (!isObj(v)) return undefined;
+  const base = repairSlotMeasure(v.base);
+  const vars = Array.isArray(v.vars) ? Array.from({ length: VARIATION_SLOTS }, (_, i) => repairSlotMeasure((v.vars as unknown[])[i])) : null;
+  if (!base && !vars?.some(Boolean)) return undefined;
+  return { ...(base ? { base } : {}), ...(vars?.some(Boolean) ? { vars } : {}) };
+}
+
+/** The record of what SOUND DISCOVERY applied to each voice (a damaged entry is dropped). */
+function repairDiscovered(v: unknown): { discovered?: Record<number, import('./types').DiscoveredSound> } {
+  if (!isObj(v)) return {};
+  const out: Record<number, import('./types').DiscoveredSound> = {};
+  for (const [k, x] of Object.entries(v)) {
+    const voice = Number(k);
+    if (!Number.isInteger(voice) || voice < 0 || voice > 5 || !isObj(x)) continue;
+    const origin = repairOrigin(x.origin, voice);
+    if (origin) out[voice] = { name: str(x.name, 'SOUND', 24), origin };
+  }
+  return Object.keys(out).length ? { discovered: out } : {};
 }
 
 /** A complete, valid project from parsed JSON (anything else throws ProjectError). */
 export function repairProject(v: unknown, initKit?: SynthKit): Project {
   if (!isObj(v)) throw new ProjectError('This is not a CLATTER project.');
   if (v.format !== undefined && v.format !== PROJECT_FORMAT) throw new ProjectError(`This file is not a CLATTER project (${String(v.format)}).`);
-  if (typeof v.version === 'number' && v.version > 5) throw new ProjectError('This project was saved by a newer version of CLATTER.');
+  if (typeof v.version === 'number' && v.version > 7) throw new ProjectError('This project was saved by a newer version of CLATTER.');
   const d = defaultProject();
   const defs = defaultTracks();
   const rawTracks = Array.isArray(v.tracks) ? v.tracks.slice(0, MAX_TRACKS) : [];
@@ -259,11 +308,12 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
   const timbreSeed = int(isObj(v.timbre) ? v.timbre.seed : undefined, 1, 0, 0xffffffff);
   const p: Project = {
     format: 'clatter-project',
-    version: 5,
+    version: 7,
     name: str(v.name, 'UNTITLED', 40),
     tempo: num(v.tempo, d.tempo, 30, 300),
     ...(repairTempoAuto(v.tempoAuto) ? { tempoAuto: repairTempoAuto(v.tempoAuto) } : {}),
     swing: num(v.swing, 50, 50, 75),
+    ...(repairGlobalScale(v.scale) ? { scale: repairGlobalScale(v.scale) } : {}),
     seed: projectSeed,
     ...seedPart(projectSeed, v.seedText, seedHash),
     seedHash,
@@ -275,6 +325,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
       voices: [0, 1, 2, 3, 4, 5].map((i) => bool((locks.voices as unknown[] | undefined)?.[i], false)),
       params: Array.isArray(locks.params) ? locks.params.filter((x): x is number => Number.isInteger(x) && x > 0 && x < SOUND_PARAM_COUNT) : [],
     },
+    ...repairDiscovered(v.discovered),
     patterns,
     current: typeof v.current === 'string' && pids.has(v.current) ? v.current : patterns[0]!.id,
     chain: {

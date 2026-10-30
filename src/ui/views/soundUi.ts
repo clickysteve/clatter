@@ -81,6 +81,26 @@ export class Plot {
     this.fn(g, W, H, ink, paper);
   }
 
+  /** A small square over the plot at (x, y) in 0..1 of its width and height (y from the top). */
+  dot(): { el: HTMLDivElement; at: (x: number | null, y: number) => void } {
+    const el = h('div', 'plotdot', this.el);
+    let last = '';
+    return {
+      el,
+      at: (x, y) => {
+        const sig = x === null ? 'none' : `${(x * 1000).toFixed(0)}|${(y * 1000).toFixed(0)}`;
+        if (sig === last) return;
+        last = sig;
+        if (x === null) el.style.display = 'none';
+        else {
+          el.style.display = 'block';
+          el.style.left = Math.max(0, Math.min(1, x)) * 100 + '%';
+          el.style.top = `calc(3px + (100% - 6px) * ${Math.max(0, Math.min(1, y)).toFixed(3)})`;
+        }
+      },
+    };
+  }
+
   /** A vertical line over the plot; move it with `at(0..1)`. */
   marker(wide = false): { el: HTMLDivElement; at: (x: number | null, w?: number) => void } {
     const el = h('div', 'plotmark' + (wide ? ' wide' : ''), this.el);

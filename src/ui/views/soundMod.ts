@@ -32,6 +32,8 @@ const RETRIG_LABEL: Record<string, string> = { hit: 'EVERY HIT', free: 'FREE RUN
 const KIND_TAG: Partial<Record<SourceId, string>> = { step: 'STEP', rnd: 'RND', smooth: 'SMTH', sh: 'S&H', vel: 'VEL', trig: 'TRIG' };
 
 type Rec = Record<string, unknown>;
+/** LFO cycles per second, from the same rate rules as the engine (free Hz, or a division of the tempo). */
+const lfoCyclesPerSec = (d: LfoDef, bpm: number) => (d.mode === 'sync' ? 1 / (divBeats(d.div) * (60 / bpm)) : d.hz);
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
 export function modulationPane(app: App, pane: HTMLElement): PaneParts {
@@ -154,7 +156,9 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
   const plot = new Plot(colE, 'modplot');
   plot.el.dataset.test = 'mod-plot';
   const pm = plot.marker();
+  const ghosts = [plot.marker(), plot.marker(), plot.marker()];
   const sm = plot.marker(true);
+  const dot = plot.dot();
   const scroll = h('div', 'col modparams sndscroll', colE);
 
   const slider = (parent: HTMLElement, label: string, key: string, o: { min: number; max: number; scale?: number; def: number; bip?: boolean; format?: (v: number) => string; title: string; get?: () => number; set?: (v: number) => void }) => {
@@ -363,12 +367,13 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
 
   // ---- the plot: the engine's own output for this source
   let plotKey = '';
-  let plotInfo: { span: number; cycles: number; total: number } = { span: 1, cycles: 1, total: 1 };
+  let plotInfo: { span: number; cycles: number; total: number; segs: readonly { t0: number; dur: number }[] } = { span: 1, cycles: 1, total: 1, segs: [] };
   const previewOf = (id: SourceId, d: SourceDef, bpm: number) => {
     const beat = 60 / bpm;
     let span = 1;
     let cycles = 1;
     let total = 1;
+    let segs: readonly { t0: number; dur: number }[] = [];
     switch (d.type) {
       case 'lfo': {
         const cyc = d.mode === 'sync' ? divBeats(d.div) * beat : 1 / d.hz;
@@ -377,7 +382,8 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
         break;
       }
       case 'env': {
-        total = envSegments(d, d.sync ? beat : 0.001).reduce((a, s) => a + s.dur, 0);
+        segs = envSegments(d, d.sync ? beat : 0.001);
+        total = segs.reduce((a, s) => a + s.dur, 0);
         span = Math.max(0.05, total * 1.1);
         break;
       }
@@ -398,7 +404,7 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
     const dt = span / 240;
     const vel = d.type === 'env' ? (d.trig === 'accent' ? 127 : d.trig === 'ghost' ? 20 : 100) : 100;
     const r = simulate({ sources: { [id]: d }, routes: [] }, { bpm, seconds: span, hitsAt: [0], dt, vel });
-    return { span, cycles, total, y: r.out[srcIndex(id)]! };
+    return { span, cycles, total, segs, y: r.out[srcIndex(id)]! };
   };
   const redrawPlot = () => {
     const id = sel();
@@ -419,7 +425,7 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
     const yOf = (v: number, H: number) => (bip ? H / 2 - v * (H / 2 - 3) : H - 3 - v * (H - 6));
     if (d.type === 'lfo' && d.wave === 'custom') {
       const t = d.table ?? sineTable();
-      plotInfo = { span: 1, cycles: 1, total: 1 };
+      plotInfo = { span: 1, cycles: 1, total: 1, segs: [] };
       plot.set((g, W, H) => {
         g.fillRect(0, Math.round(H / 2), W, 1);
         g.lineWidth = 2;
@@ -435,7 +441,7 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
       return;
     }
     if (d.type === 'step') {
-      plotInfo = { span: 1, cycles: 1, total: 1 };
+      plotInfo = { span: 1, cycles: 1, total: 1, segs: [] };
       plot.set((g, W, H) => {
         g.fillRect(0, Math.round(H / 2), W, 1);
         const w = W / d.len;
@@ -449,7 +455,7 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
     }
     const pv = previewOf(id, d, bpm);
     if (!pv) return;
-    plotInfo = { span: pv.span, cycles: pv.cycles, total: pv.total };
+    plotInfo = { span: pv.span, cycles: pv.cycles, total: pv.total, segs: pv.segs };
     plot.set((g, W, H) => {
       if (bip) g.fillRect(0, Math.round(H / 2), W, 1);
       g.lineWidth = 2;
@@ -620,6 +626,11 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
   subscribe(app, ['mod', 'tracks', 'selection', 'kit', 'project', 'view'], () => mp.refresh());
 
   // ---------------------------------------------------------------- live feedback from the engine
+  let lastMsg: MetersMessage | null = null;
+  let lastK = -1;
+  let lastP = 0;
+  let lastAt = 0;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const frame = (m: MetersMessage | null) => {
     const md = m?.mod;
     if (!md || md.track !== trackIdx()) return;
@@ -636,13 +647,48 @@ export function modulationPane(app: App, pane: HTMLElement): PaneParts {
     const txt = `OUT ${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
     if (live.textContent !== txt) live.textContent = txt;
     const d = cfg.sources[id];
-    const p = md.pos[k] ?? 0;
-    if (d?.type === 'lfo' && plotInfo.cycles === 1 && d.wave !== 'custom') pm.at((((p - d.phase) % 1) + 1) % 1);
-    else if (d?.type === 'lfo' && d.wave === 'custom') pm.at(p);
-    else if (d?.type === 'env' && p > 0) pm.at((p * plotInfo.total) / plotInfo.span);
-    else pm.at(null);
-    if (d?.type === 'step') sm.at(Math.floor(p) / d.len, 1 / d.len);
-    else sm.at(null);
+    // The engine reports positions every ~21 ms; between reports the marker advances at the
+    // source's own rate, and each report corrects it (retriggers, phase resets, tempo changes).
+    const now = performance.now();
+    if (m !== lastMsg || k !== lastK) {
+      lastMsg = m;
+      lastK = k;
+      lastP = md.pos[k] ?? 0;
+      lastAt = now;
+    }
+    const rate = d?.type === 'lfo' ? lfoCyclesPerSec(d, app.project.tempo) : d?.type === 'env' && plotInfo.total > 0 ? 1 / plotInfo.total : 0;
+    const dtS = reduceMotion.matches ? 0 : Math.min(0.06, (now - lastAt) / 1000);
+    const raw = lastP > 0 || d?.type === 'lfo' ? lastP + rate * dtS : 0;
+    const showGhosts = (n: number, ph: number) => {
+      for (let c = 0; c < ghosts.length; c++) ghosts[c]!.at(c + 1 < n ? (c + 1 + ph) / n : null);
+    };
+    let dotAt: number | null = null;
+    let ghostN = 0;
+    if (d?.type === 'lfo') {
+      const ph = (((raw - d.phase) % 1) + 1) % 1;
+      ghostN = plotInfo.cycles;
+      pm.at(ph / plotInfo.cycles);
+      showGhosts(ghostN, ph);
+      if (ghostN === 1) dotAt = ph;
+      sm.at(null);
+    } else if (d?.type === 'env') {
+      const running = lastP > 0 && lastP < 1;
+      const t = Math.min(raw, 1) * plotInfo.total;
+      pm.at(running ? t / plotInfo.span : null);
+      const seg = running ? plotInfo.segs.find((sg) => sg.dur > 0 && t < sg.t0 + sg.dur) : undefined;
+      if (seg) sm.at(seg.t0 / plotInfo.span, seg.dur / plotInfo.span);
+      else sm.at(null);
+      dotAt = running ? t / plotInfo.span : plotInfo.total / plotInfo.span;
+    } else if (d?.type === 'step') {
+      pm.at(null);
+      sm.at(Math.floor(lastP) / d.len, 1 / d.len);
+    } else {
+      pm.at(null);
+      sm.at(null);
+    }
+    if (ghostN <= 1) showGhosts(0, 0);
+    if (dotAt !== null && d && plotInfo.span > 0) dot.at(dotAt, d && isBipolar(d) ? (1 - v) / 2 : 1 - v);
+    else dot.at(null, 0);
     const routes = cfg.routes;
     for (let i = 0; i < routeUi.length; i++) {
       const u = routeUi[i]!;

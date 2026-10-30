@@ -173,3 +173,9 @@ pattern gives the same modulation on every pass, in playback and in export.
   firmware changes.
 * One LXR voice cannot sound two tracks at once (see above).
 * The hi-hat's open decay is read at the open trigger only.
+
+## Live plot markers
+
+While the MODULATION tab is open the engine reports each source's position (about every 21 ms). The editor plot draws a marker from it: for an LFO, the current phase of the shown waveform (minus the source's phase offset, so it follows the drawn shape); for an envelope, the time through its stages, with the active stage shaded and a dot at the current level. Between engine reports the marker advances at the source's own rate (free Hz, or the tempo division) so it moves smoothly at the display rate; every report corrects it, so retriggers, phase resets and tempo changes show immediately. Nothing is added to the audio thread. With reduced motion preferred the marker steps at the report rate instead of interpolating.
+
+Limits: waves that differ per cycle (S&H, STEP, SMOOTH) are drawn over four cycles but the engine reports only the phase within a cycle, so a marker is shown at that phase in every drawn cycle. Rate modulation by routes is not extrapolated between reports. An envelope at rest shows its dot at the end of the timeline at its resting level.

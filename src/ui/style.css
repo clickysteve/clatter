@@ -1941,6 +1941,7 @@ html[data-view='pattern'] #main {
 }
 .sidetrack.on .meter {
   border-color: var(--paper);
+  background: var(--ink);
 }
 .sidetrack.on .meter .lvl {
   background: var(--paper);
@@ -2181,6 +2182,16 @@ html[data-view='pattern'] #main {
   width: var(--u);
   background: var(--ink);
   mix-blend-mode: difference;
+  pointer-events: none;
+  display: none;
+}
+.plotdot {
+  position: absolute;
+  width: calc(6 * var(--px));
+  height: calc(6 * var(--px));
+  margin: calc(-3 * var(--px)) 0 0 calc(-3 * var(--px));
+  background: var(--ink);
+  border: var(--u) solid var(--paper);
   pointer-events: none;
   display: none;
 }

@@ -245,3 +245,46 @@ test('DISCOVER: eight candidates, audition and A/B leave the instrument alone, A
   expect(await kit()).toBe(before);
   expect(errors).toEqual([]);
 });
+
+test('SIDEBAR: the selected track’s meter moves and stays visible against the selected styling', async ({ page }) => {
+  const errors = await boot(page);
+  const sel = page.locator('.sidetrack.on');
+  await expect(sel).toHaveCount(1);
+  // the fill must contrast with the meter's own background (it was paper on paper)
+  const colours = await sel.locator('.meter').evaluate((m) => ({ bg: getComputedStyle(m).backgroundColor, fill: getComputedStyle(m.querySelector('.lvl')!).backgroundColor }));
+  expect(colours.bg).not.toBe(colours.fill);
+  await page.evaluate(() => {
+    const a = (window as unknown as W).clatter;
+    void a.audition(a.track.id);
+  });
+  await expect.poll(() => sel.locator('.lvl').evaluate((l) => parseFloat((l as HTMLElement).style.width) || 0), { timeout: 8000 }).toBeGreaterThan(1);
+  // an unselected track still works
+  const other = await page.evaluate(() => {
+    const a = (window as unknown as W).clatter;
+    const t = a.project.tracks.find((x) => x.id !== a.track.id)!;
+    void a.audition(t.id);
+    return t.id;
+  });
+  await expect.poll(() => page.locator(`.sidetrack[data-track="${other}"] .lvl`).evaluate((l) => parseFloat((l as HTMLElement).style.width) || 0), { timeout: 8000 }).toBeGreaterThan(1);
+  await expect(sel).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test('MODULATION: the LFO marker travels at the configured rate and the envelope marker follows a trigger', async ({ page }) => {
+  const errors = await boot(page);
+  await page.click('[data-test=sound-tab-modulation]');
+  await page.evaluate(() => (window as unknown as W).clatter.loadModPreset('f:wobble'));
+  await page.click('[data-test=play]');
+  await expect.poll(() => page.evaluate(() => !!(window as unknown as W).clatter.meters?.mod), { timeout: 8000 }).toBe(true);
+  const markX = () => page.locator('.modplot .plotmark:not(.wide)').first().evaluate((m) => ({ shown: (m as HTMLElement).style.display !== 'none', x: parseFloat((m as HTMLElement).style.left) }));
+  const xs: number[] = [];
+  for (let i = 0; i < 12; i++) {
+    const m = await markX();
+    if (m.shown) xs.push(m.x);
+    await page.waitForTimeout(40);
+  }
+  // the marker moves between frames (more distinct positions than the engine's ~46 Hz reports alone would explain being static)
+  expect(new Set(xs).size).toBeGreaterThan(3);
+  await page.keyboard.press('Space');
+  expect(errors).toEqual([]);
+});

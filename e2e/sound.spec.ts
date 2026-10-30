@@ -184,6 +184,31 @@ test('TUNER: analyses the selected sound, shows the note, follows a variation, s
   expect(errors).toEqual([]);
 });
 
+test('TUNER: the PITCH control retunes the real sound, the readout follows without leaving the tab', async ({ page }) => {
+  const errors = await boot(page);
+  await page.click('[data-test=sound-tab-tuner]');
+  await expect(page.locator('[data-test=tuner-note]')).not.toHaveText(/^[·…]?$/, { timeout: 20_000 });
+  const hz = async () => parseFloat((await page.locator('[data-test=tuner-hz]').innerText()).replace(/[^0-9.]/g, ''));
+  const start = await hz();
+  const others = await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.project.tracks.map((t) => t.sound)));
+  await expect(page.locator('[data-test=tuner-pitch]')).toBeVisible();
+  // an octave up in semitone steps; the readout is re-measured on its own, with AUTO off
+  const c0 = await page.evaluate(() => (window as unknown as W).clatter.paramValue(8));
+  for (let i = 0; i < 12; i++) await page.click('[data-test=tuner-pitch-up]');
+  await expect(page.locator('[data-test=tuner-stale]')).not.toHaveText(/MEASURING|CHANGED/, { timeout: 20_000 });
+  const up = await hz();
+  expect(up / start).toBeGreaterThan(1.9);
+  expect(up / start).toBeLessThan(2.1);
+  expect(await page.evaluate(() => (window as unknown as W).clatter.paramValue(8))).toBe(c0 + 12);
+  expect(await page.evaluate(() => JSON.stringify((window as unknown as W).clatter.project.tracks.map((t) => t.sound)))).toBe(others);
+  // the same value is in the sound editor and in undo
+  await page.click('[data-test=sound-tab-synth]');
+  await expect(page.locator('[data-param="8"]').first()).toBeVisible();
+  await page.evaluate(() => (window as unknown as W).clatter.undo());
+  expect(await page.evaluate(() => (window as unknown as W).clatter.paramValue(8))).toBe(c0 + 11);
+  expect(errors).toEqual([]);
+});
+
 test('DISCOVER: eight candidates, audition and A/B leave the instrument alone, APPLY is one undo step', async ({ page }) => {
   const errors = await boot(page);
   const kit = () => page.evaluate(() => JSON.stringify((window as unknown as W).clatter.project.kit.synth));

@@ -32,12 +32,13 @@ import { modulationPane } from './soundMod';
 import { tunerPane } from './soundTuner';
 import { scalePane } from './soundScale';
 import { discoverPane } from './soundDiscover';
+import { factoryPane } from './soundFactory';
 import { db, type PaneParts } from './soundUi';
 import { variationsPane } from './soundVar';
 import { font } from '../scale';
 import { describeScale, shortScale, trackScaleState } from '../../music/scale';
 
-const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', variations: 'VARIATIONS', mixer: 'MIXER', fx: 'FX', tuner: 'TUNER', scale: 'SCALE', discover: 'DISCOVER', kits: 'KITS' };
+const TAB_LABEL: Record<SoundTab, string> = { synth: 'SYNTH', sample: 'SAMPLE', modulation: 'MODULATION', variations: 'VARIATIONS', mixer: 'MIXER', fx: 'FX', tuner: 'TUNER', scale: 'SCALE', discover: 'DISCOVER', factory: 'FACTORY', kits: 'KITS' };
 const TAB_TITLE: Record<SoundTab, string> = {
   synth: 'The selected track’s source, BASE / A-D and the LXR voice parameters',
   sample: 'The sample layer of the base sound or of the variation being edited, and sample sets',
@@ -48,6 +49,7 @@ const TAB_TITLE: Record<SoundTab, string> = {
   tuner: 'The audible pitch of the selected sound: note, frequency, cents, confidence and pitch movement, measured in the rendered audio',
   scale: 'Musical scale quantisation: the global scale and each track’s OFF, GLOBAL or CUSTOM setting, and what the scale does to every sound',
   discover: 'SOUND DISCOVERY: eight candidate sounds for this instrument, auditioned through the LXR engine, compared with the original, mutated, saved and applied only when you say',
+  factory: 'SAMPLE FACTORY: generate dozens of rendered, quality-checked sounds, audition and curate them, and export the best as a sample pack',
   kits: 'Synth kits, sample sets and full kits: save, load, import, export, generate, lock voices',
 };
 const MODE_TAG = { synth: 'SYN', sample: 'SMP', hybrid: 'HYB' } as const;
@@ -430,6 +432,7 @@ export function soundView(app: App, screen: HTMLElement): View {
   parts.set('tuner', tunerPane(app, panes.tuner));
   parts.set('scale', scalePane(app, panes.scale));
   parts.set('discover', discoverPane(app, panes.discover));
+  parts.set('factory', factoryPane(app, panes.factory));
   parts.set('kits', kitsPane(app, panes.kits));
   tp.refresh();
 

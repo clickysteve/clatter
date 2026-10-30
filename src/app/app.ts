@@ -14,9 +14,12 @@ import { encodeWav16, createZip, fileName, slug } from '@slopfactory/core/export
 import { readBundle, writeBundle, type SampleStore } from '@slopfactory/core/storage';
 import { AudioHost, lxrWasm } from '../audio/host';
 import { SampleLibrary } from '../audio/library';
-import { renderHit, renderProject } from '../audio/render';
+import { renderHit, renderKitHit, renderProject } from '../audio/render';
 import { AuditionPlayer } from '../audio/auditionPlayer';
 import { DiscoverSession } from './discover';
+import { FactorySession } from './factory';
+import { exportPack } from '../export/packExport';
+import { STAGE_TRACK } from '../sound/factory';
 import { applyToKit, clampWildness, soundWithExtras, type Candidate } from '../sound/discover';
 import { analyseTarget, normalizeTarget, PitchCache, targetKey, type PitchRecord, type PitchTarget } from '../analysis/trackPitch';
 import type { MetersMessage, TimedHit } from '../audio/protocol';
@@ -69,7 +72,7 @@ import { setScale } from '../ui/scale';
 import { Scheduler, startTicker } from '../transport/scheduler';
 import { PAR } from '../sound/lxrParamIds';
 
-export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod' | 'notice' | 'kitexport' | 'discover' | 'scale';
+export type Topic = 'project' | 'pattern' | 'tracks' | 'kit' | 'mix' | 'transport' | 'destruction' | 'gen' | 'library' | 'kits' | 'midi' | 'status' | 'snapshots' | 'view' | 'workspace' | 'selection' | 'history' | 'master' | 'mod' | 'notice' | 'kitexport' | 'discover' | 'factory' | 'scale';
 
 export interface Selection {
   /** track indices (inclusive) */
@@ -140,6 +143,8 @@ export class App {
   readonly pitch = new PitchCache();
   /** SOUND DISCOVERY: candidate sounds for the selected instrument, auditioned offline, applied only when asked (src/app/discover.ts) */
   readonly discover: DiscoverSession;
+  /** SAMPLE FACTORY: collections of rendered, checked LXR sounds to audition, curate and export as a sample pack; never writes to the project until SEND TO KIT (src/app/factory.ts) */
+  readonly factory: FactorySession;
   kits: KitService | null = null;
   /** the synth kit, sample set and full kit libraries (after boot) */
   kitm: KitManager | null = null;
@@ -322,6 +327,32 @@ export class App {
     });
     this.discover.character = this.prefs.discover.character;
     this.discover.wildness = this.prefs.discover.wildness;
+    this.factory = new FactorySession(
+      {
+        project: () => this.project,
+        flavour: () => styleById(this.project.gen.style).kitFlavour,
+        drawSeed: () => this.drawSeed('factory'),
+        render: async (p, o) => {
+          if (!this.module) throw new Error('the engine is not loaded yet');
+          return renderKitHit(this.module, p, this.library, STAGE_TRACK, { vel: 110, slot: null, wet: o.wet, tail: o.tail, maxSeconds: o.maxSeconds });
+        },
+        runPack: async (project, sounds, options, onProgress, signal) => {
+          if (!this.module) throw new Error('the engine is not loaded yet');
+          return exportPack(project, sounds, options, { module: this.module, library: this.library, onProgress, signal });
+        },
+        deliver: (file) => this.deliver(file),
+        play: (audio) => player.play(audio),
+        stop: () => player.stop(host.ctx ?? undefined),
+        apply: (c) => this.applyDiscovered(c, false),
+        changed: () => this.emit(['factory']),
+        say: (t) => this.say(t),
+        notify: (t, level) => this.notify(t, level),
+      },
+      this.discover.library,
+    );
+    const fp = this.prefs.factory;
+    Object.assign(this.factory, { instrument: fp.instrument, count: fp.count, variation: fp.variation, diversity: fp.diversity, qcStrict: fp.qcStrict, character: this.prefs.discover.character, wildness: this.prefs.discover.wildness });
+    this.factory.pack = { format: fp.format, processing: fp.processing, tail: { mode: fp.tailMode, seconds: fp.tailSeconds }, normalise: fp.normalise, name: this.factory.pack.name };
   }
 
   // ------------------------------------------------------------------ events
@@ -402,6 +433,7 @@ export class App {
     if (resetHistory) {
       this.history.clear();
       this.discover.reset();
+      this.factory.reset();
       this.tuneReport.clear();
     }
     this.ui.sel = null;

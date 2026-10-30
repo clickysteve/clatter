@@ -1799,6 +1799,14 @@ html[data-view='pattern'] #main {
   outline: 3px solid var(--selection);
   outline-offset: 2px;
 }
+.sound-main .wsbar {
+  gap: calc(4 * var(--px));
+}
+/* eleven tabs: a little less padding keeps them on one line at 1366 wide */
+.sound-main .wstab {
+  padding: 0 calc(12 * var(--px));
+  letter-spacing: 0;
+}
 .wsinfo {
   margin-left: auto;
   align-self: center;
@@ -2560,6 +2568,134 @@ html[data-view='pattern'] #main {
 @media (max-width: 1100px) {
   .dscbody {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* FACTORY */
+/* the controls take what they need; on a small window the whole tab scrolls and the list keeps a usable height */
+.sndpane.sndpane-factory {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: var(--ink) var(--paper);
+}
+.sndpane-factory .flist {
+  flex: 1 0 calc(250 * var(--px));
+}
+.fbar {
+  position: relative;
+  min-width: calc(180 * var(--px));
+  height: var(--ctl-h-med);
+  border: var(--u) solid var(--ink);
+  overflow: hidden;
+}
+.fbar .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--grey);
+}
+.fbar .ftext {
+  position: relative;
+  padding: 0 calc(6 * var(--px));
+  line-height: calc(var(--ctl-h-med) - 2 * var(--u));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--paper);
+  display: inline-block;
+  max-width: 100%;
+}
+.flist {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--px));
+  padding: calc(6 * var(--px)) 0;
+  align-content: flex-start;
+}
+.frow {
+  display: grid;
+  grid-template-columns: calc(22 * var(--px)) calc(22 * var(--px)) calc(34 * var(--px)) calc(98 * var(--px)) minmax(calc(110 * var(--px)), 1.2fr) minmax(calc(60 * var(--px)), 0.7fr) calc(64 * var(--px)) calc(74 * var(--px)) minmax(calc(80 * var(--px)), 1fr) auto;
+  align-items: center;
+  gap: calc(8 * var(--px));
+  border: var(--u) solid var(--ink);
+  padding: calc(2 * var(--px)) calc(6 * var(--px));
+  min-width: 0;
+  flex: none;
+}
+.frow.sel {
+  box-shadow: inset 0 0 0 calc(3 * var(--px)) var(--ink);
+}
+.frow.playing {
+  background: var(--lightgrey);
+}
+.frow.failed {
+  border-style: dashed;
+}
+.frow.bad {
+  border-style: dotted;
+}
+.frow .fcheck,
+.frow .fstar {
+  cursor: pointer;
+  text-align: center;
+  font-family: var(--font-chip);
+}
+.frow .fwave {
+  width: calc(96 * var(--px));
+  height: calc(24 * var(--px));
+  image-rendering: pixelated;
+  border: var(--u) solid var(--ink);
+}
+.frow .fname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.frow .fpitch {
+  font-size: var(--fs-lg);
+  white-space: nowrap;
+}
+.frow .fnum {
+  white-space: nowrap;
+  text-align: right;
+}
+.frow .fflags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(3 * var(--px));
+}
+.frow .dtag {
+  font-family: var(--font-2);
+  font-size: var(--fs-2);
+  border: var(--u) solid var(--ink);
+  padding: 0 calc(3 * var(--px));
+}
+.frow .dtag.fail {
+  background: var(--ink);
+  color: var(--paper);
+}
+.frow .fact {
+  gap: calc(3 * var(--px));
+}
+.frow .fact .btn,
+.frow .fplay {
+  padding: 0 calc(5 * var(--px));
+}
+.fout {
+  flex: none;
+  gap: calc(6 * var(--px));
+  padding-top: calc(8 * var(--px));
+  border-top: var(--u) solid var(--ink);
+}
+@media (max-width: 1100px) {
+  .frow {
+    grid-template-columns: calc(22 * var(--px)) calc(22 * var(--px)) calc(34 * var(--px)) calc(98 * var(--px)) minmax(0, 1fr) auto;
+  }
+  .frow .fpitch,
+  .frow .fnum,
+  .frow .fflags {
+    display: none;
   }
 }
 

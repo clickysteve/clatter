@@ -483,7 +483,7 @@ for (const [w, h, scale] of [
     await page.setViewportSize({ width: w, height: h });
     await bootAt(page, scale);
     await page.click('[data-test=view-sound]');
-    for (const tab of ['synth', 'sample', 'modulation', 'variations', 'mixer', 'fx', 'tuner', 'discover', 'kits'] as const) {
+    for (const tab of ['synth', 'sample', 'modulation', 'variations', 'mixer', 'fx', 'tuner', 'discover', 'factory', 'kits'] as const) {
       await page.click(`[data-test=sound-tab-${tab}]`);
       await page.waitForTimeout(150);
       const r = await page.evaluate(() => {

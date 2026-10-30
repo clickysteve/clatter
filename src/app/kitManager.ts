@@ -309,6 +309,7 @@ export class KitManager {
         this.app.applyKitChange(clone(full.synth.synth));
         p.kit.name = full.synth.name;
         assignSeed(p.kit, { seed: full.synth.seed, text: full.synth.seedText });
+        delete p.kit.made;
         applyVoices(p, full.synth.voices);
         applyPlan(p, plan);
         applyJoin(p, full, (id) => !!this.app.library.get(id));
@@ -367,6 +368,7 @@ export class KitManager {
         this.app.applyKitChange(clone(data.synth));
         p.kit.name = data.name;
         assignSeed(p.kit, { seed: data.seed, text: data.seedText });
+        delete p.kit.made;
         applyVoices(p, data.voices);
       },
       ['kit', 'tracks'],

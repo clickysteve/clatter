@@ -36,6 +36,8 @@ track has no voice, so there is nothing to discover on it.
 
 ### Wildness and character
 
+CHARACTER and WILDNESS are the same two settings as on SOUND > KITS: change one tab and the other follows. They mean the same thing in both places (see [KIT_GENERATION.md](KIT_GENERATION.md)): the generator designs the candidate at that WILDNESS, so a low-WILDNESS candidate is a recognisable instrument and a high one may be a different instrument altogether.
+
 A candidate is the generator's own design of the voice for the CHARACTER, drawn back towards the sound
 it replaces by `1 - wildness`: at 100 % it is the generator's design, at 10 % it is the current voice
 moved a little. Menus (waveforms, filter types) are taken whole or left, never blended. Parameter locks

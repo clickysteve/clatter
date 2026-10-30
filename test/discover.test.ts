@@ -115,7 +115,7 @@ describe('candidate generation', () => {
     const s = seed('velvet-orbit');
     const c = generateCandidate(p.kit.synth, s, 3, 0, optsFor(p, v, { wildness: 1 }));
     const rng = new Rng(candidateSeed(s.seed, v, 3, 0));
-    const d = designVoice(v, 'kick', 'electro', rng);
+    const d = designVoice(v, 'kick', 'electro', rng, 1);
     for (const [k, x] of Object.entries(d.values)) if (voiceKeys(v)[k as keyof ReturnType<typeof voiceKeys>] !== undefined && !k.startsWith('lfo')) expect(c.values[k as keyof typeof c.values]).toBe(x);
   });
 
@@ -746,7 +746,7 @@ describe('seeds', () => {
     app.discover.select(4);
     app.discover.apply();
     const back = parseProject(serialize(app.project));
-    expect(back.version).toBe(8);
+    expect(back.version).toBe(9);
     expect(back.discovered![3]).toMatchObject({ name: '5', origin: { kind: 'generated', seed: seedFromText('silver-moth'), seedText: 'silver-moth', index: 4, draw: 0, character: 'machine', voice: 3, archetype: 'snare' } });
     // and the metadata is enough to make that sound again
     const origin = back.discovered![3]!.origin;

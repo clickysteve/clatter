@@ -260,7 +260,7 @@ describe('stored settings', () => {
     p.tracks[0]!.scale = { mode: 'custom', root: 3, type: 'user', mask: maskOfSteps([0, 4, 7, 11]) };
     p.tracks[1]!.scale = { mode: 'off', root: 0, type: 'minor' };
     const back = parseProject(serialize(p));
-    expect(back.version).toBe(8);
+    expect(back.version).toBe(9);
     expect(back.scale).toEqual(p.scale);
     expect(back.tracks[0]!.scale).toEqual(p.tracks[0]!.scale);
     expect(back.tracks[1]!.scale).toEqual(p.tracks[1]!.scale);
@@ -273,7 +273,7 @@ describe('stored settings', () => {
     delete p.scale;
     for (const t of p.tracks) delete t.scale;
     const old = repairProject(p);
-    expect(old.version).toBe(8);
+    expect(old.version).toBe(9);
     expect(old.scale).toBeUndefined();
     for (const t of old.tracks) {
       expect(t.scale).toBeUndefined();
@@ -283,6 +283,6 @@ describe('stored settings', () => {
   });
 
   it('refuses a project from a newer version', () => {
-    expect(() => repairProject({ format: 'clatter-project', version: 9 })).toThrow();
+    expect(() => repairProject({ format: 'clatter-project', version: 10 })).toThrow();
   });
 });

@@ -82,6 +82,7 @@ paths are relative, the same build also works at `https://clickysteve.github.io/
 - [docs/KIT_EXPORT.md](docs/KIT_EXPORT.md): EXPORT KIT: every instrument as WAV files (variations, velocity layers, pitch ranges, automatic note names) with a kit.json; how pitch is retuned and verified, and the limits.
 - [docs/SCALE.md](docs/SCALE.md): SOUND > SCALE: global and per-track scale quantisation, what is and is not quantised, measured vs estimated pitch, modulation, exporter modes, limits.
 - [docs/DISCOVERY.md](docs/DISCOVERY.md): SOUND DISCOVERY: eight candidate sounds for an instrument, audition through the engine, A/B, mutation, the sound library, pitch and seeds.
+- [docs/KIT_GENERATION.md](docs/KIT_GENERATION.md): how GENERATE KIT, MUTATE and DISCOVER design sounds: CHARACTER recipes, WILDNESS, choosing among rendered candidates by audio analysis, kit contrast, and the development-time evaluator (`npm run eval:kits`) with its before/after findings.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the three systems, the engine, timing, state,
   files and tests.
 

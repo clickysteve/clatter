@@ -7,7 +7,7 @@
  * Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
  */
 import { defaultMix, defaultPlay, defaultProject, defaultSound, defaultTracks, emptySynthKit } from './defaults';
-import { clamp, MAX_PATTERNS, MAX_STEPS, MAX_TRACKS, RESOLUTIONS, ROLES, ROLL_SPEEDS, SNAPSHOTS, VARIATION_SLOTS, type Grid, type Hit, type Pattern, type PitchMeasure, type Project, type SlotMeasure, type TrackPitch, type Resolution, type Role, type SynthKit, type Track } from './types';
+import { clamp, MAX_PATTERNS, MAX_STEPS, MAX_TRACKS, RESOLUTIONS, ROLES, ROLL_SPEEDS, SNAPSHOTS, VARIATION_SLOTS, type Grid, type Hit, type KitMade, type Pattern, type PitchMeasure, type Project, type SlotMeasure, type TrackPitch, type Resolution, type Role, type SynthKit, type Track } from './types';
 import { defaultGen } from '../rhythm/generate';
 import { STYLES } from '../rhythm/styles';
 import { defaultChop } from '../destruction/chop';
@@ -59,6 +59,14 @@ function repairGrid(v: unknown, steps: number): Grid {
   const g: Grid = new Array(steps).fill(null);
   for (let i = 0; i < steps; i++) g[i] = repairHit(a[i]);
   return g;
+}
+
+const KIT_FLAVOURS: readonly string[] = ['machine', 'electro', 'acoustic', 'industrial', 'glitch', 'dub'];
+
+/** `{ made }` when the stored record of how a kit was generated is whole (absent before version 9). */
+function madePart(v: unknown): { made?: KitMade } {
+  if (!isObj(v) || typeof v.character !== 'string' || !KIT_FLAVOURS.includes(v.character)) return {};
+  return { made: { generator: int(v.generator, 1, 1, 1e6), character: v.character as KitMade['character'], wildness: num(v.wildness, 0.5, 0, 1) } };
 }
 
 /** `{ seedText }` when the stored phrase still names the number, else nothing. */
@@ -267,7 +275,7 @@ function repairDiscovered(v: unknown): { discovered?: Record<number, import('./t
 export function repairProject(v: unknown, initKit?: SynthKit): Project {
   if (!isObj(v)) throw new ProjectError('This is not a CLATTER project.');
   if (v.format !== undefined && v.format !== PROJECT_FORMAT) throw new ProjectError(`This file is not a CLATTER project (${String(v.format)}).`);
-  if (typeof v.version === 'number' && v.version > 8) throw new ProjectError('This project was saved by a newer version of CLATTER.');
+  if (typeof v.version === 'number' && v.version > 9) throw new ProjectError('This project was saved by a newer version of CLATTER.');
   const d = defaultProject();
   const defs = defaultTracks();
   const rawTracks = Array.isArray(v.tracks) ? v.tracks.slice(0, MAX_TRACKS) : [];
@@ -307,7 +315,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
   const timbreSeed = int(isObj(v.timbre) ? v.timbre.seed : undefined, 1, 0, 0xffffffff);
   const p: Project = {
     format: 'clatter-project',
-    version: 8,
+    version: 9,
     name: str(v.name, 'UNTITLED', 40),
     tempo: num(v.tempo, d.tempo, 30, 300),
     ...(repairTempoAuto(v.tempoAuto) ? { tempoAuto: repairTempoAuto(v.tempoAuto) } : {}),
@@ -318,7 +326,7 @@ export function repairProject(v: unknown, initKit?: SynthKit): Project {
     seedHash,
     generator: int(v.generator, GENERATOR_VERSION, 1, 1e6),
     tracks,
-    kit: { name: str(kit.name, 'KIT', 24), seed: kitSeed, ...seedPart(kitSeed, kit.seedText, seedHash), synth: repairKit(kit.synth, initKit) },
+    kit: { name: str(kit.name, 'KIT', 24), seed: kitSeed, ...seedPart(kitSeed, kit.seedText, seedHash), ...madePart(kit.made), synth: repairKit(kit.synth, initKit) },
     ...(str(v.sampleSet, '', 24) ? { sampleSet: str(v.sampleSet, '', 24) } : {}),
     soundLocks: {
       voices: [0, 1, 2, 3, 4, 5].map((i) => bool((locks.voices as unknown[] | undefined)?.[i], false)),

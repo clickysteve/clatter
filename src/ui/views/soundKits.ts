@@ -13,7 +13,9 @@ import { VOICES } from '../../sound/lxrParams';
 import { kitLibraryDialog, openKitFile } from '../kitDialogs';
 import { exportKitDialog } from '../kitExportDialog';
 import { seedField } from '../seedField';
-import { button, chooseFiles, download, group, h, num, Panel } from '../widgets';
+import { savePrefs } from '../../app/prefs';
+import { CHARACTERS, characterLabel, WILDNESS_MIN } from '../../sound/discover';
+import { button, chooseFiles, download, group, h, num, Panel, range, select } from '../widgets';
 import { viewVoice } from './soundControls';
 import { subscribe } from './patternView';
 import type { PaneParts } from './soundUi';
@@ -32,12 +34,42 @@ export function kitsPane(app: App, pane: HTMLElement): PaneParts {
   button(kp, top, 'MUTATE KIT', () => void app.mutateKit(mutAmt), { cls: 'med', disabled: () => app.ui.busy, title: 'Controlled changes to every unlocked voice (⇧K)' }).dataset.test = 'mutate-kit';
   h('div', 'lbl', top, 'AMOUNT');
   num(kp, top, { get: () => Math.round(mutAmt * 100), set: (v) => ((mutAmt = v / 100), kp.refresh()), min: 5, max: 100, format: (v) => v + '%', title: 'How far MUTATE goes' });
+  const cr = h('div', 'row wrap sndtop', pane);
+  h('div', 'lbl', cr, 'CHARACTER').title = 'The sound world GENERATE KIT designs for. STYLE follows the rhythm style. ' + CHARACTERS.map((c) => `${c.label}: ${c.hint}`).join('. ');
+  select(kp, cr, {
+    options: () => [{ value: 'style' as const, label: 'STYLE · ' + characterLabel(app.kitFlavour()) }, ...CHARACTERS.map((c) => ({ value: c.id as string, label: c.label }))],
+    get: () => app.prefs.discover.character,
+    set: (v) => {
+      app.prefs.discover.character = v as typeof app.prefs.discover.character;
+      app.discover.character = app.prefs.discover.character;
+      savePrefs(app.prefs);
+      kp.refresh();
+    },
+    width: 150,
+    title: 'Character of the next GENERATE KIT (and of SOUND > DISCOVER)',
+  }).dataset.test = 'kit-character';
+  h('div', 'lbl', cr, 'WILDNESS').title = 'How strictly the sounds follow their instrument. Low: recognisable, controlled, balanced. Medium: more unusual timbres, still usable. High: extreme synthesis, strange pitch, metallic and noisy textures, unexpected identities. It is never just louder or harsher. Shared with SOUND > DISCOVER.';
+  range(kp, cr, {
+    get: () => Math.round(app.kitWildness() * 100),
+    set: (v) => {
+      app.prefs.discover.wildness = v / 100;
+      app.discover.wildness = v / 100;
+      savePrefs(app.prefs);
+      kp.refresh();
+    },
+    min: Math.round(WILDNESS_MIN * 100),
+    max: 100,
+    def: 60,
+    format: (v) => v + '%',
+    width: 150,
+    title: 'Wildness 5-100%',
+  }).dataset.test = 'kit-wildness';
   const sr = h('div', 'row sndtop', pane);
   h('div', 'lbl', sr, 'SEED').title = 'The seed of GENERATE KIT. Type a phrase (or a number) to hold it: the same seed, style and locks make the same kit.';
   const sh = h('div', 'grow', sr);
   seedField(kp, sh, { get: () => app.seedSlot('kit').value, fixed: () => app.seedSlot('kit').fixed, onFixed: (on) => app.setSeedFixed('kit', on), onInput: (t) => void app.setSeedInput('kit', t), onRoll: () => app.rollSeed('kit'), onClear: () => app.clearSeed('kit'), test: 'kit-seed' });
   const kn = h('div', 'report grow', top);
-  kp.add(() => (kn.textContent = `${app.project.kit.name} · SEED ${(app.project.kit.seedText ?? String(app.project.kit.seed)).toUpperCase()}${app.ui.busy ? ' · CHECKING THE KIT IN THE ENGINE…' : ''} · ${app.project.soundLocks.params.length} PARAMS LOCKED`));
+  kp.add(() => (kn.textContent = `${app.project.kit.name} · SEED ${(app.project.kit.seedText ?? String(app.project.kit.seed)).toUpperCase()}${app.project.kit.made ? ` · ${app.project.kit.made.character.toUpperCase()} ${Math.round(app.project.kit.made.wildness * 100)}%` : ''}${app.ui.busy ? ' · CHECKING THE KIT IN THE ENGINE…' : ''} · ${app.project.soundLocks.params.length} PARAMS LOCKED`));
 
   const body = h('div', 'kitws sndscroll', pane);
   const cards = h('div', 'kitcards', body);

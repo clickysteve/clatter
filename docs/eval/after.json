@@ -1,0 +1,4819 @@
+{
+ "label": "after",
+ "kits": 1008,
+ "sounds": 7056,
+ "seconds": 722,
+ "overall": {
+  "kick": {
+   "n": 1008,
+   "silentPct": 0,
+   "clipPct": 0,
+   "unsafePct": 0,
+   "looksLikePct": 85.119,
+   "convention": 0.814,
+   "peak": {
+    "mean": 0.344,
+    "p10": 0.25,
+    "p90": 0.5
+   },
+   "rmsDb": -18.485,
+   "attackMs": {
+    "p10": 6.984,
+    "p50": 11.973,
+    "p90": 17.959
+   },
+   "lengthMs": {
+    "p10": 113,
+    "p50": 281,
+    "p90": 893
+   },
+   "t20Ms": {
+    "p50": 220
+   },
+   "centroidHz": {
+    "p10": 40,
+    "p50": 59,
+    "p90": 933
+   },
+   "low": 0.795,
+   "high": 0.017,
+   "tonality": 0.722,
+   "noise": 0.162,
+   "transientDb": -3.198,
+   "sweepOct": 2.59,
+   "pitchStability": 0.316,
+   "lengthOctSd": 1.184,
+   "centroidOctSd": 1.838
+  },
+  "ltom": {
+   "n": 672,
+   "silentPct": 0,
+   "clipPct": 0,
+   "unsafePct": 0,
+   "looksLikePct": 88.244,
+   "convention": 0.838,
+   "peak": {
+    "mean": 0.309,
+    "p10": 0.221,
+    "p90": 0.42
+   },
+   "rmsDb": -21.061,
+   "attackMs": {
+    "p10": 5.986,
+    "p50": 9.977,
+    "p90": 16.961
+   },
+   "lengthMs": {
+    "p10": 89,
+    "p50": 251,
+    "p90": 608
+   },
+   "t20Ms": {
+    "p50": 177
+   },
+   "centroidHz": {
+    "p10": 97,
+    "p50": 147,
+    "p90": 1451
+   },
+   "low": 0.652,
+   "high": 0.024,
+   "tonality": 0.773,
+   "noise": 0.146,
+   "transientDb": -1.994,
+   "sweepOct": 1.892,
+   "pitchStability": 0.482,
+   "lengthOctSd": 1.096,
+   "centroidOctSd": 1.592
+  },
+  "htom": {
+   "n": 672,
+   "silentPct": 0,
+   "clipPct": 0,
+   "unsafePct": 0,
+   "looksLikePct": 92.113,
+   "convention": 0.896,
+   "peak": {
+    "mean": 0.305,
+    "p10": 0.217,
+    "p90": 0.42
+   },
+   "rmsDb": -21.523,
+   "attackMs": {
+    "p10": 5.986,
+    "p50": 9.977,
+    "p90": 14.966
+   },
+   "lengthMs": {
+    "p10": 91,
+    "p50": 239,
+    "p90": 637
+   },
+   "t20Ms": {
+    "p50": 177
+   },
+   "centroidHz": {
+    "p10": 190,
+    "p50": 269,
+    "p90": 2056
+   },
+   "low": 0.105,
+   "high": 0.03,
+   "tonality": 0.748,
+   "noise": 0.159,
+   "transientDb": -1.485,
+   "sweepOct": 1.902,
+   "pitchStability": 0.542,
+   "lengthOctSd": 1.102,
+   "centroidOctSd": 1.41
+  },
+  "snare": {
+   "n": 672,
+   "silentPct": 0,
+   "clipPct": 0,
+   "unsafePct": 0,
+   "looksLikePct": 91.071,
+   "convention": 0.88,
+   "peak": {
+    "mean": 0.418,
+    "p10": 0.289,
+    "p90": 0.516
+   },
+   "rmsDb": -23.829,
+   "attackMs": {
+    "p10": 0,
+    "p50": 2.993,
+    "p90": 12.971
+   },
+   "lengthMs": {
+    "p10": 68,
+    "p50": 167,
+    "p90": 475
+   },
+   "t20Ms": {
+    "p50": 99
+   },
+   "centroidHz": {
+    "p10": 746,
+    "p50": 1738,
+    "p90": 4763
+   },
+   "low": 0.141,
+   "high": 0.151,
+   "tonality": 0.433,
+   "noise": 0.647,
+   "transientDb": 6.679,
+   "sweepOct": 0.241,
+   "pitchStability": 0.539,
+   "lengthOctSd": 1.097,
+   "centroidOctSd": 1.015
+  },
+  "clap": {
+   "n": 336,
+   "silentPct": 0,
+   "clipPct": 0,
+   "unsafePct": 0,
+   "looksLikePct": 89.881,
+   "convention": 0.902,
+   "peak": {
+    "mean": 0.375,
+    "p10": 0.249,
+    "p90": 0.479
+   },
+   "rmsDb": -24.839,
+   "attackMs": {
+    "p10": 1.995,
+    "p50": 15.964,
+    "p90": 28.934
+   },
+   "lengthMs": {
+    "p10": 67,
+    "p50": 170,
+    "p90": 390
+   },
+   "t20Ms": {
+    "p50": 105
+   },
+   "centroidHz": {
+    "p10": 901,
+    "p50": 1929,
+    "p90": 5573
+   },
+   "low": 0.053,
+   "high": 0.165,
+   "tonality": 0.393,
+   "noise": 0.721,
+   "transientDb": 0.703,
+   "sweepOct": 0.233,
+   "pitchStability": 0.582,
+   "lengthOctSd": 1.002,
+   "centroidOctSd": 0.993
+  },
+  "chat": {
+   "n": 1008,
+   "silentPct": 0,
+   "clipPct": 0,
+   "unsafePct": 0.198,
+   "looksLikePct": 83.829,
+   "convention": 0.864,
+   "peak": {
+    "mean": 0.255,
+    "p10": 0.178,
+    "p90": 0.308
+   },
+   "rmsDb": -29.568,
+   "attackMs": {
+    "p10": 0,
+    "p50": 1.995,
+    "p90": 5.986
+   },
+   "lengthMs": {
+    "p10": 36,
+    "p50": 82,
+    "p90": 256
+   },
+   "t20Ms": {
+    "p50": 45
+   },
+   "centroidHz": {
+    "p10": 1467,
+    "p50": 5321,
+    "p90": 8621
+   },
+   "low": 0.019,
+   "high": 0.433,
+   "tonality": 0.376,
+   "noise": 0.719,
+   "transientDb": 11.773,
+   "sweepOct": 0.188,
+   "pitchStability": 0.299,
+   "lengthOctSd": 1.275,
+   "centroidOctSd": 1.107
+  },
+  "ohat": {
+   "n": 1008,
+   "silentPct": 0,
+   "clipPct": 0,
+   "unsafePct": 0,
+   "looksLikePct": 82.044,
+   "convention": 0.825,
+   "peak": {
+    "mean": 0.262,
+    "p10": 0.187,
+    "p90": 0.316
+   },
+   "rmsDb": -29.965,
+   "attackMs": {
+    "p10": 0.998,
+    "p50": 2.993,
+    "p90": 7.982
+   },
+   "lengthMs": {
+    "p10": 90,
+    "p50": 264,
+    "p90": 641
+   },
+   "t20Ms": {
+    "p50": 150
+   },
+   "centroidHz": {
+    "p10": 1336,
+    "p50": 5302,
+    "p90": 8651
+   },
+   "low": 0.02,
+   "high": 0.436,
+   "tonality": 0.396,
+   "noise": 0.694,
+   "transientDb": 6.65,
+   "sweepOct": 0.324,
+   "pitchStability": 0.72,
+   "lengthOctSd": 1.143,
+   "centroidOctSd": 1.136
+  },
+  "cymbal": {
+   "n": 1008,
+   "silentPct": 0,
+   "clipPct": 0,
+   "unsafePct": 0.099,
+   "looksLikePct": 79.762,
+   "convention": 0.793,
+   "peak": {
+    "mean": 0.247,
+    "p10": 0.215,
+    "p90": 0.285
+   },
+   "rmsDb": -30.93,
+   "attackMs": {
+    "p10": 0.998,
+    "p50": 4.989,
+    "p90": 31.927
+   },
+   "lengthMs": {
+    "p10": 115,
+    "p50": 852,
+    "p90": 2501
+   },
+   "t20Ms": {
+    "p50": 517
+   },
+   "centroidHz": {
+    "p10": 1242,
+    "p50": 3943,
+    "p90": 8341
+   },
+   "low": 0.023,
+   "high": 0.345,
+   "tonality": 0.385,
+   "noise": 0.684,
+   "transientDb": 3.219,
+   "sweepOct": 0.359,
+   "pitchStability": 0.738,
+   "lengthOctSd": 1.672,
+   "centroidOctSd": 1.126
+  },
+  "perc": {
+   "n": 336,
+   "silentPct": 0,
+   "clipPct": 0,
+   "unsafePct": 0,
+   "looksLikePct": 91.369,
+   "convention": 0.928,
+   "peak": {
+    "mean": 0.294,
+    "p10": 0.181,
+    "p90": 0.361
+   },
+   "rmsDb": -25.839,
+   "attackMs": {
+    "p10": 3.991,
+    "p50": 6.984,
+    "p90": 14.966
+   },
+   "lengthMs": {
+    "p10": 49,
+    "p50": 126,
+    "p90": 254
+   },
+   "t20Ms": {
+    "p50": 79
+   },
+   "centroidHz": {
+    "p10": 315,
+    "p50": 882,
+    "p90": 4028
+   },
+   "low": 0.1,
+   "high": 0.09,
+   "tonality": 0.747,
+   "noise": 0.195,
+   "transientDb": 3.14,
+   "sweepOct": 1.453,
+   "pitchStability": 0.463,
+   "lengthOctSd": 0.943,
+   "centroidOctSd": 1.575
+  },
+  "fx": {
+   "n": 336,
+   "silentPct": 0,
+   "clipPct": 0,
+   "unsafePct": 0,
+   "looksLikePct": 97.917,
+   "convention": 0.983,
+   "peak": {
+    "mean": 0.267,
+    "p10": 0.188,
+    "p90": 0.302
+   },
+   "rmsDb": -24.502,
+   "attackMs": {
+    "p10": 4.989,
+    "p50": 11.973,
+    "p90": 24.943
+   },
+   "lengthMs": {
+    "p10": 70,
+    "p50": 170,
+    "p90": 336
+   },
+   "t20Ms": {
+    "p50": 107
+   },
+   "centroidHz": {
+    "p10": 274,
+    "p50": 898,
+    "p90": 2229
+   },
+   "low": 0.159,
+   "high": 0.031,
+   "tonality": 0.779,
+   "noise": 0.162,
+   "transientDb": -3.389,
+   "sweepOct": 2.129,
+   "pitchStability": 0.573,
+   "lengthOctSd": 0.963,
+   "centroidOctSd": 1.198
+  }
+ },
+ "byWildness": {
+  "1": {
+   "instruments": {
+    "kick": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 42.857,
+     "convention": 0.566,
+     "peak": {
+      "mean": 0.348,
+      "p10": 0.232,
+      "p90": 0.499
+     },
+     "rmsDb": -21.051,
+     "attackMs": {
+      "p10": 4.989,
+      "p50": 11.973,
+      "p90": 26.939
+     },
+     "lengthMs": {
+      "p10": 51,
+      "p50": 195,
+      "p90": 725
+     },
+     "t20Ms": {
+      "p50": 122
+     },
+     "centroidHz": {
+      "p10": 43,
+      "p50": 608,
+      "p90": 3678
+     },
+     "low": 0.332,
+     "high": 0.066,
+     "tonality": 0.483,
+     "noise": 0.342,
+     "transientDb": -1.322,
+     "sweepOct": 1.62,
+     "pitchStability": 0.246,
+     "lengthOctSd": 1.327,
+     "centroidOctSd": 2.339
+    },
+    "ltom": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 63.69,
+     "convention": 0.658,
+     "peak": {
+      "mean": 0.317,
+      "p10": 0.179,
+      "p90": 0.421
+     },
+     "rmsDb": -22.599,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 10.975,
+      "p90": 37.914
+     },
+     "lengthMs": {
+      "p10": 46,
+      "p50": 184,
+      "p90": 776
+     },
+     "t20Ms": {
+      "p50": 110
+     },
+     "centroidHz": {
+      "p10": 82,
+      "p50": 900,
+      "p90": 4169
+     },
+     "low": 0.284,
+     "high": 0.088,
+     "tonality": 0.51,
+     "noise": 0.353,
+     "transientDb": -0.726,
+     "sweepOct": 1.873,
+     "pitchStability": 0.212,
+     "lengthOctSd": 1.379,
+     "centroidOctSd": 2.092
+    },
+    "htom": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 70.833,
+     "convention": 0.736,
+     "peak": {
+      "mean": 0.317,
+      "p10": 0.212,
+      "p90": 0.42
+     },
+     "rmsDb": -23.063,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 9.977,
+      "p90": 24.943
+     },
+     "lengthMs": {
+      "p10": 48,
+      "p50": 152,
+      "p90": 745
+     },
+     "t20Ms": {
+      "p50": 89
+     },
+     "centroidHz": {
+      "p10": 93,
+      "p50": 853,
+      "p90": 5099
+     },
+     "low": 0.276,
+     "high": 0.107,
+     "tonality": 0.501,
+     "noise": 0.349,
+     "transientDb": 1.505,
+     "sweepOct": 1.791,
+     "pitchStability": 0.22,
+     "lengthOctSd": 1.373,
+     "centroidOctSd": 2.202
+    },
+    "snare": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 73.214,
+     "convention": 0.721,
+     "peak": {
+      "mean": 0.415,
+      "p10": 0.284,
+      "p90": 0.516
+     },
+     "rmsDb": -22.123,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 6.984,
+      "p90": 30.93
+     },
+     "lengthMs": {
+      "p10": 39,
+      "p50": 132,
+      "p90": 521
+     },
+     "t20Ms": {
+      "p50": 71
+     },
+     "centroidHz": {
+      "p10": 409,
+      "p50": 1144,
+      "p90": 4700
+     },
+     "low": 0.144,
+     "high": 0.125,
+     "tonality": 0.423,
+     "noise": 0.56,
+     "transientDb": 4.849,
+     "sweepOct": 0.634,
+     "pitchStability": 0.305,
+     "lengthOctSd": 1.335,
+     "centroidOctSd": 1.296
+    },
+    "clap": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 63.095,
+     "convention": 0.724,
+     "peak": {
+      "mean": 0.384,
+      "p10": 0.261,
+      "p90": 0.479
+     },
+     "rmsDb": -23.681,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 6.984,
+      "p90": 37.914
+     },
+     "lengthMs": {
+      "p10": 53,
+      "p50": 162,
+      "p90": 527
+     },
+     "t20Ms": {
+      "p50": 93
+     },
+     "centroidHz": {
+      "p10": 410,
+      "p50": 1249,
+      "p90": 4973
+     },
+     "low": 0.162,
+     "high": 0.1,
+     "tonality": 0.478,
+     "noise": 0.569,
+     "transientDb": 3.187,
+     "sweepOct": 0.712,
+     "pitchStability": 0.426,
+     "lengthOctSd": 1.206,
+     "centroidOctSd": 1.202
+    },
+    "chat": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0.794,
+     "looksLikePct": 40.873,
+     "convention": 0.563,
+     "peak": {
+      "mean": 0.251,
+      "p10": 0.158,
+      "p90": 0.31
+     },
+     "rmsDb": -29.835,
+     "attackMs": {
+      "p10": 0,
+      "p50": 2.993,
+      "p90": 13.968
+     },
+     "lengthMs": {
+      "p10": 40,
+      "p50": 157,
+      "p90": 1229
+     },
+     "t20Ms": {
+      "p50": 59
+     },
+     "centroidHz": {
+      "p10": 412,
+      "p50": 2387,
+      "p90": 7988
+     },
+     "low": 0.069,
+     "high": 0.24,
+     "tonality": 0.478,
+     "noise": 0.523,
+     "transientDb": 9.002,
+     "sweepOct": 0.409,
+     "pitchStability": 0.47,
+     "lengthOctSd": 1.819,
+     "centroidOctSd": 1.55
+    },
+    "ohat": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 42.063,
+     "convention": 0.571,
+     "peak": {
+      "mean": 0.251,
+      "p10": 0.158,
+      "p90": 0.309
+     },
+     "rmsDb": -28.881,
+     "attackMs": {
+      "p10": 0,
+      "p50": 3.991,
+      "p90": 14.966
+     },
+     "lengthMs": {
+      "p10": 28,
+      "p50": 219,
+      "p90": 435
+     },
+     "t20Ms": {
+      "p50": 87
+     },
+     "centroidHz": {
+      "p10": 362,
+      "p50": 2236,
+      "p90": 8464
+     },
+     "low": 0.075,
+     "high": 0.241,
+     "tonality": 0.466,
+     "noise": 0.529,
+     "transientDb": 10.573,
+     "sweepOct": 0.804,
+     "pitchStability": 0.496,
+     "lengthOctSd": 1.452,
+     "centroidOctSd": 1.601
+    },
+    "cymbal": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 34.921,
+     "convention": 0.479,
+     "peak": {
+      "mean": 0.237,
+      "p10": 0.193,
+      "p90": 0.278
+     },
+     "rmsDb": -29.607,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 6.984,
+      "p90": 54.875
+     },
+     "lengthMs": {
+      "p10": 40,
+      "p50": 178,
+      "p90": 2501
+     },
+     "t20Ms": {
+      "p50": 83
+     },
+     "centroidHz": {
+      "p10": 544,
+      "p50": 1670,
+      "p90": 8259
+     },
+     "low": 0.084,
+     "high": 0.238,
+     "tonality": 0.44,
+     "noise": 0.545,
+     "transientDb": 6.474,
+     "sweepOct": 0.277,
+     "pitchStability": 0.479,
+     "lengthOctSd": 2.125,
+     "centroidOctSd": 1.588
+    },
+    "perc": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 70.238,
+     "convention": 0.772,
+     "peak": {
+      "mean": 0.262,
+      "p10": 0.094,
+      "p90": 0.361
+     },
+     "rmsDb": -26.449,
+     "attackMs": {
+      "p10": 2.993,
+      "p50": 8.98,
+      "p90": 24.943
+     },
+     "lengthMs": {
+      "p10": 30,
+      "p50": 135,
+      "p90": 459
+     },
+     "t20Ms": {
+      "p50": 70
+     },
+     "centroidHz": {
+      "p10": 62,
+      "p50": 681,
+      "p90": 4020
+     },
+     "low": 0.298,
+     "high": 0.065,
+     "tonality": 0.572,
+     "noise": 0.306,
+     "transientDb": 3.809,
+     "sweepOct": 2.058,
+     "pitchStability": 0.38,
+     "lengthOctSd": 1.472,
+     "centroidOctSd": 2.093
+    },
+    "fx": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 91.667,
+     "convention": 0.935,
+     "peak": {
+      "mean": 0.259,
+      "p10": 0.139,
+      "p90": 0.302
+     },
+     "rmsDb": -24.727,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 11.973,
+      "p90": 45.896
+     },
+     "lengthMs": {
+      "p10": 50,
+      "p50": 227,
+      "p90": 839
+     },
+     "t20Ms": {
+      "p50": 94
+     },
+     "centroidHz": {
+      "p10": 126,
+      "p50": 473,
+      "p90": 1438
+     },
+     "low": 0.304,
+     "high": 0.021,
+     "tonality": 0.636,
+     "noise": 0.247,
+     "transientDb": -2.278,
+     "sweepOct": 1.916,
+     "pitchStability": 0.318,
+     "lengthOctSd": 1.402,
+     "centroidOctSd": 1.35
+    }
+   },
+   "kit": {
+    "kits": 252,
+    "decaySpreadOct": 1.346,
+    "centroidRangeOct": 5.352,
+    "levelRangeDb": 7.918,
+    "maxPeak": 0.437,
+    "loudKitsPct": 0,
+    "brightSpread": 0.204,
+    "sameness": 0.613,
+    "tomsTooAlikePct": 0.595,
+    "hatsTooAlikePct": 13.095,
+    "sameDecayKitsPct": 0.794,
+    "msPerKit": 542
+   },
+   "nearestNeighbour": 1.139
+  },
+  "0.1": {
+   "instruments": {
+    "kick": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.923,
+     "peak": {
+      "mean": 0.331,
+      "p10": 0.254,
+      "p90": 0.5
+     },
+     "rmsDb": -17.664,
+     "attackMs": {
+      "p10": 6.984,
+      "p50": 10.975,
+      "p90": 15.964
+     },
+     "lengthMs": {
+      "p10": 115,
+      "p50": 315,
+      "p90": 889
+     },
+     "t20Ms": {
+      "p50": 262
+     },
+     "centroidHz": {
+      "p10": 45,
+      "p50": 55,
+      "p90": 96
+     },
+     "low": 0.965,
+     "high": 0,
+     "tonality": 0.96,
+     "noise": 0.02,
+     "transientDb": -3.934,
+     "sweepOct": 2.967,
+     "pitchStability": 0.394,
+     "lengthOctSd": 1.001,
+     "centroidOctSd": 0.435
+    },
+    "ltom": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.924,
+     "peak": {
+      "mean": 0.298,
+      "p10": 0.236,
+      "p90": 0.42
+     },
+     "rmsDb": -20.253,
+     "attackMs": {
+      "p10": 6.984,
+      "p50": 9.977,
+      "p90": 11.973
+     },
+     "lengthMs": {
+      "p10": 91,
+      "p50": 283,
+      "p90": 599
+     },
+     "t20Ms": {
+      "p50": 212
+     },
+     "centroidHz": {
+      "p10": 106,
+      "p50": 138,
+      "p90": 198
+     },
+     "low": 0.839,
+     "high": 0,
+     "tonality": 0.906,
+     "noise": 0.048,
+     "transientDb": -2.514,
+     "sweepOct": 1.925,
+     "pitchStability": 0.666,
+     "lengthOctSd": 0.911,
+     "centroidOctSd": 0.343
+    },
+    "htom": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.966,
+     "peak": {
+      "mean": 0.298,
+      "p10": 0.235,
+      "p90": 0.42
+     },
+     "rmsDb": -20.351,
+     "attackMs": {
+      "p10": 6.984,
+      "p50": 8.98,
+      "p90": 11.973
+     },
+     "lengthMs": {
+      "p10": 112,
+      "p50": 289,
+      "p90": 603
+     },
+     "t20Ms": {
+      "p50": 235
+     },
+     "centroidHz": {
+      "p10": 209,
+      "p50": 245,
+      "p90": 314
+     },
+     "low": 0.007,
+     "high": 0,
+     "tonality": 0.906,
+     "noise": 0.048,
+     "transientDb": -2.852,
+     "sweepOct": 1.843,
+     "pitchStability": 0.761,
+     "lengthOctSd": 0.876,
+     "centroidOctSd": 0.276
+    },
+    "snare": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 95.833,
+     "convention": 0.946,
+     "peak": {
+      "mean": 0.419,
+      "p10": 0.287,
+      "p90": 0.512
+     },
+     "rmsDb": -24.432,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 7.982
+     },
+     "lengthMs": {
+      "p10": 99,
+      "p50": 206,
+      "p90": 466
+     },
+     "t20Ms": {
+      "p50": 137
+     },
+     "centroidHz": {
+      "p10": 994,
+      "p50": 1950,
+      "p90": 4763
+     },
+     "low": 0.173,
+     "high": 0.166,
+     "tonality": 0.442,
+     "noise": 0.698,
+     "transientDb": 5.659,
+     "sweepOct": 0.024,
+     "pitchStability": 0.665,
+     "lengthOctSd": 0.787,
+     "centroidOctSd": 0.77
+    },
+    "clap": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 1,
+     "peak": {
+      "mean": 0.349,
+      "p10": 0.237,
+      "p90": 0.463
+     },
+     "rmsDb": -26.199,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 15.964,
+      "p90": 23.946
+     },
+     "lengthMs": {
+      "p10": 104,
+      "p50": 190,
+      "p90": 371
+     },
+     "t20Ms": {
+      "p50": 125
+     },
+     "centroidHz": {
+      "p10": 1572,
+      "p50": 2106,
+      "p90": 6271
+     },
+     "low": 0.004,
+     "high": 0.169,
+     "tonality": 0.382,
+     "noise": 0.796,
+     "transientDb": -0.563,
+     "sweepOct": -0.024,
+     "pitchStability": 0.756,
+     "lengthOctSd": 0.643,
+     "centroidOctSd": 0.655
+    },
+    "chat": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.985,
+     "peak": {
+      "mean": 0.267,
+      "p10": 0.207,
+      "p90": 0.309
+     },
+     "rmsDb": -29.465,
+     "attackMs": {
+      "p10": 0,
+      "p50": 0.998,
+      "p90": 3.991
+     },
+     "lengthMs": {
+      "p10": 37,
+      "p50": 72,
+      "p90": 122
+     },
+     "t20Ms": {
+      "p50": 43
+     },
+     "centroidHz": {
+      "p10": 4243,
+      "p50": 6459,
+      "p90": 8507
+     },
+     "low": 0.002,
+     "high": 0.53,
+     "tonality": 0.278,
+     "noise": 0.849,
+     "transientDb": 12.477,
+     "sweepOct": 0.105,
+     "pitchStability": 0.256,
+     "lengthOctSd": 0.652,
+     "centroidOctSd": 0.4
+    },
+    "ohat": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 99.206,
+     "convention": 0.93,
+     "peak": {
+      "mean": 0.277,
+      "p10": 0.224,
+      "p90": 0.324
+     },
+     "rmsDb": -30.099,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 1.995,
+      "p90": 4.989
+     },
+     "lengthMs": {
+      "p10": 110,
+      "p50": 297,
+      "p90": 591
+     },
+     "t20Ms": {
+      "p50": 175
+     },
+     "centroidHz": {
+      "p10": 4172,
+      "p50": 6488,
+      "p90": 8572
+     },
+     "low": 0.002,
+     "high": 0.528,
+     "tonality": 0.299,
+     "noise": 0.835,
+     "transientDb": 5.029,
+     "sweepOct": 0.193,
+     "pitchStability": 0.812,
+     "lengthOctSd": 0.821,
+     "centroidOctSd": 0.411
+    },
+    "cymbal": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.945,
+     "peak": {
+      "mean": 0.255,
+      "p10": 0.229,
+      "p90": 0.295
+     },
+     "rmsDb": -32.013,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 4.989,
+      "p90": 24.943
+     },
+     "lengthMs": {
+      "p10": 356,
+      "p50": 1057,
+      "p90": 2420
+     },
+     "t20Ms": {
+      "p50": 660
+     },
+     "centroidHz": {
+      "p10": 3323,
+      "p50": 4293,
+      "p90": 7490
+     },
+     "low": 0.002,
+     "high": 0.358,
+     "tonality": 0.327,
+     "noise": 0.788,
+     "transientDb": 1.63,
+     "sweepOct": 0.498,
+     "pitchStability": 0.842,
+     "lengthOctSd": 0.99,
+     "centroidOctSd": 0.46
+    },
+    "perc": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 1,
+     "peak": {
+      "mean": 0.289,
+      "p10": 0.201,
+      "p90": 0.361
+     },
+     "rmsDb": -26.778,
+     "attackMs": {
+      "p10": 4.989,
+      "p50": 5.986,
+      "p90": 9.977
+     },
+     "lengthMs": {
+      "p10": 97,
+      "p50": 140,
+      "p90": 220
+     },
+     "t20Ms": {
+      "p50": 94
+     },
+     "centroidHz": {
+      "p10": 512,
+      "p50": 785,
+      "p90": 4290
+     },
+     "low": 0,
+     "high": 0.1,
+     "tonality": 0.872,
+     "noise": 0.083,
+     "transientDb": 1.76,
+     "sweepOct": 1.235,
+     "pitchStability": 0.638,
+     "lengthOctSd": 0.411,
+     "centroidOctSd": 1.285
+    },
+    "fx": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 1,
+     "peak": {
+      "mean": 0.269,
+      "p10": 0.207,
+      "p90": 0.301
+     },
+     "rmsDb": -24.159,
+     "attackMs": {
+      "p10": 8.98,
+      "p50": 15.964,
+      "p90": 21.95
+     },
+     "lengthMs": {
+      "p10": 127,
+      "p50": 192,
+      "p90": 254
+     },
+     "t20Ms": {
+      "p50": 130
+     },
+     "centroidHz": {
+      "p10": 757,
+      "p50": 1011,
+      "p90": 2019
+     },
+     "low": 0.09,
+     "high": 0.011,
+     "tonality": 0.936,
+     "noise": 0.044,
+     "transientDb": -9.216,
+     "sweepOct": 2.49,
+     "pitchStability": 0.86,
+     "lengthOctSd": 0.358,
+     "centroidOctSd": 0.623
+    }
+   },
+   "kit": {
+    "kits": 252,
+    "decaySpreadOct": 1.115,
+    "centroidRangeOct": 6.911,
+    "levelRangeDb": 4.936,
+    "maxPeak": 0.413,
+    "loudKitsPct": 0,
+    "brightSpread": 0.252,
+    "sameness": 0.486,
+    "tomsTooAlikePct": 0,
+    "hatsTooAlikePct": 0,
+    "sameDecayKitsPct": 0,
+    "msPerKit": 610
+   },
+   "nearestNeighbour": 0.449
+  },
+  "0.4": {
+   "instruments": {
+    "kick": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.92,
+     "peak": {
+      "mean": 0.347,
+      "p10": 0.252,
+      "p90": 0.5
+     },
+     "rmsDb": -17.494,
+     "attackMs": {
+      "p10": 7.982,
+      "p50": 11.973,
+      "p90": 16.961
+     },
+     "lengthMs": {
+      "p10": 127,
+      "p50": 313,
+      "p90": 985
+     },
+     "t20Ms": {
+      "p50": 245
+     },
+     "centroidHz": {
+      "p10": 47,
+      "p50": 58,
+      "p90": 88
+     },
+     "low": 0.963,
+     "high": 0,
+     "tonality": 0.909,
+     "noise": 0.047,
+     "transientDb": -3.879,
+     "sweepOct": 2.885,
+     "pitchStability": 0.418,
+     "lengthOctSd": 1.03,
+     "centroidOctSd": 0.427
+    },
+    "ltom": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 98.81,
+     "convention": 0.917,
+     "peak": {
+      "mean": 0.303,
+      "p10": 0.232,
+      "p90": 0.42
+     },
+     "rmsDb": -20.831,
+     "attackMs": {
+      "p10": 6.984,
+      "p50": 9.977,
+      "p90": 12.971
+     },
+     "lengthMs": {
+      "p10": 91,
+      "p50": 284,
+      "p90": 607
+     },
+     "t20Ms": {
+      "p50": 226
+     },
+     "centroidHz": {
+      "p10": 98,
+      "p50": 141,
+      "p90": 320
+     },
+     "low": 0.771,
+     "high": 0.003,
+     "tonality": 0.89,
+     "noise": 0.058,
+     "transientDb": -2.311,
+     "sweepOct": 1.757,
+     "pitchStability": 0.581,
+     "lengthOctSd": 0.951,
+     "centroidOctSd": 0.871
+    },
+    "htom": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.959,
+     "peak": {
+      "mean": 0.314,
+      "p10": 0.228,
+      "p90": 0.42
+     },
+     "rmsDb": -20.329,
+     "attackMs": {
+      "p10": 6.984,
+      "p50": 9.977,
+      "p90": 13.968
+     },
+     "lengthMs": {
+      "p10": 114,
+      "p50": 273,
+      "p90": 648
+     },
+     "t20Ms": {
+      "p50": 211
+     },
+     "centroidHz": {
+      "p10": 201,
+      "p50": 261,
+      "p90": 375
+     },
+     "low": 0.021,
+     "high": 0.001,
+     "tonality": 0.878,
+     "noise": 0.063,
+     "transientDb": -2.945,
+     "sweepOct": 1.885,
+     "pitchStability": 0.71,
+     "lengthOctSd": 0.879,
+     "centroidOctSd": 0.419
+    },
+    "snare": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 98.214,
+     "convention": 0.957,
+     "peak": {
+      "mean": 0.413,
+      "p10": 0.272,
+      "p90": 0.525
+     },
+     "rmsDb": -24.881,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 6.984
+     },
+     "lengthMs": {
+      "p10": 103,
+      "p50": 180,
+      "p90": 483
+     },
+     "t20Ms": {
+      "p50": 114
+     },
+     "centroidHz": {
+      "p10": 1126,
+      "p50": 1889,
+      "p90": 4877
+     },
+     "low": 0.137,
+     "high": 0.171,
+     "tonality": 0.45,
+     "noise": 0.685,
+     "transientDb": 6.152,
+     "sweepOct": 0.012,
+     "pitchStability": 0.679,
+     "lengthOctSd": 0.83,
+     "centroidOctSd": 0.805
+    },
+    "clap": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 97.619,
+     "convention": 0.977,
+     "peak": {
+      "mean": 0.371,
+      "p10": 0.234,
+      "p90": 0.485
+     },
+     "rmsDb": -25.937,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 15.964,
+      "p90": 24.943
+     },
+     "lengthMs": {
+      "p10": 101,
+      "p50": 193,
+      "p90": 375
+     },
+     "t20Ms": {
+      "p50": 109
+     },
+     "centroidHz": {
+      "p10": 1449,
+      "p50": 2063,
+      "p90": 5418
+     },
+     "low": 0.01,
+     "high": 0.168,
+     "tonality": 0.396,
+     "noise": 0.754,
+     "transientDb": -0.571,
+     "sweepOct": -0.015,
+     "pitchStability": 0.701,
+     "lengthOctSd": 0.686,
+     "centroidOctSd": 0.737
+    },
+    "chat": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 99.603,
+     "convention": 0.979,
+     "peak": {
+      "mean": 0.254,
+      "p10": 0.187,
+      "p90": 0.306
+     },
+     "rmsDb": -29.951,
+     "attackMs": {
+      "p10": 0,
+      "p50": 0.998,
+      "p90": 2.993
+     },
+     "lengthMs": {
+      "p10": 38,
+      "p50": 72,
+      "p90": 133
+     },
+     "t20Ms": {
+      "p50": 43
+     },
+     "centroidHz": {
+      "p10": 3982,
+      "p50": 6273,
+      "p90": 8740
+     },
+     "low": 0.001,
+     "high": 0.517,
+     "tonality": 0.355,
+     "noise": 0.772,
+     "transientDb": 13.034,
+     "sweepOct": 0.128,
+     "pitchStability": 0.267,
+     "lengthOctSd": 0.681,
+     "centroidOctSd": 0.444
+    },
+    "ohat": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 96.032,
+     "convention": 0.925,
+     "peak": {
+      "mean": 0.262,
+      "p10": 0.193,
+      "p90": 0.317
+     },
+     "rmsDb": -30.832,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 1.995,
+      "p90": 4.989
+     },
+     "lengthMs": {
+      "p10": 115,
+      "p50": 297,
+      "p90": 664
+     },
+     "t20Ms": {
+      "p50": 168
+     },
+     "centroidHz": {
+      "p10": 3997,
+      "p50": 6247,
+      "p90": 8723
+     },
+     "low": 0.001,
+     "high": 0.517,
+     "tonality": 0.379,
+     "noise": 0.738,
+     "transientDb": 5.743,
+     "sweepOct": 0.175,
+     "pitchStability": 0.788,
+     "lengthOctSd": 0.878,
+     "centroidOctSd": 0.451
+    },
+    "cymbal": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 97.222,
+     "convention": 0.913,
+     "peak": {
+      "mean": 0.251,
+      "p10": 0.228,
+      "p90": 0.285
+     },
+     "rmsDb": -31.454,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 4.989,
+      "p90": 22.948
+     },
+     "lengthMs": {
+      "p10": 361,
+      "p50": 958,
+      "p90": 2501
+     },
+     "t20Ms": {
+      "p50": 631
+     },
+     "centroidHz": {
+      "p10": 2959,
+      "p50": 4372,
+      "p90": 8329
+     },
+     "low": 0.002,
+     "high": 0.372,
+     "tonality": 0.35,
+     "noise": 0.751,
+     "transientDb": 1.87,
+     "sweepOct": 0.338,
+     "pitchStability": 0.813,
+     "lengthOctSd": 1.019,
+     "centroidOctSd": 0.582
+    },
+    "perc": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 97.619,
+     "convention": 0.98,
+     "peak": {
+      "mean": 0.305,
+      "p10": 0.184,
+      "p90": 0.361
+     },
+     "rmsDb": -27.39,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 5.986,
+      "p90": 12.971
+     },
+     "lengthMs": {
+      "p10": 84,
+      "p50": 140,
+      "p90": 248
+     },
+     "t20Ms": {
+      "p50": 78
+     },
+     "centroidHz": {
+      "p10": 500,
+      "p50": 1167,
+      "p90": 3846
+     },
+     "low": 0.03,
+     "high": 0.106,
+     "tonality": 0.789,
+     "noise": 0.188,
+     "transientDb": 2.77,
+     "sweepOct": 1.609,
+     "pitchStability": 0.556,
+     "lengthOctSd": 0.581,
+     "centroidOctSd": 1.272
+    },
+    "fx": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.997,
+     "peak": {
+      "mean": 0.273,
+      "p10": 0.196,
+      "p90": 0.301
+     },
+     "rmsDb": -24.441,
+     "attackMs": {
+      "p10": 4.989,
+      "p50": 15.964,
+      "p90": 24.943
+     },
+     "lengthMs": {
+      "p10": 105,
+      "p50": 175,
+      "p90": 282
+     },
+     "t20Ms": {
+      "p50": 109
+     },
+     "centroidHz": {
+      "p10": 434,
+      "p50": 978,
+      "p90": 2440
+     },
+     "low": 0.138,
+     "high": 0.038,
+     "tonality": 0.825,
+     "noise": 0.131,
+     "transientDb": -5.298,
+     "sweepOct": 2.874,
+     "pitchStability": 0.723,
+     "lengthOctSd": 0.503,
+     "centroidOctSd": 1.048
+    }
+   },
+   "kit": {
+    "kits": 252,
+    "decaySpreadOct": 1.13,
+    "centroidRangeOct": 6.881,
+    "levelRangeDb": 5.821,
+    "maxPeak": 0.428,
+    "loudKitsPct": 0,
+    "brightSpread": 0.253,
+    "sameness": 0.47,
+    "tomsTooAlikePct": 0,
+    "hatsTooAlikePct": 0.794,
+    "sameDecayKitsPct": 0,
+    "msPerKit": 601
+   },
+   "nearestNeighbour": 0.584
+  },
+  "0.7": {
+   "instruments": {
+    "kick": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 97.619,
+     "convention": 0.844,
+     "peak": {
+      "mean": 0.351,
+      "p10": 0.253,
+      "p90": 0.5
+     },
+     "rmsDb": -17.733,
+     "attackMs": {
+      "p10": 6.984,
+      "p50": 11.973,
+      "p90": 19.955
+     },
+     "lengthMs": {
+      "p10": 115,
+      "p50": 289,
+      "p90": 957
+     },
+     "t20Ms": {
+      "p50": 237
+     },
+     "centroidHz": {
+      "p10": 35,
+      "p50": 52,
+      "p90": 153
+     },
+     "low": 0.918,
+     "high": 0.001,
+     "tonality": 0.538,
+     "noise": 0.24,
+     "transientDb": -3.656,
+     "sweepOct": 2.887,
+     "pitchStability": 0.206,
+     "lengthOctSd": 1.179,
+     "centroidOctSd": 0.966
+    },
+    "ltom": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 90.476,
+     "convention": 0.854,
+     "peak": {
+      "mean": 0.316,
+      "p10": 0.213,
+      "p90": 0.421
+     },
+     "rmsDb": -20.561,
+     "attackMs": {
+      "p10": 5.986,
+      "p50": 9.977,
+      "p90": 17.959
+     },
+     "lengthMs": {
+      "p10": 112,
+      "p50": 267,
+      "p90": 685
+     },
+     "t20Ms": {
+      "p50": 181
+     },
+     "centroidHz": {
+      "p10": 84,
+      "p50": 139,
+      "p90": 615
+     },
+     "low": 0.714,
+     "high": 0.003,
+     "tonality": 0.785,
+     "noise": 0.124,
+     "transientDb": -2.425,
+     "sweepOct": 2.013,
+     "pitchStability": 0.468,
+     "lengthOctSd": 0.968,
+     "centroidOctSd": 1.242
+    },
+    "htom": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 97.619,
+     "convention": 0.923,
+     "peak": {
+      "mean": 0.29,
+      "p10": 0.182,
+      "p90": 0.419
+     },
+     "rmsDb": -22.351,
+     "attackMs": {
+      "p10": 5.986,
+      "p50": 9.977,
+      "p90": 14.966
+     },
+     "lengthMs": {
+      "p10": 111,
+      "p50": 272,
+      "p90": 697
+     },
+     "t20Ms": {
+      "p50": 201
+     },
+     "centroidHz": {
+      "p10": 190,
+      "p50": 352,
+      "p90": 1778
+     },
+     "low": 0.116,
+     "high": 0.012,
+     "tonality": 0.708,
+     "noise": 0.175,
+     "transientDb": -1.647,
+     "sweepOct": 2.089,
+     "pitchStability": 0.475,
+     "lengthOctSd": 1.02,
+     "centroidOctSd": 1.215
+    },
+    "snare": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 97.024,
+     "convention": 0.895,
+     "peak": {
+      "mean": 0.424,
+      "p10": 0.298,
+      "p90": 0.52
+     },
+     "rmsDb": -23.878,
+     "attackMs": {
+      "p10": 0,
+      "p50": 2.993,
+      "p90": 9.977
+     },
+     "lengthMs": {
+      "p10": 46,
+      "p50": 167,
+      "p90": 498
+     },
+     "t20Ms": {
+      "p50": 98
+     },
+     "centroidHz": {
+      "p10": 898,
+      "p50": 1710,
+      "p90": 4692
+     },
+     "low": 0.111,
+     "high": 0.143,
+     "tonality": 0.416,
+     "noise": 0.645,
+     "transientDb": 10.055,
+     "sweepOct": 0.293,
+     "pitchStability": 0.509,
+     "lengthOctSd": 1.223,
+     "centroidOctSd": 0.925
+    },
+    "clap": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 98.81,
+     "convention": 0.906,
+     "peak": {
+      "mean": 0.395,
+      "p10": 0.256,
+      "p90": 0.48
+     },
+     "rmsDb": -23.539,
+     "attackMs": {
+      "p10": 2.993,
+      "p50": 15.964,
+      "p90": 28.934
+     },
+     "lengthMs": {
+      "p10": 40,
+      "p50": 142,
+      "p90": 395
+     },
+     "t20Ms": {
+      "p50": 92
+     },
+     "centroidHz": {
+      "p10": 1310,
+      "p50": 2096,
+      "p90": 5991
+     },
+     "low": 0.037,
+     "high": 0.222,
+     "tonality": 0.315,
+     "noise": 0.765,
+     "transientDb": 0.759,
+     "sweepOct": 0.26,
+     "pitchStability": 0.447,
+     "lengthOctSd": 1.197,
+     "centroidOctSd": 0.889
+    },
+    "chat": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 94.841,
+     "convention": 0.931,
+     "peak": {
+      "mean": 0.248,
+      "p10": 0.166,
+      "p90": 0.31
+     },
+     "rmsDb": -29.021,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 4.989
+     },
+     "lengthMs": {
+      "p10": 32,
+      "p50": 71,
+      "p90": 138
+     },
+     "t20Ms": {
+      "p50": 40
+     },
+     "centroidHz": {
+      "p10": 3234,
+      "p50": 5168,
+      "p90": 8583
+     },
+     "low": 0.003,
+     "high": 0.447,
+     "tonality": 0.394,
+     "noise": 0.734,
+     "transientDb": 12.578,
+     "sweepOct": 0.109,
+     "pitchStability": 0.205,
+     "lengthOctSd": 0.775,
+     "centroidOctSd": 0.616
+    },
+    "ohat": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 90.873,
+     "convention": 0.876,
+     "peak": {
+      "mean": 0.256,
+      "p10": 0.177,
+      "p90": 0.316
+     },
+     "rmsDb": -30.048,
+     "attackMs": {
+      "p10": 0,
+      "p50": 2.993,
+      "p90": 8.98
+     },
+     "lengthMs": {
+      "p10": 117,
+      "p50": 283,
+      "p90": 789
+     },
+     "t20Ms": {
+      "p50": 153
+     },
+     "centroidHz": {
+      "p10": 3265,
+      "p50": 5231,
+      "p90": 8916
+     },
+     "low": 0.002,
+     "high": 0.46,
+     "tonality": 0.44,
+     "noise": 0.672,
+     "transientDb": 5.256,
+     "sweepOct": 0.125,
+     "pitchStability": 0.785,
+     "lengthOctSd": 0.966,
+     "centroidOctSd": 0.605
+    },
+    "cymbal": {
+     "n": 252,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0.397,
+     "looksLikePct": 86.905,
+     "convention": 0.834,
+     "peak": {
+      "mean": 0.245,
+      "p10": 0.213,
+      "p90": 0.283
+     },
+     "rmsDb": -30.647,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 4.989,
+      "p90": 37.914
+     },
+     "lengthMs": {
+      "p10": 315,
+      "p50": 860,
+      "p90": 2501
+     },
+     "t20Ms": {
+      "p50": 593
+     },
+     "centroidHz": {
+      "p10": 1882,
+      "p50": 3973,
+      "p90": 8836
+     },
+     "low": 0.005,
+     "high": 0.41,
+     "tonality": 0.423,
+     "noise": 0.653,
+     "transientDb": 2.901,
+     "sweepOct": 0.321,
+     "pitchStability": 0.817,
+     "lengthOctSd": 1.201,
+     "centroidOctSd": 0.892
+    },
+    "perc": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 97.619,
+     "convention": 0.959,
+     "peak": {
+      "mean": 0.319,
+      "p10": 0.211,
+      "p90": 0.361
+     },
+     "rmsDb": -22.737,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 6.984,
+      "p90": 10.975
+     },
+     "lengthMs": {
+      "p10": 46,
+      "p50": 99,
+      "p90": 246
+     },
+     "t20Ms": {
+      "p50": 66
+     },
+     "centroidHz": {
+      "p10": 431,
+      "p50": 901,
+      "p90": 4765
+     },
+     "low": 0.071,
+     "high": 0.088,
+     "tonality": 0.754,
+     "noise": 0.205,
+     "transientDb": 4.22,
+     "sweepOct": 0.911,
+     "pitchStability": 0.277,
+     "lengthOctSd": 0.862,
+     "centroidOctSd": 1.195
+    },
+    "fx": {
+     "n": 84,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.998,
+     "peak": {
+      "mean": 0.267,
+      "p10": 0.181,
+      "p90": 0.302
+     },
+     "rmsDb": -24.682,
+     "attackMs": {
+      "p10": 2.993,
+      "p50": 7.982,
+      "p90": 22.948
+     },
+     "lengthMs": {
+      "p10": 47,
+      "p50": 114,
+      "p90": 296
+     },
+     "t20Ms": {
+      "p50": 55
+     },
+     "centroidHz": {
+      "p10": 347,
+      "p50": 1013,
+      "p90": 2569
+     },
+     "low": 0.104,
+     "high": 0.053,
+     "tonality": 0.72,
+     "noise": 0.227,
+     "transientDb": 3.234,
+     "sweepOct": 1.234,
+     "pitchStability": 0.39,
+     "lengthOctSd": 0.988,
+     "centroidOctSd": 1.131
+    }
+   },
+   "kit": {
+    "kits": 252,
+    "decaySpreadOct": 1.269,
+    "centroidRangeOct": 6.951,
+    "levelRangeDb": 6.753,
+    "maxPeak": 0.44,
+    "loudKitsPct": 0,
+    "brightSpread": 0.259,
+    "sameness": 0.442,
+    "tomsTooAlikePct": 0,
+    "hatsTooAlikePct": 2.778,
+    "sameDecayKitsPct": 0,
+    "msPerKit": 588
+   },
+   "nearestNeighbour": 0.821
+  }
+ },
+ "byCharacter": {
+  "machine": {
+   "instruments": {
+    "kick": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 85.119,
+     "convention": 0.842,
+     "peak": {
+      "mean": 0.289,
+      "p10": 0.239,
+      "p90": 0.414
+     },
+     "rmsDb": -20.413,
+     "attackMs": {
+      "p10": 6.984,
+      "p50": 9.977,
+      "p90": 13.968
+     },
+     "lengthMs": {
+      "p10": 173,
+      "p50": 281,
+      "p90": 336
+     },
+     "t20Ms": {
+      "p50": 212
+     },
+     "centroidHz": {
+      "p10": 35,
+      "p50": 56,
+      "p90": 957
+     },
+     "low": 0.829,
+     "high": 0.02,
+     "tonality": 0.745,
+     "noise": 0.143,
+     "transientDb": -2.785,
+     "sweepOct": 2.537,
+     "pitchStability": 0.572,
+     "lengthOctSd": 0.572,
+     "centroidOctSd": 1.877
+    },
+    "ltom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 91.071,
+     "convention": 0.862,
+     "peak": {
+      "mean": 0.268,
+      "p10": 0.205,
+      "p90": 0.399
+     },
+     "rmsDb": -22.557,
+     "attackMs": {
+      "p10": 6.984,
+      "p50": 8.98,
+      "p90": 15.964
+     },
+     "lengthMs": {
+      "p10": 164,
+      "p50": 222,
+      "p90": 299
+     },
+     "t20Ms": {
+      "p50": 159
+     },
+     "centroidHz": {
+      "p10": 91,
+      "p50": 133,
+      "p90": 1205
+     },
+     "low": 0.691,
+     "high": 0.021,
+     "tonality": 0.741,
+     "noise": 0.153,
+     "transientDb": -1.83,
+     "sweepOct": 1.962,
+     "pitchStability": 0.624,
+     "lengthOctSd": 0.489,
+     "centroidOctSd": 1.612
+    },
+    "htom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 90.179,
+     "convention": 0.915,
+     "peak": {
+      "mean": 0.262,
+      "p10": 0.2,
+      "p90": 0.369
+     },
+     "rmsDb": -22.762,
+     "attackMs": {
+      "p10": 5.986,
+      "p50": 8.98,
+      "p90": 12.971
+     },
+     "lengthMs": {
+      "p10": 161,
+      "p50": 221,
+      "p90": 300
+     },
+     "t20Ms": {
+      "p50": 163
+     },
+     "centroidHz": {
+      "p10": 189,
+      "p50": 268,
+      "p90": 1226
+     },
+     "low": 0.107,
+     "high": 0.026,
+     "tonality": 0.704,
+     "noise": 0.166,
+     "transientDb": -0.576,
+     "sweepOct": 1.964,
+     "pitchStability": 0.61,
+     "lengthOctSd": 0.607,
+     "centroidOctSd": 1.388
+    },
+    "snare": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 96.429,
+     "convention": 0.932,
+     "peak": {
+      "mean": 0.364,
+      "p10": 0.245,
+      "p90": 0.463
+     },
+     "rmsDb": -26.037,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 9.977
+     },
+     "lengthMs": {
+      "p10": 56,
+      "p50": 149,
+      "p90": 191
+     },
+     "t20Ms": {
+      "p50": 88
+     },
+     "centroidHz": {
+      "p10": 1250,
+      "p50": 1948,
+      "p90": 5143
+     },
+     "low": 0.039,
+     "high": 0.216,
+     "tonality": 0.418,
+     "noise": 0.701,
+     "transientDb": 7.922,
+     "sweepOct": 0.193,
+     "pitchStability": 0.601,
+     "lengthOctSd": 0.715,
+     "centroidOctSd": 0.955
+    },
+    "clap": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 92.857,
+     "convention": 0.917,
+     "peak": {
+      "mean": 0.361,
+      "p10": 0.254,
+      "p90": 0.454
+     },
+     "rmsDb": -25.85,
+     "attackMs": {
+      "p10": 2.993,
+      "p50": 12.971,
+      "p90": 24.943
+     },
+     "lengthMs": {
+      "p10": 46,
+      "p50": 147,
+      "p90": 190
+     },
+     "t20Ms": {
+      "p50": 84
+     },
+     "centroidHz": {
+      "p10": 1184,
+      "p50": 2143,
+      "p90": 6538
+     },
+     "low": 0.047,
+     "high": 0.244,
+     "tonality": 0.367,
+     "noise": 0.765,
+     "transientDb": 1.694,
+     "sweepOct": 0.187,
+     "pitchStability": 0.648,
+     "lengthOctSd": 0.689,
+     "centroidOctSd": 1.019
+    },
+    "chat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 86.31,
+     "convention": 0.877,
+     "peak": {
+      "mean": 0.241,
+      "p10": 0.158,
+      "p90": 0.292
+     },
+     "rmsDb": -30.505,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 7.982
+     },
+     "lengthMs": {
+      "p10": 42,
+      "p50": 64,
+      "p90": 445
+     },
+     "t20Ms": {
+      "p50": 36
+     },
+     "centroidHz": {
+      "p10": 2022,
+      "p50": 6472,
+      "p90": 9039
+     },
+     "low": 0.024,
+     "high": 0.509,
+     "tonality": 0.352,
+     "noise": 0.745,
+     "transientDb": 12.583,
+     "sweepOct": 0.198,
+     "pitchStability": 0.096,
+     "lengthOctSd": 1.186,
+     "centroidOctSd": 1.186
+    },
+    "ohat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 86.905,
+     "convention": 0.888,
+     "peak": {
+      "mean": 0.247,
+      "p10": 0.165,
+      "p90": 0.308
+     },
+     "rmsDb": -31.243,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 9.977
+     },
+     "lengthMs": {
+      "p10": 164,
+      "p50": 250,
+      "p90": 323
+     },
+     "t20Ms": {
+      "p50": 136
+     },
+     "centroidHz": {
+      "p10": 2028,
+      "p50": 6655,
+      "p90": 9938
+     },
+     "low": 0.02,
+     "high": 0.523,
+     "tonality": 0.373,
+     "noise": 0.723,
+     "transientDb": 6.271,
+     "sweepOct": 0.259,
+     "pitchStability": 0.795,
+     "lengthOctSd": 0.668,
+     "centroidOctSd": 1.195
+    },
+    "cymbal": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 85.119,
+     "convention": 0.846,
+     "peak": {
+      "mean": 0.238,
+      "p10": 0.207,
+      "p90": 0.263
+     },
+     "rmsDb": -32.537,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 4.989,
+      "p90": 22.948
+     },
+     "lengthMs": {
+      "p10": 84,
+      "p50": 739,
+      "p90": 943
+     },
+     "t20Ms": {
+      "p50": 435
+     },
+     "centroidHz": {
+      "p10": 1558,
+      "p50": 4155,
+      "p90": 9155
+     },
+     "low": 0.017,
+     "high": 0.385,
+     "tonality": 0.366,
+     "noise": 0.695,
+     "transientDb": 3.888,
+     "sweepOct": 0.416,
+     "pitchStability": 0.755,
+     "lengthOctSd": 1.302,
+     "centroidOctSd": 1.107
+    },
+    "perc": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 91.071,
+     "convention": 0.941,
+     "peak": {
+      "mean": 0.289,
+      "p10": 0.186,
+      "p90": 0.359
+     },
+     "rmsDb": -25.455,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 5.986,
+      "p90": 13.968
+     },
+     "lengthMs": {
+      "p10": 53,
+      "p50": 109,
+      "p90": 205
+     },
+     "t20Ms": {
+      "p50": 70
+     },
+     "centroidHz": {
+      "p10": 395,
+      "p50": 946,
+      "p90": 4313
+     },
+     "low": 0.101,
+     "high": 0.111,
+     "tonality": 0.741,
+     "noise": 0.18,
+     "transientDb": 3.041,
+     "sweepOct": 1.526,
+     "pitchStability": 0.349,
+     "lengthOctSd": 0.763,
+     "centroidOctSd": 1.681
+    },
+    "fx": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.994,
+     "peak": {
+      "mean": 0.262,
+      "p10": 0.183,
+      "p90": 0.301
+     },
+     "rmsDb": -25.18,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 11.973,
+      "p90": 21.95
+     },
+     "lengthMs": {
+      "p10": 50,
+      "p50": 148,
+      "p90": 306
+     },
+     "t20Ms": {
+      "p50": 89
+     },
+     "centroidHz": {
+      "p10": 347,
+      "p50": 923,
+      "p90": 2478
+     },
+     "low": 0.12,
+     "high": 0.045,
+     "tonality": 0.754,
+     "noise": 0.186,
+     "transientDb": -2.236,
+     "sweepOct": 2.162,
+     "pitchStability": 0.619,
+     "lengthOctSd": 0.845,
+     "centroidOctSd": 1.162
+    }
+   },
+   "kit": {
+    "kits": 168,
+    "decaySpreadOct": 1.129,
+    "centroidRangeOct": 6.94,
+    "levelRangeDb": 6.126,
+    "maxPeak": 0.393,
+    "loudKitsPct": 0,
+    "brightSpread": 0.285,
+    "sameness": 0.447,
+    "tomsTooAlikePct": 0,
+    "hatsTooAlikePct": 0.595,
+    "sameDecayKitsPct": 0,
+    "msPerKit": 498
+   }
+  },
+  "electro": {
+   "instruments": {
+    "kick": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 85.119,
+     "convention": 0.801,
+     "peak": {
+      "mean": 0.327,
+      "p10": 0.271,
+      "p90": 0.458
+     },
+     "rmsDb": -19.055,
+     "attackMs": {
+      "p10": 10.975,
+      "p50": 12.971,
+      "p90": 18.957
+     },
+     "lengthMs": {
+      "p10": 263,
+      "p50": 752,
+      "p90": 921
+     },
+     "t20Ms": {
+      "p50": 613
+     },
+     "centroidHz": {
+      "p10": 36,
+      "p50": 49,
+      "p90": 843
+     },
+     "low": 0.81,
+     "high": 0.018,
+     "tonality": 0.631,
+     "noise": 0.201,
+     "transientDb": -4.04,
+     "sweepOct": 2.983,
+     "pitchStability": 0.073,
+     "lengthOctSd": 0.889,
+     "centroidOctSd": 1.853
+    },
+    "ltom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 93.75,
+     "convention": 0.9,
+     "peak": {
+      "mean": 0.299,
+      "p10": 0.241,
+      "p90": 0.412
+     },
+     "rmsDb": -22.32,
+     "attackMs": {
+      "p10": 7.982,
+      "p50": 10.975,
+      "p90": 17.959
+     },
+     "lengthMs": {
+      "p10": 273,
+      "p50": 480,
+      "p90": 701
+     },
+     "t20Ms": {
+      "p50": 349
+     },
+     "centroidHz": {
+      "p10": 97,
+      "p50": 137,
+      "p90": 1137
+     },
+     "low": 0.675,
+     "high": 0.022,
+     "tonality": 0.745,
+     "noise": 0.146,
+     "transientDb": -2.965,
+     "sweepOct": 2.302,
+     "pitchStability": 0.458,
+     "lengthOctSd": 0.886,
+     "centroidOctSd": 1.482
+    },
+    "htom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 91.964,
+     "convention": 0.918,
+     "peak": {
+      "mean": 0.3,
+      "p10": 0.236,
+      "p90": 0.404
+     },
+     "rmsDb": -22.635,
+     "attackMs": {
+      "p10": 7.982,
+      "p50": 10.975,
+      "p90": 14.966
+     },
+     "lengthMs": {
+      "p10": 343,
+      "p50": 544,
+      "p90": 697
+     },
+     "t20Ms": {
+      "p50": 389
+     },
+     "centroidHz": {
+      "p10": 185,
+      "p50": 258,
+      "p90": 950
+     },
+     "low": 0.101,
+     "high": 0.021,
+     "tonality": 0.705,
+     "noise": 0.162,
+     "transientDb": -1.491,
+     "sweepOct": 2.357,
+     "pitchStability": 0.445,
+     "lengthOctSd": 0.946,
+     "centroidOctSd": 1.265
+    },
+    "snare": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 92.857,
+     "convention": 0.905,
+     "peak": {
+      "mean": 0.41,
+      "p10": 0.308,
+      "p90": 0.478
+     },
+     "rmsDb": -23.865,
+     "attackMs": {
+      "p10": 0,
+      "p50": 2.993,
+      "p90": 13.968
+     },
+     "lengthMs": {
+      "p10": 77,
+      "p50": 332,
+      "p90": 452
+     },
+     "t20Ms": {
+      "p50": 219
+     },
+     "centroidHz": {
+      "p10": 839,
+      "p50": 1636,
+      "p90": 2432
+     },
+     "low": 0.161,
+     "high": 0.088,
+     "tonality": 0.448,
+     "noise": 0.631,
+     "transientDb": 5.095,
+     "sweepOct": 0.344,
+     "pitchStability": 0.611,
+     "lengthOctSd": 0.986,
+     "centroidOctSd": 0.703
+    },
+    "clap": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 92.857,
+     "convention": 0.923,
+     "peak": {
+      "mean": 0.337,
+      "p10": 0.231,
+      "p90": 0.425
+     },
+     "rmsDb": -27.036,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 11.973,
+      "p90": 22.948
+     },
+     "lengthMs": {
+      "p10": 240,
+      "p50": 345,
+      "p90": 451
+     },
+     "t20Ms": {
+      "p50": 189
+     },
+     "centroidHz": {
+      "p10": 1116,
+      "p50": 1789,
+      "p90": 3504
+     },
+     "low": 0.033,
+     "high": 0.101,
+     "tonality": 0.467,
+     "noise": 0.682,
+     "transientDb": 0.053,
+     "sweepOct": 0.311,
+     "pitchStability": 0.71,
+     "lengthOctSd": 0.811,
+     "centroidOctSd": 0.74
+    },
+    "chat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 84.524,
+     "convention": 0.875,
+     "peak": {
+      "mean": 0.253,
+      "p10": 0.186,
+      "p90": 0.286
+     },
+     "rmsDb": -30.52,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 1.995,
+      "p90": 5.986
+     },
+     "lengthMs": {
+      "p10": 73,
+      "p50": 123,
+      "p90": 278
+     },
+     "t20Ms": {
+      "p50": 67
+     },
+     "centroidHz": {
+      "p10": 2387,
+      "p50": 6127,
+      "p90": 8500
+     },
+     "low": 0.012,
+     "high": 0.456,
+     "tonality": 0.452,
+     "noise": 0.651,
+     "transientDb": 9.211,
+     "sweepOct": 0.299,
+     "pitchStability": 0.566,
+     "lengthOctSd": 1.162,
+     "centroidOctSd": 0.994
+    },
+    "ohat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 85.119,
+     "convention": 0.894,
+     "peak": {
+      "mean": 0.26,
+      "p10": 0.196,
+      "p90": 0.303
+     },
+     "rmsDb": -30.666,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 2.993,
+      "p90": 7.982
+     },
+     "lengthMs": {
+      "p10": 206,
+      "p50": 464,
+      "p90": 696
+     },
+     "t20Ms": {
+      "p50": 248
+     },
+     "centroidHz": {
+      "p10": 1352,
+      "p50": 6065,
+      "p90": 8523
+     },
+     "low": 0.018,
+     "high": 0.45,
+     "tonality": 0.448,
+     "noise": 0.62,
+     "transientDb": 6.191,
+     "sweepOct": 0.449,
+     "pitchStability": 0.777,
+     "lengthOctSd": 1.122,
+     "centroidOctSd": 1.055
+    },
+    "cymbal": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 83.929,
+     "convention": 0.826,
+     "peak": {
+      "mean": 0.242,
+      "p10": 0.229,
+      "p90": 0.256
+     },
+     "rmsDb": -32.236,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 6.984,
+      "p90": 63.855
+     },
+     "lengthMs": {
+      "p10": 178,
+      "p50": 2324,
+      "p90": 2501
+     },
+     "t20Ms": {
+      "p50": 1269
+     },
+     "centroidHz": {
+      "p10": 1302,
+      "p50": 4264,
+      "p90": 8244
+     },
+     "low": 0.023,
+     "high": 0.355,
+     "tonality": 0.397,
+     "noise": 0.667,
+     "transientDb": 3.005,
+     "sweepOct": 0.521,
+     "pitchStability": 0.781,
+     "lengthOctSd": 1.614,
+     "centroidOctSd": 1.127
+    },
+    "perc": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 91.071,
+     "convention": 0.913,
+     "peak": {
+      "mean": 0.301,
+      "p10": 0.196,
+      "p90": 0.361
+     },
+     "rmsDb": -26.561,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 7.982,
+      "p90": 17.959
+     },
+     "lengthMs": {
+      "p10": 106,
+      "p50": 206,
+      "p90": 367
+     },
+     "t20Ms": {
+      "p50": 114
+     },
+     "centroidHz": {
+      "p10": 303,
+      "p50": 864,
+      "p90": 3846
+     },
+     "low": 0.124,
+     "high": 0.089,
+     "tonality": 0.757,
+     "noise": 0.196,
+     "transientDb": 2.319,
+     "sweepOct": 1.663,
+     "pitchStability": 0.579,
+     "lengthOctSd": 1.004,
+     "centroidOctSd": 1.656
+    },
+    "fx": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 94.643,
+     "convention": 0.969,
+     "peak": {
+      "mean": 0.261,
+      "p10": 0.181,
+      "p90": 0.301
+     },
+     "rmsDb": -25.414,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 15.964,
+      "p90": 43.9
+     },
+     "lengthMs": {
+      "p10": 79,
+      "p50": 210,
+      "p90": 782
+     },
+     "t20Ms": {
+      "p50": 130
+     },
+     "centroidHz": {
+      "p10": 200,
+      "p50": 884,
+      "p90": 2082
+     },
+     "low": 0.168,
+     "high": 0.018,
+     "tonality": 0.796,
+     "noise": 0.135,
+     "transientDb": -3.506,
+     "sweepOct": 2.408,
+     "pitchStability": 0.572,
+     "lengthOctSd": 1.126,
+     "centroidOctSd": 1.258
+    }
+   },
+   "kit": {
+    "kits": 168,
+    "decaySpreadOct": 1.364,
+    "centroidRangeOct": 6.811,
+    "levelRangeDb": 6.046,
+    "maxPeak": 0.416,
+    "loudKitsPct": 0,
+    "brightSpread": 0.247,
+    "sameness": 0.465,
+    "tomsTooAlikePct": 0,
+    "hatsTooAlikePct": 2.381,
+    "sameDecayKitsPct": 0,
+    "msPerKit": 730
+   }
+  },
+  "acoustic": {
+   "instruments": {
+    "kick": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 83.929,
+     "convention": 0.852,
+     "peak": {
+      "mean": 0.293,
+      "p10": 0.236,
+      "p90": 0.44
+     },
+     "rmsDb": -20.801,
+     "attackMs": {
+      "p10": 5.986,
+      "p50": 8.98,
+      "p90": 13.968
+     },
+     "lengthMs": {
+      "p10": 121,
+      "p50": 207,
+      "p90": 273
+     },
+     "t20Ms": {
+      "p50": 158
+     },
+     "centroidHz": {
+      "p10": 50,
+      "p50": 63,
+      "p90": 1335
+     },
+     "low": 0.792,
+     "high": 0.024,
+     "tonality": 0.862,
+     "noise": 0.087,
+     "transientDb": -1.75,
+     "sweepOct": 1.822,
+     "pitchStability": 0.637,
+     "lengthOctSd": 0.663,
+     "centroidOctSd": 1.938
+    },
+    "ltom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 87.5,
+     "convention": 0.786,
+     "peak": {
+      "mean": 0.294,
+      "p10": 0.234,
+      "p90": 0.396
+     },
+     "rmsDb": -21.769,
+     "attackMs": {
+      "p10": 5.986,
+      "p50": 9.977,
+      "p90": 13.968
+     },
+     "lengthMs": {
+      "p10": 137,
+      "p50": 206,
+      "p90": 253
+     },
+     "t20Ms": {
+      "p50": 147
+     },
+     "centroidHz": {
+      "p10": 95,
+      "p50": 141,
+      "p90": 1133
+     },
+     "low": 0.705,
+     "high": 0.018,
+     "tonality": 0.83,
+     "noise": 0.11,
+     "transientDb": -1.734,
+     "sweepOct": 1.496,
+     "pitchStability": 0.643,
+     "lengthOctSd": 0.522,
+     "centroidOctSd": 1.549
+    },
+    "htom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 92.857,
+     "convention": 0.921,
+     "peak": {
+      "mean": 0.285,
+      "p10": 0.216,
+      "p90": 0.368
+     },
+     "rmsDb": -22.23,
+     "attackMs": {
+      "p10": 5.986,
+      "p50": 7.982,
+      "p90": 10.975
+     },
+     "lengthMs": {
+      "p10": 111,
+      "p50": 178,
+      "p90": 238
+     },
+     "t20Ms": {
+      "p50": 133
+     },
+     "centroidHz": {
+      "p10": 195,
+      "p50": 261,
+      "p90": 2312
+     },
+     "low": 0.078,
+     "high": 0.029,
+     "tonality": 0.821,
+     "noise": 0.116,
+     "transientDb": 0.265,
+     "sweepOct": 1.236,
+     "pitchStability": 0.664,
+     "lengthOctSd": 0.601,
+     "centroidOctSd": 1.466
+    },
+    "snare": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 98.214,
+     "convention": 0.941,
+     "peak": {
+      "mean": 0.412,
+      "p10": 0.295,
+      "p90": 0.493
+     },
+     "rmsDb": -25.185,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 5.986
+     },
+     "lengthMs": {
+      "p10": 71,
+      "p50": 125,
+      "p90": 164
+     },
+     "t20Ms": {
+      "p50": 67
+     },
+     "centroidHz": {
+      "p10": 1196,
+      "p50": 2449,
+      "p90": 6258
+     },
+     "low": 0.078,
+     "high": 0.25,
+     "tonality": 0.372,
+     "noise": 0.733,
+     "transientDb": 10.545,
+     "sweepOct": -0.138,
+     "pitchStability": 0.613,
+     "lengthOctSd": 0.596,
+     "centroidOctSd": 0.953
+    },
+    "clap": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 96.429,
+     "convention": 0.936,
+     "peak": {
+      "mean": 0.373,
+      "p10": 0.273,
+      "p90": 0.444
+     },
+     "rmsDb": -25.248,
+     "attackMs": {
+      "p10": 1.995,
+      "p50": 15.964,
+      "p90": 23.946
+     },
+     "lengthMs": {
+      "p10": 51,
+      "p50": 138,
+      "p90": 180
+     },
+     "t20Ms": {
+      "p50": 69
+     },
+     "centroidHz": {
+      "p10": 1295,
+      "p50": 2206,
+      "p90": 5988
+     },
+     "low": 0.039,
+     "high": 0.233,
+     "tonality": 0.379,
+     "noise": 0.775,
+     "transientDb": 1.899,
+     "sweepOct": 0.109,
+     "pitchStability": 0.617,
+     "lengthOctSd": 0.685,
+     "centroidOctSd": 0.865
+    },
+    "chat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 87.5,
+     "convention": 0.891,
+     "peak": {
+      "mean": 0.242,
+      "p10": 0.168,
+      "p90": 0.291
+     },
+     "rmsDb": -29.973,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 5.986
+     },
+     "lengthMs": {
+      "p10": 42,
+      "p50": 64,
+      "p90": 437
+     },
+     "t20Ms": {
+      "p50": 40
+     },
+     "centroidHz": {
+      "p10": 1900,
+      "p50": 6998,
+      "p90": 9683
+     },
+     "low": 0.015,
+     "high": 0.559,
+     "tonality": 0.28,
+     "noise": 0.795,
+     "transientDb": 12.219,
+     "sweepOct": 0.204,
+     "pitchStability": 0.117,
+     "lengthOctSd": 1.219,
+     "centroidOctSd": 1.164
+    },
+    "ohat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 88.69,
+     "convention": 0.882,
+     "peak": {
+      "mean": 0.249,
+      "p10": 0.173,
+      "p90": 0.303
+     },
+     "rmsDb": -30.349,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 7.982
+     },
+     "lengthMs": {
+      "p10": 125,
+      "p50": 237,
+      "p90": 292
+     },
+     "t20Ms": {
+      "p50": 136
+     },
+     "centroidHz": {
+      "p10": 1298,
+      "p50": 7103,
+      "p90": 9903
+     },
+     "low": 0.017,
+     "high": 0.567,
+     "tonality": 0.297,
+     "noise": 0.77,
+     "transientDb": 6.695,
+     "sweepOct": 0.279,
+     "pitchStability": 0.779,
+     "lengthOctSd": 0.747,
+     "centroidOctSd": 1.226
+    },
+    "cymbal": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 83.333,
+     "convention": 0.853,
+     "peak": {
+      "mean": 0.237,
+      "p10": 0.209,
+      "p90": 0.265
+     },
+     "rmsDb": -32.228,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 4.989,
+      "p90": 25.941
+     },
+     "lengthMs": {
+      "p10": 104,
+      "p50": 744,
+      "p90": 1007
+     },
+     "t20Ms": {
+      "p50": 454
+     },
+     "centroidHz": {
+      "p10": 1386,
+      "p50": 4248,
+      "p90": 9264
+     },
+     "low": 0.023,
+     "high": 0.362,
+     "tonality": 0.331,
+     "noise": 0.747,
+     "transientDb": 3.006,
+     "sweepOct": 0.523,
+     "pitchStability": 0.744,
+     "lengthOctSd": 1.262,
+     "centroidOctSd": 1.146
+    },
+    "perc": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 96.429,
+     "convention": 0.952,
+     "peak": {
+      "mean": 0.286,
+      "p10": 0.152,
+      "p90": 0.361
+     },
+     "rmsDb": -26.644,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 6.984,
+      "p90": 12.971
+     },
+     "lengthMs": {
+      "p10": 48,
+      "p50": 112,
+      "p90": 194
+     },
+     "t20Ms": {
+      "p50": 71
+     },
+     "centroidHz": {
+      "p10": 438,
+      "p50": 984,
+      "p90": 4299
+     },
+     "low": 0.075,
+     "high": 0.113,
+     "tonality": 0.746,
+     "noise": 0.187,
+     "transientDb": 4.48,
+     "sweepOct": 1.514,
+     "pitchStability": 0.423,
+     "lengthOctSd": 0.786,
+     "centroidOctSd": 1.546
+    },
+    "fx": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 96.429,
+     "convention": 0.972,
+     "peak": {
+      "mean": 0.268,
+      "p10": 0.182,
+      "p90": 0.301
+     },
+     "rmsDb": -24.117,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 12.971,
+      "p90": 24.943
+     },
+     "lengthMs": {
+      "p10": 80,
+      "p50": 167,
+      "p90": 289
+     },
+     "t20Ms": {
+      "p50": 101
+     },
+     "centroidHz": {
+      "p10": 238,
+      "p50": 1000,
+      "p90": 2295
+     },
+     "low": 0.136,
+     "high": 0.03,
+     "tonality": 0.828,
+     "noise": 0.133,
+     "transientDb": -3.167,
+     "sweepOct": 2.251,
+     "pitchStability": 0.644,
+     "lengthOctSd": 0.833,
+     "centroidOctSd": 1.304
+    }
+   },
+   "kit": {
+    "kits": 168,
+    "decaySpreadOct": 1.123,
+    "centroidRangeOct": 6.62,
+    "levelRangeDb": 6.56,
+    "maxPeak": 0.418,
+    "loudKitsPct": 0,
+    "brightSpread": 0.293,
+    "sameness": 0.478,
+    "tomsTooAlikePct": 0,
+    "hatsTooAlikePct": 3.571,
+    "sameDecayKitsPct": 0,
+    "msPerKit": 486
+   }
+  },
+  "industrial": {
+   "instruments": {
+    "kick": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 87.5,
+     "convention": 0.852,
+     "peak": {
+      "mean": 0.488,
+      "p10": 0.48,
+      "p90": 0.502
+     },
+     "rmsDb": -13.104,
+     "attackMs": {
+      "p10": 8.98,
+      "p50": 12.971,
+      "p90": 19.955
+     },
+     "lengthMs": {
+      "p10": 179,
+      "p50": 311,
+      "p90": 486
+     },
+     "t20Ms": {
+      "p50": 266
+     },
+     "centroidHz": {
+      "p10": 48,
+      "p50": 78,
+      "p90": 827
+     },
+     "low": 0.782,
+     "high": 0.01,
+     "tonality": 0.739,
+     "noise": 0.163,
+     "transientDb": -4.16,
+     "sweepOct": 3.09,
+     "pitchStability": 0.429,
+     "lengthOctSd": 0.666,
+     "centroidOctSd": 1.64
+    },
+    "ltom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 88.393,
+     "convention": 0.889,
+     "peak": {
+      "mean": 0.414,
+      "p10": 0.418,
+      "p90": 0.422
+     },
+     "rmsDb": -15.667,
+     "attackMs": {
+      "p10": 7.982,
+      "p50": 11.973,
+      "p90": 15.964
+     },
+     "lengthMs": {
+      "p10": 131,
+      "p50": 315,
+      "p90": 506
+     },
+     "t20Ms": {
+      "p50": 261
+     },
+     "centroidHz": {
+      "p10": 113,
+      "p50": 203,
+      "p90": 1912
+     },
+     "low": 0.626,
+     "high": 0.027,
+     "tonality": 0.803,
+     "noise": 0.155,
+     "transientDb": -3.166,
+     "sweepOct": 2.096,
+     "pitchStability": 0.6,
+     "lengthOctSd": 0.94,
+     "centroidOctSd": 1.538
+    },
+    "htom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 91.964,
+     "convention": 0.915,
+     "peak": {
+      "mean": 0.415,
+      "p10": 0.418,
+      "p90": 0.422
+     },
+     "rmsDb": -16.922,
+     "attackMs": {
+      "p10": 7.982,
+      "p50": 10.975,
+      "p90": 14.966
+     },
+     "lengthMs": {
+      "p10": 145,
+      "p50": 302,
+      "p90": 459
+     },
+     "t20Ms": {
+      "p50": 251
+     },
+     "centroidHz": {
+      "p10": 210,
+      "p50": 368,
+      "p90": 2050
+     },
+     "low": 0.14,
+     "high": 0.043,
+     "tonality": 0.773,
+     "noise": 0.189,
+     "transientDb": -3.267,
+     "sweepOct": 2.169,
+     "pitchStability": 0.657,
+     "lengthOctSd": 0.742,
+     "centroidOctSd": 1.386
+    },
+    "snare": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 92.857,
+     "convention": 0.916,
+     "peak": {
+      "mean": 0.51,
+      "p10": 0.451,
+      "p90": 0.572
+     },
+     "rmsDb": -19.197,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 2.993,
+      "p90": 12.971
+     },
+     "lengthMs": {
+      "p10": 100,
+      "p50": 253,
+      "p90": 456
+     },
+     "t20Ms": {
+      "p50": 188
+     },
+     "centroidHz": {
+      "p10": 900,
+      "p50": 2186,
+      "p90": 4424
+     },
+     "low": 0.088,
+     "high": 0.145,
+     "tonality": 0.356,
+     "noise": 0.711,
+     "transientDb": 4.812,
+     "sweepOct": 0.155,
+     "pitchStability": 0.664,
+     "lengthOctSd": 0.924,
+     "centroidOctSd": 0.903
+    },
+    "clap": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 96.429,
+     "convention": 0.936,
+     "peak": {
+      "mean": 0.487,
+      "p10": 0.44,
+      "p90": 0.542
+     },
+     "rmsDb": -19.963,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 15.964,
+      "p90": 27.937
+     },
+     "lengthMs": {
+      "p10": 97,
+      "p50": 224,
+      "p90": 363
+     },
+     "t20Ms": {
+      "p50": 156
+     },
+     "centroidHz": {
+      "p10": 1249,
+      "p50": 2466,
+      "p90": 6305
+     },
+     "low": 0.039,
+     "high": 0.221,
+     "tonality": 0.303,
+     "noise": 0.788,
+     "transientDb": -0.334,
+     "sweepOct": 0,
+     "pitchStability": 0.683,
+     "lengthOctSd": 0.795,
+     "centroidOctSd": 0.914
+    },
+    "chat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0.595,
+     "looksLikePct": 83.333,
+     "convention": 0.844,
+     "peak": {
+      "mean": 0.297,
+      "p10": 0.264,
+      "p90": 0.339
+     },
+     "rmsDb": -26.989,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 5.986
+     },
+     "lengthMs": {
+      "p10": 49,
+      "p50": 109,
+      "p90": 192
+     },
+     "t20Ms": {
+      "p50": 64
+     },
+     "centroidHz": {
+      "p10": 1332,
+      "p50": 4362,
+      "p90": 6602
+     },
+     "low": 0.021,
+     "high": 0.326,
+     "tonality": 0.459,
+     "noise": 0.681,
+     "transientDb": 10.378,
+     "sweepOct": 0.112,
+     "pitchStability": 0.431,
+     "lengthOctSd": 1.133,
+     "centroidOctSd": 0.94
+    },
+    "ohat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 83.929,
+     "convention": 0.845,
+     "peak": {
+      "mean": 0.303,
+      "p10": 0.268,
+      "p90": 0.346
+     },
+     "rmsDb": -27.311,
+     "attackMs": {
+      "p10": 0,
+      "p50": 2.993,
+      "p90": 7.982
+     },
+     "lengthMs": {
+      "p10": 138,
+      "p50": 341,
+      "p90": 530
+     },
+     "t20Ms": {
+      "p50": 196
+     },
+     "centroidHz": {
+      "p10": 1316,
+      "p50": 4255,
+      "p90": 6510
+     },
+     "low": 0.024,
+     "high": 0.32,
+     "tonality": 0.472,
+     "noise": 0.667,
+     "transientDb": 6.422,
+     "sweepOct": 0.197,
+     "pitchStability": 0.718,
+     "lengthOctSd": 1.044,
+     "centroidOctSd": 0.947
+    },
+    "cymbal": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 80.357,
+     "convention": 0.803,
+     "peak": {
+      "mean": 0.288,
+      "p10": 0.249,
+      "p90": 0.335
+     },
+     "rmsDb": -27.21,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 4.989,
+      "p90": 31.927
+     },
+     "lengthMs": {
+      "p10": 128,
+      "p50": 1344,
+      "p90": 2501
+     },
+     "t20Ms": {
+      "p50": 847
+     },
+     "centroidHz": {
+      "p10": 1230,
+      "p50": 3306,
+      "p90": 7573
+     },
+     "low": 0.024,
+     "high": 0.292,
+     "tonality": 0.459,
+     "noise": 0.65,
+     "transientDb": 2.955,
+     "sweepOct": 0.103,
+     "pitchStability": 0.734,
+     "lengthOctSd": 1.616,
+     "centroidOctSd": 0.953
+    },
+    "perc": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 89.286,
+     "convention": 0.921,
+     "peak": {
+      "mean": 0.309,
+      "p10": 0.169,
+      "p90": 0.362
+     },
+     "rmsDb": -24.805,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 7.982,
+      "p90": 14.966
+     },
+     "lengthMs": {
+      "p10": 42,
+      "p50": 140,
+      "p90": 242
+     },
+     "t20Ms": {
+      "p50": 85
+     },
+     "centroidHz": {
+      "p10": 204,
+      "p50": 725,
+      "p90": 3888
+     },
+     "low": 0.103,
+     "high": 0.067,
+     "tonality": 0.751,
+     "noise": 0.204,
+     "transientDb": 2.928,
+     "sweepOct": 1.593,
+     "pitchStability": 0.518,
+     "lengthOctSd": 0.899,
+     "centroidOctSd": 1.533
+    },
+    "fx": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.994,
+     "peak": {
+      "mean": 0.272,
+      "p10": 0.201,
+      "p90": 0.302
+     },
+     "rmsDb": -24.574,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 11.973,
+      "p90": 26.939
+     },
+     "lengthMs": {
+      "p10": 59,
+      "p50": 167,
+      "p90": 315
+     },
+     "t20Ms": {
+      "p50": 109
+     },
+     "centroidHz": {
+      "p10": 322,
+      "p50": 986,
+      "p90": 2030
+     },
+     "low": 0.171,
+     "high": 0.031,
+     "tonality": 0.744,
+     "noise": 0.201,
+     "transientDb": -2.686,
+     "sweepOct": 2.112,
+     "pitchStability": 0.544,
+     "lengthOctSd": 0.854,
+     "centroidOctSd": 1.051
+    }
+   },
+   "kit": {
+    "kits": 168,
+    "decaySpreadOct": 1.248,
+    "centroidRangeOct": 5.984,
+    "levelRangeDb": 6.313,
+    "maxPeak": 0.519,
+    "loudKitsPct": 0,
+    "brightSpread": 0.19,
+    "sameness": 0.565,
+    "tomsTooAlikePct": 0,
+    "hatsTooAlikePct": 7.143,
+    "sameDecayKitsPct": 1.19,
+    "msPerKit": 638
+   }
+  },
+  "glitch": {
+   "instruments": {
+    "kick": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 82.738,
+     "convention": 0.769,
+     "peak": {
+      "mean": 0.356,
+      "p10": 0.263,
+      "p90": 0.477
+     },
+     "rmsDb": -18.368,
+     "attackMs": {
+      "p10": 5.986,
+      "p50": 8.98,
+      "p90": 16.961
+     },
+     "lengthMs": {
+      "p10": 81,
+      "p50": 115,
+      "p90": 156
+     },
+     "t20Ms": {
+      "p50": 92
+     },
+     "centroidHz": {
+      "p10": 50,
+      "p50": 96,
+      "p90": 1127
+     },
+     "low": 0.716,
+     "high": 0.011,
+     "tonality": 0.772,
+     "noise": 0.157,
+     "transientDb": -2.026,
+     "sweepOct": 2.669,
+     "pitchStability": 0.126,
+     "lengthOctSd": 0.491,
+     "centroidOctSd": 1.707
+    },
+    "ltom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 78.571,
+     "convention": 0.704,
+     "peak": {
+      "mean": 0.274,
+      "p10": 0.182,
+      "p90": 0.418
+     },
+     "rmsDb": -22.049,
+     "attackMs": {
+      "p10": 4.989,
+      "p50": 6.984,
+      "p90": 12.971
+     },
+     "lengthMs": {
+      "p10": 64,
+      "p50": 91,
+      "p90": 148
+     },
+     "t20Ms": {
+      "p50": 66
+     },
+     "centroidHz": {
+      "p10": 96,
+      "p50": 164,
+      "p90": 2045
+     },
+     "low": 0.575,
+     "high": 0.031,
+     "tonality": 0.823,
+     "noise": 0.134,
+     "transientDb": 0.49,
+     "sweepOct": 1.453,
+     "pitchStability": 0.178,
+     "lengthOctSd": 0.503,
+     "centroidOctSd": 1.75
+    },
+    "htom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 91.964,
+     "convention": 0.807,
+     "peak": {
+      "mean": 0.274,
+      "p10": 0.178,
+      "p90": 0.402
+     },
+     "rmsDb": -22.423,
+     "attackMs": {
+      "p10": 4.989,
+      "p50": 7.982,
+      "p90": 12.971
+     },
+     "lengthMs": {
+      "p10": 68,
+      "p50": 111,
+      "p90": 136
+     },
+     "t20Ms": {
+      "p50": 78
+     },
+     "centroidHz": {
+      "p10": 192,
+      "p50": 279,
+      "p90": 2674
+     },
+     "low": 0.096,
+     "high": 0.04,
+     "tonality": 0.806,
+     "noise": 0.147,
+     "transientDb": -0.226,
+     "sweepOct": 1.699,
+     "pitchStability": 0.416,
+     "lengthOctSd": 0.435,
+     "centroidOctSd": 1.589
+    },
+    "snare": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 90.179,
+     "convention": 0.838,
+     "peak": {
+      "mean": 0.439,
+      "p10": 0.339,
+      "p90": 0.512
+     },
+     "rmsDb": -22.481,
+     "attackMs": {
+      "p10": 0,
+      "p50": 3.991,
+      "p90": 15.964
+     },
+     "lengthMs": {
+      "p10": 67,
+      "p50": 94,
+      "p90": 125
+     },
+     "t20Ms": {
+      "p50": 58
+     },
+     "centroidHz": {
+      "p10": 686,
+      "p50": 1781,
+      "p90": 4733
+     },
+     "low": 0.099,
+     "high": 0.164,
+     "tonality": 0.43,
+     "noise": 0.653,
+     "transientDb": 6.074,
+     "sweepOct": 0.262,
+     "pitchStability": 0.195,
+     "lengthOctSd": 0.509,
+     "centroidOctSd": 1.097
+    },
+    "clap": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 85.714,
+     "convention": 0.882,
+     "peak": {
+      "mean": 0.369,
+      "p10": 0.249,
+      "p90": 0.456
+     },
+     "rmsDb": -23.559,
+     "attackMs": {
+      "p10": 1.995,
+      "p50": 17.959,
+      "p90": 37.914
+     },
+     "lengthMs": {
+      "p10": 67,
+      "p50": 99,
+      "p90": 132
+     },
+     "t20Ms": {
+      "p50": 54
+     },
+     "centroidHz": {
+      "p10": 733,
+      "p50": 1766,
+      "p90": 4847
+     },
+     "low": 0.084,
+     "high": 0.135,
+     "tonality": 0.422,
+     "noise": 0.693,
+     "transientDb": 1.287,
+     "sweepOct": 0.117,
+     "pitchStability": 0.233,
+     "lengthOctSd": 0.434,
+     "centroidOctSd": 1.026
+    },
+    "chat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 77.381,
+     "convention": 0.826,
+     "peak": {
+      "mean": 0.247,
+      "p10": 0.173,
+      "p90": 0.296
+     },
+     "rmsDb": -28.88,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 7.982
+     },
+     "lengthMs": {
+      "p10": 27,
+      "p50": 38,
+      "p90": 278
+     },
+     "t20Ms": {
+      "p50": 25
+     },
+     "centroidHz": {
+      "p10": 1123,
+      "p50": 4293,
+      "p90": 7269
+     },
+     "low": 0.019,
+     "high": 0.335,
+     "tonality": 0.299,
+     "noise": 0.764,
+     "transientDb": 16.666,
+     "sweepOct": 0.054,
+     "pitchStability": 0.102,
+     "lengthOctSd": 1.173,
+     "centroidOctSd": 1.045
+    },
+    "ohat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 63.095,
+     "convention": 0.558,
+     "peak": {
+      "mean": 0.25,
+      "p10": 0.177,
+      "p90": 0.301
+     },
+     "rmsDb": -29.553,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 1.995,
+      "p90": 7.982
+     },
+     "lengthMs": {
+      "p10": 72,
+      "p50": 109,
+      "p90": 151
+     },
+     "t20Ms": {
+      "p50": 67
+     },
+     "centroidHz": {
+      "p10": 1206,
+      "p50": 4293,
+      "p90": 8387
+     },
+     "low": 0.017,
+     "high": 0.345,
+     "tonality": 0.385,
+     "noise": 0.709,
+     "transientDb": 8.769,
+     "sweepOct": 0.35,
+     "pitchStability": 0.481,
+     "lengthOctSd": 0.552,
+     "centroidOctSd": 1.061
+    },
+    "cymbal": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0.595,
+     "looksLikePct": 66.071,
+     "convention": 0.63,
+     "peak": {
+      "mean": 0.24,
+      "p10": 0.219,
+      "p90": 0.259
+     },
+     "rmsDb": -29.489,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 2.993,
+      "p90": 15.964
+     },
+     "lengthMs": {
+      "p10": 70,
+      "p50": 342,
+      "p90": 441
+     },
+     "t20Ms": {
+      "p50": 218
+     },
+     "centroidHz": {
+      "p10": 1065,
+      "p50": 4073,
+      "p90": 8368
+     },
+     "low": 0.028,
+     "high": 0.357,
+     "tonality": 0.373,
+     "noise": 0.684,
+     "transientDb": 4.336,
+     "sweepOct": 0.083,
+     "pitchStability": 0.681,
+     "lengthOctSd": 1.033,
+     "centroidOctSd": 1.174
+    },
+    "perc": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 89.286,
+     "convention": 0.905,
+     "peak": {
+      "mean": 0.284,
+      "p10": 0.157,
+      "p90": 0.361
+     },
+     "rmsDb": -24.774,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 6.984,
+      "p90": 12.971
+     },
+     "lengthMs": {
+      "p10": 33,
+      "p50": 92,
+      "p90": 151
+     },
+     "t20Ms": {
+      "p50": 64
+     },
+     "centroidHz": {
+      "p10": 300,
+      "p50": 786,
+      "p90": 3367
+     },
+     "low": 0.095,
+     "high": 0.067,
+     "tonality": 0.711,
+     "noise": 0.24,
+     "transientDb": 2.889,
+     "sweepOct": 0.891,
+     "pitchStability": 0.296,
+     "lengthOctSd": 0.703,
+     "centroidOctSd": 1.303
+    },
+    "fx": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 100,
+     "convention": 0.988,
+     "peak": {
+      "mean": 0.269,
+      "p10": 0.165,
+      "p90": 0.306
+     },
+     "rmsDb": -23.537,
+     "attackMs": {
+      "p10": 4.989,
+      "p50": 11.973,
+      "p90": 21.95
+     },
+     "lengthMs": {
+      "p10": 67,
+      "p50": 135,
+      "p90": 184
+     },
+     "t20Ms": {
+      "p50": 80
+     },
+     "centroidHz": {
+      "p10": 271,
+      "p50": 863,
+      "p90": 2147
+     },
+     "low": 0.221,
+     "high": 0.022,
+     "tonality": 0.735,
+     "noise": 0.184,
+     "transientDb": -3.686,
+     "sweepOct": 1.574,
+     "pitchStability": 0.381,
+     "lengthOctSd": 0.596,
+     "centroidOctSd": 1.104
+    }
+   },
+   "kit": {
+    "kits": 168,
+    "decaySpreadOct": 0.96,
+    "centroidRangeOct": 5.982,
+    "levelRangeDb": 7.29,
+    "maxPeak": 0.438,
+    "loudKitsPct": 0,
+    "brightSpread": 0.209,
+    "sameness": 0.638,
+    "tomsTooAlikePct": 0.893,
+    "hatsTooAlikePct": 11.31,
+    "sameDecayKitsPct": 0,
+    "msPerKit": 396
+   }
+  },
+  "dub": {
+   "instruments": {
+    "kick": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 86.31,
+     "convention": 0.766,
+     "peak": {
+      "mean": 0.312,
+      "p10": 0.264,
+      "p90": 0.388
+     },
+     "rmsDb": -19.171,
+     "attackMs": {
+      "p10": 10.975,
+      "p50": 14.966,
+      "p90": 22.948
+     },
+     "lengthMs": {
+      "p10": 239,
+      "p50": 890,
+      "p90": 1189
+     },
+     "t20Ms": {
+      "p50": 774
+     },
+     "centroidHz": {
+      "p10": 36,
+      "p50": 48,
+      "p90": 886
+     },
+     "low": 0.839,
+     "high": 0.017,
+     "tonality": 0.585,
+     "noise": 0.221,
+     "transientDb": -4.425,
+     "sweepOct": 2.438,
+     "pitchStability": 0.059,
+     "lengthOctSd": 1.112,
+     "centroidOctSd": 1.839
+    },
+    "ltom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 90.179,
+     "convention": 0.889,
+     "peak": {
+      "mean": 0.302,
+      "p10": 0.244,
+      "p90": 0.396
+     },
+     "rmsDb": -22.005,
+     "attackMs": {
+      "p10": 7.982,
+      "p50": 11.973,
+      "p90": 25.941
+     },
+     "lengthMs": {
+      "p10": 230,
+      "p50": 601,
+      "p90": 752
+     },
+     "t20Ms": {
+      "p50": 413
+     },
+     "centroidHz": {
+      "p10": 98,
+      "p50": 139,
+      "p90": 1412
+     },
+     "low": 0.641,
+     "high": 0.021,
+     "tonality": 0.693,
+     "noise": 0.178,
+     "transientDb": -2.76,
+     "sweepOct": 2.043,
+     "pitchStability": 0.39,
+     "lengthOctSd": 1.002,
+     "centroidOctSd": 1.48
+    },
+    "htom": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 93.75,
+     "convention": 0.898,
+     "peak": {
+      "mean": 0.293,
+      "p10": 0.224,
+      "p90": 0.389
+     },
+     "rmsDb": -22.169,
+     "attackMs": {
+      "p10": 7.982,
+      "p50": 11.973,
+      "p90": 22.948
+     },
+     "lengthMs": {
+      "p10": 403,
+      "p50": 606,
+      "p90": 752
+     },
+     "t20Ms": {
+      "p50": 447
+     },
+     "centroidHz": {
+      "p10": 166,
+      "p50": 260,
+      "p90": 875
+     },
+     "low": 0.11,
+     "high": 0.02,
+     "tonality": 0.68,
+     "noise": 0.173,
+     "transientDb": -3.615,
+     "sweepOct": 1.988,
+     "pitchStability": 0.457,
+     "lengthOctSd": 0.883,
+     "centroidOctSd": 1.25
+    },
+    "snare": {
+     "n": 112,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 75.893,
+     "convention": 0.747,
+     "peak": {
+      "mean": 0.37,
+      "p10": 0.268,
+      "p90": 0.453
+     },
+     "rmsDb": -26.206,
+     "attackMs": {
+      "p10": 0,
+      "p50": 3.991,
+      "p90": 17.959
+     },
+     "lengthMs": {
+      "p10": 66,
+      "p50": 474,
+      "p90": 594
+     },
+     "t20Ms": {
+      "p50": 243
+     },
+     "centroidHz": {
+      "p10": 507,
+      "p50": 1044,
+      "p90": 2005
+     },
+     "low": 0.381,
+     "high": 0.046,
+     "tonality": 0.571,
+     "noise": 0.452,
+     "transientDb": 5.625,
+     "sweepOct": 0.626,
+     "pitchStability": 0.552,
+     "lengthOctSd": 1.073,
+     "centroidOctSd": 0.844
+    },
+    "clap": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 75,
+     "convention": 0.816,
+     "peak": {
+      "mean": 0.322,
+      "p10": 0.217,
+      "p90": 0.438
+     },
+     "rmsDb": -27.379,
+     "attackMs": {
+      "p10": 2.993,
+      "p50": 15.964,
+      "p90": 32.925
+     },
+     "lengthMs": {
+      "p10": 78,
+      "p50": 372,
+      "p90": 573
+     },
+     "t20Ms": {
+      "p50": 217
+     },
+     "centroidHz": {
+      "p10": 436,
+      "p50": 1651,
+      "p90": 2459
+     },
+     "low": 0.079,
+     "high": 0.052,
+     "tonality": 0.416,
+     "noise": 0.623,
+     "transientDb": -0.381,
+     "sweepOct": 0.675,
+     "pitchStability": 0.603,
+     "lengthOctSd": 0.996,
+     "centroidOctSd": 0.932
+    },
+    "chat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0.595,
+     "looksLikePct": 83.929,
+     "convention": 0.875,
+     "peak": {
+      "mean": 0.25,
+      "p10": 0.171,
+      "p90": 0.289
+     },
+     "rmsDb": -30.542,
+     "attackMs": {
+      "p10": 0,
+      "p50": 1.995,
+      "p90": 6.984
+     },
+     "lengthMs": {
+      "p10": 71,
+      "p50": 109,
+      "p90": 177
+     },
+     "t20Ms": {
+      "p50": 58
+     },
+     "centroidHz": {
+      "p10": 1291,
+      "p50": 5615,
+      "p90": 8073
+     },
+     "low": 0.021,
+     "high": 0.413,
+     "tonality": 0.417,
+     "noise": 0.681,
+     "transientDb": 9.582,
+     "sweepOct": 0.258,
+     "pitchStability": 0.485,
+     "lengthOctSd": 1.11,
+     "centroidOctSd": 1.167
+    },
+    "ohat": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 84.524,
+     "convention": 0.884,
+     "peak": {
+      "mean": 0.26,
+      "p10": 0.189,
+      "p90": 0.309
+     },
+     "rmsDb": -30.669,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 2.993,
+      "p90": 9.977
+     },
+     "lengthMs": {
+      "p10": 217,
+      "p50": 601,
+      "p90": 839
+     },
+     "t20Ms": {
+      "p50": 304
+     },
+     "centroidHz": {
+      "p10": 1346,
+      "p50": 5501,
+      "p90": 8216
+     },
+     "low": 0.023,
+     "high": 0.413,
+     "tonality": 0.401,
+     "noise": 0.673,
+     "transientDb": 5.554,
+     "sweepOct": 0.411,
+     "pitchStability": 0.772,
+     "lengthOctSd": 1.236,
+     "centroidOctSd": 1.187
+    },
+    "cymbal": {
+     "n": 168,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 79.762,
+     "convention": 0.799,
+     "peak": {
+      "mean": 0.237,
+      "p10": 0.206,
+      "p90": 0.258
+     },
+     "rmsDb": -31.883,
+     "attackMs": {
+      "p10": 0.998,
+      "p50": 6.984,
+      "p90": 56.871
+     },
+     "lengthMs": {
+      "p10": 123,
+      "p50": 2444,
+      "p90": 2501
+     },
+     "t20Ms": {
+      "p50": 1430
+     },
+     "centroidHz": {
+      "p10": 950,
+      "p50": 3796,
+      "p90": 7815
+     },
+     "low": 0.026,
+     "high": 0.318,
+     "tonality": 0.385,
+     "noise": 0.664,
+     "transientDb": 2.124,
+     "sweepOct": 0.505,
+     "pitchStability": 0.73,
+     "lengthOctSd": 1.689,
+     "centroidOctSd": 1.207
+    },
+    "perc": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 91.071,
+     "convention": 0.935,
+     "peak": {
+      "mean": 0.293,
+      "p10": 0.181,
+      "p90": 0.361
+     },
+     "rmsDb": -26.793,
+     "attackMs": {
+      "p10": 3.991,
+      "p50": 6.984,
+      "p90": 14.966
+     },
+     "lengthMs": {
+      "p10": 61,
+      "p50": 163,
+      "p90": 319
+     },
+     "t20Ms": {
+      "p50": 99
+     },
+     "centroidHz": {
+      "p10": 407,
+      "p50": 1047,
+      "p90": 4290
+     },
+     "low": 0.102,
+     "high": 0.092,
+     "tonality": 0.775,
+     "noise": 0.165,
+     "transientDb": 3.181,
+     "sweepOct": 1.534,
+     "pitchStability": 0.61,
+     "lengthOctSd": 1.006,
+     "centroidOctSd": 1.64
+    },
+    "fx": {
+     "n": 56,
+     "silentPct": 0,
+     "clipPct": 0,
+     "unsafePct": 0,
+     "looksLikePct": 96.429,
+     "convention": 0.98,
+     "peak": {
+      "mean": 0.27,
+      "p10": 0.211,
+      "p90": 0.302
+     },
+     "rmsDb": -24.193,
+     "attackMs": {
+      "p10": 5.986,
+      "p50": 11.973,
+      "p90": 25.941
+     },
+     "lengthMs": {
+      "p10": 79,
+      "p50": 210,
+      "p90": 825
+     },
+     "t20Ms": {
+      "p50": 149
+     },
+     "centroidHz": {
+      "p10": 313,
+      "p50": 889,
+      "p90": 2059
+     },
+     "low": 0.14,
+     "high": 0.039,
+     "tonality": 0.82,
+     "noise": 0.136,
+     "transientDb": -5.054,
+     "sweepOct": 2.265,
+     "pitchStability": 0.674,
+     "lengthOctSd": 1.093,
+     "centroidOctSd": 1.254
+    }
+   },
+   "kit": {
+    "kits": 168,
+    "decaySpreadOct": 1.466,
+    "centroidRangeOct": 6.806,
+    "levelRangeDb": 5.808,
+    "maxPeak": 0.394,
+    "loudKitsPct": 0,
+    "brightSpread": 0.228,
+    "sameness": 0.423,
+    "tomsTooAlikePct": 0,
+    "hatsTooAlikePct": 0,
+    "sameDecayKitsPct": 0,
+    "msPerKit": 763
+   }
+  }
+ },
+ "characterSeparation": 1.172,
+ "wildnessSeparation": 1.551,
+ "kit": {
+  "kits": 1008,
+  "decaySpreadOct": 1.215,
+  "centroidRangeOct": 6.524,
+  "levelRangeDb": 6.357,
+  "maxPeak": 0.429,
+  "loudKitsPct": 0,
+  "brightSpread": 0.242,
+  "sameness": 0.503,
+  "tomsTooAlikePct": 0.149,
+  "hatsTooAlikePct": 4.167,
+  "sameDecayKitsPct": 0.198,
+  "msPerKit": 585
+ },
+ "mutation": {
+  "plain": {
+   "sounds": 672,
+   "unsafePct": 0.149,
+   "silentPct": 0,
+   "looksLikePct": 85.863,
+   "lowWildLooksLikePct": 96.131,
+   "movedOctaves": 0.466,
+   "msPerKit": 130
+  },
+  "chosen": {
+   "sounds": 672,
+   "unsafePct": 0,
+   "silentPct": 0,
+   "looksLikePct": 88.988,
+   "lowWildLooksLikePct": 100,
+   "movedOctaves": 0.381,
+   "msPerKit": 574
+  }
+ },
+ "pitch": {
+  "kick": {
+   "n": 264,
+   "kinds": {
+    "stable": 211,
+    "inharmonic": 40,
+    "swept": 10,
+    "unpitched": 3
+   },
+   "stability": 0.749,
+   "sweepCents": 157
+  },
+  "ltom": {
+   "n": 192,
+   "kinds": {
+    "stable": 121,
+    "inharmonic": 56,
+    "swept": 11,
+    "unpitched": 4
+   },
+   "stability": 0.609,
+   "sweepCents": 127
+  },
+  "htom": {
+   "n": 192,
+   "kinds": {
+    "stable": 133,
+    "inharmonic": 52,
+    "swept": 5,
+    "unpitched": 2
+   },
+   "stability": 0.674,
+   "sweepCents": 162
+  }
+ },
+ "unsafeExamples": [
+  {
+   "kit": 95,
+   "character": "dub",
+   "wildness": 1,
+   "layout": "standard",
+   "instr": "chat",
+   "flags": [
+    "drone"
+   ],
+   "peak": 0.288,
+   "lengthMs": 2501
+  },
+  {
+   "kit": 352,
+   "character": "glitch",
+   "wildness": 0.7,
+   "layout": "alt",
+   "instr": "cymbal",
+   "flags": [
+    "click-only"
+   ],
+   "peak": 0.242,
+   "lengthMs": 14
+  },
+  {
+   "kit": 741,
+   "character": "industrial",
+   "wildness": 1,
+   "layout": "standard",
+   "instr": "chat",
+   "flags": [
+    "drone"
+   ],
+   "peak": 0.314,
+   "lengthMs": 2501
+  }
+ ],
+ "flags": {
+  "drone": 2,
+  "click-only": 1
+ }
+}

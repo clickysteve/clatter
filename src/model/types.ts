@@ -389,6 +389,15 @@ export interface DiscoveredSound {
   origin: CandidateOrigin;
 }
 
+/** What a generated kit was made with: the seed, this and the generator version name the kit again. */
+export interface KitMade {
+  /** KIT_GENERATOR when it was made */
+  generator: number;
+  character: import('../rhythm/styles').KitFlavour;
+  /** 0-1 */
+  wildness: number;
+}
+
 /** The LXR kit: every sound parameter value (0-127) and the modulation targets. */
 export interface SynthKit {
   params: number[];
@@ -466,7 +475,7 @@ export interface MasterSettings {
 
 export interface Project {
   format: 'clatter-project';
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   /** the four performance macros 0-1 (absent: 0) */
   macros?: number[];
   name: string;
@@ -486,7 +495,7 @@ export interface Project {
   /** the version of the generators that made the seeded material (absent: 1, the generators of every older project) */
   generator?: number;
   tracks: Track[];
-  kit: { name: string; seed: number; seedText?: string; synth: SynthKit };
+  kit: { name: string; seed: number; seedText?: string; /** how GENERATE KIT made it (absent: unknown, an older project or a loaded kit) */ made?: KitMade; synth: SynthKit };
   /** the sample set the tracks' samples came from or were saved as (display; the samples themselves are on the tracks) */
   sampleSet?: string;
   soundLocks: SoundLocks;

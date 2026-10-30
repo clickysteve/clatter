@@ -241,7 +241,7 @@ export function generateCandidate(base: SynthKit, seed: SeedValue, index: number
   const w = clampWildness(o.wildness);
   const rng = new Rng(candidateSeed(seed.seed, o.voice, index, draw));
   const cur = voiceValues(base, o.voice);
-  const design = designVoice(o.voice, o.archetype, o.character, rng);
+  const design = designVoice(o.voice, o.archetype, o.character, rng, w);
   const target = lfoTargetFor(o.voice, o.archetype, rng);
   const keys = voiceKeys(o.voice);
   const held = new Set(o.locks.params);
@@ -300,7 +300,7 @@ export function mutateCandidate(base: SynthKit, c: Candidate, o: MutateOptions):
   const seed = o.seed ?? mutationSeed(c);
   const kit0 = applyToKit(base, c.voice, c).kit;
   // the candidate itself is the starting sound; only parameter locks stand in the way
-  const kit = mutateKit(kit0, { seed, flavour: o.character, voiceRoles: o.voiceRoles, locks: { voices: [false, false, false, false, false, false], params: o.locks.params }, amount: w, voices: [c.voice] });
+  const kit = mutateKit(kit0, { seed, flavour: o.character, voiceRoles: o.voiceRoles, locks: { voices: [false, false, false, false, false, false], params: o.locks.params }, amount: w, voices: [c.voice], wildness: w });
   const values = voiceValues(kit, c.voice);
   const next = { voice: c.voice, values, lfo: c.lfo, vel: c.vel, ...(c.extras ? { extras: c.extras } : {}) };
   return {

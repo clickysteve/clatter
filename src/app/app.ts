@@ -17,7 +17,7 @@ import { SampleLibrary } from '../audio/library';
 import { renderHit, renderProject } from '../audio/render';
 import { AuditionPlayer } from '../audio/auditionPlayer';
 import { DiscoverSession } from './discover';
-import { applyToKit, soundWithExtras, type Candidate } from '../sound/discover';
+import { applyToKit, clampWildness, soundWithExtras, type Candidate } from '../sound/discover';
 import { analyseTarget, PitchCache, type PitchRecord, type PitchTarget } from '../analysis/trackPitch';
 import type { MetersMessage, TimedHit } from '../audio/protocol';
 import { ENGINE_RATE } from '../audio/engine';
@@ -36,7 +36,7 @@ import { hash32, randomSeed, Rng } from '../rhythm/rng';
 import { assignSeed, parseSeedInput, randomSeedValue, seedLabel, type SeedValue } from '../rhythm/seed';
 import { applyVelOp, clampVel, VEL_LABEL, type VelOp } from '../rhythm/velocity';
 import type { GestureHost } from '../ui/stepGesture';
-import { styleById } from '../rhythm/styles';
+import { styleById, type KitFlavour } from '../rhythm/styles';
 import type { Realization } from '../rhythm/realize';
 import { applyWildcard, defaultWild, repairWild, SCOPE_LABEL, type WildSettings } from '../destruction/wildcardProject';
 import type { TrigCond } from '../model/types';
@@ -50,8 +50,9 @@ import { describeDestroy } from '../destruction/destroy';
 import { kitPitchPlans, needsMeasure, pitchPlanList, pitchPlanOf, type TuneEnv } from '../music/tuning';
 import { measureAndTune, type TrackResult } from '../music/measure';
 import { defaultGlobalScale, defaultModeFor, defaultTrackScale, normaliseScale, trackScaleSpec, type GlobalScale, type ScaleSpec, type TrackScale } from '../music/scale';
-import { evolveKit, generateKit, mutateKit, voiceRolesOf } from '../sound/kitgen';
+import { evolveKit, generateKit, KIT_GENERATOR, mutateKit, voiceRolesOf } from '../sound/kitgen';
 import { KitService } from '../sound/kitService';
+import { DEFAULT_CANDIDATES, type SelectOptions } from '../sound/kitcheck';
 import { KitManager } from './kitManager';
 import { exportMidi } from '../export/midiFile';
 import { Sequence } from './sequence';
@@ -314,7 +315,7 @@ export class App {
         if (p === this.project) this.pitch.set(rec);
         return rec;
       },
-      check: async (kit, voice, seed) => (this.kits ? this.kits.check(kit, { flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), seed, voices: [voice], locked: [false, false, false, false, false, false], pitch: this.pitchPlans() }) : kit),
+      check: async (kit, voice, seed) => (this.kits ? this.kits.check(kit, { flavour: this.kitFlavour(), wildness: this.discover.wildness, voiceRoles: voiceRolesOf(this.project.tracks), seed, voices: [voice], locked: [false, false, false, false, false, false], lockedParams: this.project.soundLocks.params, pitch: this.pitchPlans() }) : kit),
       apply: (c, withExtras) => this.applyDiscovered(c, withExtras),
       changed: () => this.emit(['discover']),
       say: (t) => this.say(t),
@@ -1448,17 +1449,28 @@ export class App {
     );
   }
 
-  private kitOpts(seed: number) {
-    return { seed, flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), locks: this.project.soundLocks, pitch: kitPitchPlans(this.project) };
+  /** The CHARACTER kits are made in: the player's choice, or the flavour of the rhythm style (STYLE). */
+  kitFlavour(): KitFlavour {
+    const c = this.prefs.discover.character;
+    return c === 'style' ? styleById(this.project.gen.style).kitFlavour : c;
   }
 
-  /** A kit through the engine check (levels, audibility). */
-  private async checkedKit(kit: SynthKit, seed: number, voices?: number[]): Promise<SynthKit> {
+  /** The WILDNESS kits are made with (0-1): shared by GENERATE KIT, MUTATE and SOUND > DISCOVER. */
+  kitWildness(): number {
+    return clampWildness(this.prefs.discover.wildness);
+  }
+
+  private kitOpts(seed: number) {
+    return { seed, flavour: this.kitFlavour(), wildness: this.kitWildness(), voiceRoles: voiceRolesOf(this.project.tracks), locks: this.project.soundLocks, pitch: kitPitchPlans(this.project) };
+  }
+
+  /** A kit through the engine check (levels, audibility, and the choice among candidates when `select` is given). */
+  private async checkedKit(kit: SynthKit, seed: number, voices?: number[], select?: SelectOptions): Promise<SynthKit> {
     if (!this.kits) return kit;
     this.ui.busy = true;
     this.emit(['status']);
     try {
-      return await this.kits.check(kit, { flavour: styleById(this.project.gen.style).kitFlavour, voiceRoles: voiceRolesOf(this.project.tracks), seed, voices, locked: this.project.soundLocks.voices, pitch: this.pitchPlans() });
+      return await this.kits.check(kit, { flavour: this.kitFlavour(), wildness: this.kitWildness(), voiceRoles: voiceRolesOf(this.project.tracks), seed, voices, locked: this.project.soundLocks.voices, lockedParams: this.project.soundLocks.params, pitch: this.pitchPlans(), select });
     } finally {
       this.ui.busy = false;
       this.emit(['status']);
@@ -1481,13 +1493,16 @@ export class App {
   async generateKit(quantise = false): Promise<void> {
     const sv = this.drawSeed('kit');
     const seed = sv.seed;
-    const kit = await this.checkedKit(generateKit(this.project.kit.synth, this.kitOpts(seed)), seed);
+    const flavour = this.kitFlavour();
+    const wildness = this.kitWildness();
+    const kit = await this.checkedKit(generateKit(this.project.kit.synth, this.kitOpts(seed)), seed, undefined, { mode: 'design', candidates: DEFAULT_CANDIDATES });
     const fn = () => {
       this.applyKitChange(kit);
       assignSeed(this.project.kit, sv);
+      this.project.kit.made = { generator: KIT_GENERATOR, character: flavour, wildness };
       this.project.kit.name = `KIT ${sv.text ?? seed.toString(36)}`.toUpperCase().slice(0, 24);
       this.evolveHome = clone(kit);
-      this.say(`NEW ${styleById(this.project.gen.style).kitFlavour.toUpperCase()} KIT · SEED ${seedLabel(sv)}`);
+      this.say(`NEW ${flavour.toUpperCase()} KIT · WILD ${Math.round(wildness * 100)}% · SEED ${seedLabel(sv)}`);
     };
     if (quantise) this.quantised('GENERATE KIT', fn, ['kit']);
     else this.change('GENERATE KIT', fn, ['kit']);
@@ -1496,7 +1511,8 @@ export class App {
   /** MUTATE KIT / MUTATE VOICE: controlled changes (amount 0-1). */
   async mutateKit(amount = 0.3, voices?: number[], quantise = false): Promise<void> {
     const seed = randomSeed();
-    const kit = await this.checkedKit(mutateKit(this.project.kit.synth, { ...this.kitOpts(seed), amount, voices }), seed, voices);
+    const base = this.project.kit.synth;
+    const kit = await this.checkedKit(mutateKit(base, { ...this.kitOpts(seed), amount, voices }), seed, voices, { mode: 'mutate', candidates: DEFAULT_CANDIDATES, base, amount });
     const label = voices && voices.length === 1 ? 'MUTATE VOICE' : 'MUTATE KIT';
     const fn = () => {
       this.applyKitChange(kit);

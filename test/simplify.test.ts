@@ -57,7 +57,7 @@ describe('one authoritative pattern', () => {
       expect(pat.gen).toBeUndefined();
       expect(pat.edits).toBeUndefined();
     }
-    expect(saved.version).toBe(8);
+    expect(saved.version).toBe(9);
   });
 
   it('GENERATE makes the current pattern; the next edit changes it at once; one UNDO undoes only the edit, a second the generation', () => {
@@ -391,7 +391,7 @@ describe('legacy projects (generated baseline plus hand edits) open as one patte
   it('resolves gen + edits into the effective pattern and keeps every audible step, velocity, condition and sound', () => {
     const { text, ids } = legacy();
     const p = parseProject(text);
-    expect(p.version).toBe(8);
+    expect(p.version).toBe(9);
     const g = (i: number) => p.patterns[0]!.grids[ids[i]!]!.map((h) => (h ? h.vel : 0));
     expect(g(0)).toEqual([110, 0, 77, 0, 55, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     expect(p.patterns[0]!.grids[ids[0]!]![2]).toEqual({ vel: 77, ratchet: 2 });

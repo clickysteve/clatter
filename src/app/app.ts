@@ -18,7 +18,7 @@ import { renderHit, renderProject } from '../audio/render';
 import { AuditionPlayer } from '../audio/auditionPlayer';
 import { DiscoverSession } from './discover';
 import { applyToKit, clampWildness, soundWithExtras, type Candidate } from '../sound/discover';
-import { analyseTarget, PitchCache, type PitchRecord, type PitchTarget } from '../analysis/trackPitch';
+import { analyseTarget, normalizeTarget, PitchCache, targetKey, type PitchRecord, type PitchTarget } from '../analysis/trackPitch';
 import type { MetersMessage, TimedHit } from '../audio/protocol';
 import { ENGINE_RATE } from '../audio/engine';
 import { defaultProject } from '../model/defaults';
@@ -1602,10 +1602,19 @@ export class App {
       const fresh = this.pitch.fresh(this.project, target);
       if (fresh) return fresh;
     }
+    // results can finish out of order while a control is being dragged: a slower, older render must not replace a newer one
+    const key = targetKey(normalizeTarget(this.project, target));
+    const mine = (this.pitchStarted.get(key) ?? 0) + 1;
+    this.pitchStarted.set(key, mine);
     const rec = await analyseTarget(this.module, this.project, this.library, target);
-    this.pitch.set(rec);
+    if (mine >= (this.pitchApplied.get(key) ?? 0)) {
+      this.pitchApplied.set(key, mine);
+      this.pitch.set(rec);
+    }
     return rec;
   }
+  private pitchStarted = new Map<string, number>();
+  private pitchApplied = new Map<string, number>();
 
   // ------------------------------------------------------------------ SCALE
   /** Per voice, where a scale-locked voice's pitch must land when the generators write it (plain data). */
@@ -2387,6 +2396,27 @@ export class App {
     this.host.send({
       type: 'hits',
       hits: [{ time: this.host.now + 0.01, track: i, vel: hit?.vel ?? 110, pitch: hit?.note ?? 0, ...(rs?.switched ? { trig: rs.trig } : {}), ...(rs?.params.length ? { sp: rs.params } : {}), ...(rs?.sample ? { smp: rs.sample } : {}) }],
+    });
+  }
+
+  /** Play a track's base sound or one of its variations now, exactly as a step using it would play (the TUNER's HEAR). */
+  async auditionSlot(trackId: string, slot: number | null, vel = 110): Promise<void> {
+    if (this.host.state !== 'running') {
+      try {
+        await this.host.start();
+        configureEngine(this.live, this.project, this.library);
+      } catch {
+        return;
+      }
+    }
+    const i = this.trackIndexOf(trackId);
+    const t = this.project.tracks[i];
+    if (!t) return;
+    const v = slot !== null && t.sound.variations?.[slot] ? slot : null;
+    const rs = v === null ? null : resolveStepSound(t.sound, { v }, (par) => this.project.kit.synth.params[par] ?? 0, { seed: this.project.seed, cycle: 0, fill: false, track: trackId, step: 0 });
+    this.host.send({
+      type: 'hits',
+      hits: [{ time: this.host.now + 0.01, track: i, vel, pitch: 0, ...(rs?.params.length ? { sp: rs.params } : {}), ...(rs?.sample ? { smp: rs.sample } : {}) }],
     });
   }
 

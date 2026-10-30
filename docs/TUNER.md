@@ -115,3 +115,22 @@ is unchanged.
 - A HYBRID mix of two layers with different pitches is usually INHARMONIC: analyse the layers separately.
 - A kit parameter change anywhere stales every stored result (the engine shares voice state).
 - Only the first 1.5 seconds after the onset are analysed.
+
+## Setting the pitch from the tuner
+
+The PITCH group under the readout edits the sound being analysed, with no offset of its own. For a synth sound
+it shows the same COARSE (semitones) and FINE controls as SOUND > SYNTH, for the oscillator of the track's LXR
+voice (drum voices and snare: the tone oscillator; cymbal and hats: the carrier). For a sample track, or the
+SAMPLE layer of a hybrid, it shows the sample's TUNE and FINE. With a variation open the variation's own value is
+written (and the kit and the other variations are untouched); on the base sound it is the kit's, which every track
+on that voice shares, as the group's note says.
+
+- Drag for broad changes, Shift-drag or type a number for fine ones; `-1 ST` and `+1 ST` step the semitones.
+- A change is a normal undo step, is saved with the project and kit, and is heard in exports.
+- After a change the readout is measured again about 140 ms after the last edit, whether or not AUTO is on. An
+  analysis that finishes late never replaces a newer one, and the old reading stays dimmed (MEASURING THE NEW
+  PITCH) until the new one arrives.
+- HEAR plays the sound through the live engine with the same overrides a step using that variation would apply.
+- The detected note can differ from the parameter: the pitch envelope, FM, filters and modulation all shape what is
+  heard. The confidence and the NO RELIABLE PITCH verdicts are unchanged, so an unsuitable sound still shows no note
+  however far COARSE is moved.

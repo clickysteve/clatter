@@ -15,12 +15,15 @@ import { describeScale, nearestInScale, trackScaleState } from '../../music/scal
 import { describeLayer } from './soundScale';
 import type { PitchLayer, PitchRecord } from '../../analysis/trackPitch';
 import { font } from '../scale';
-import { button, group, h, Panel } from '../widgets';
+import { VOICE_PARAMS, VOICES } from '../../sound/lxrParams';
+import { button, ctl, group, h, Panel, range } from '../widgets';
 import { subscribe } from './patternView';
-import { slotBar } from './soundControls';
+import { paramCtl, slotBar } from './soundControls';
 import { Plot, vis, type PaneParts } from './soundUi';
 
 const AUTO_DELAY = 450;
+/** after a PITCH edit the re-analysis follows quickly: the control is being dragged, but only its last position is rendered */
+const PITCH_DELAY = 140;
 const LAYERS: [PitchLayer, string, string][] = [
   ['mix', 'MIX', 'Both layers, as the track plays'],
   ['synth', 'SYNTH', 'Only the LXR voice'],
@@ -49,6 +52,8 @@ export function tunerPane(app: App, pane: HTMLElement): PaneParts {
   let error = '';
   let timer: ReturnType<typeof setTimeout> | null = null;
   let open = false;
+  /** the PITCH control was touched: analyse again after every change, whether or not AUTO is on */
+  let follow = false;
 
   const target = () => ({ trackId: t().id, slot: app.ui.slot, layer, ...(untunedView ? { raw: true } : {}) });
   const stored = () => app.pitch.lookup(app.project, target());
@@ -77,18 +82,18 @@ export function tunerPane(app: App, pane: HTMLElement): PaneParts {
     busy = false;
     tp.refresh();
     // the sound changed while it was being analysed: AUTO catches up
-    if (auto && open && stored()?.stale) schedule();
+    if ((auto || follow) && open && stored()?.stale) schedule();
   };
   const schedule = () => {
     if (timer) clearTimeout(timer);
     timer = null;
-    if (!auto || !open || app.ui.view !== 'sound' || app.ui.soundTab !== 'tuner') return;
+    if (!(auto || follow) || !open || app.ui.view !== 'sound' || app.ui.soundTab !== 'tuner') return;
     const s = stored();
     if (s && !s.stale) return;
     timer = setTimeout(() => {
       timer = null;
       void run(false);
-    }, AUTO_DELAY);
+    }, follow ? PITCH_DELAY : AUTO_DELAY);
   };
   button(tp, bar, 'ANALYSE CURRENT SOUND', () => void run(false), { cls: 'med', disabled: () => busy, title: 'Render this sound alone, offline, and find its pitch. Nothing you hear or save changes. A result that is still valid is shown at once.' }).dataset.test = 'tuner-analyse';
   button(tp, bar, 'REANALYSE', () => void run(true), { disabled: () => busy, title: 'Render and analyse again, even if the sound has not changed' }).dataset.test = 'tuner-reanalyse';
@@ -155,6 +160,76 @@ export function tunerPane(app: App, pane: HTMLElement): PaneParts {
   const stabM = meter('STABILITY');
   const stale = h('div', 'tstale', tg);
   stale.dataset.test = 'tuner-stale';
+
+
+  // ---------------------------------------------------------------- the pitch control
+  // The real parameters of the sound being edited, the same controls as SOUND > SYNTH (or SAMPLE): the
+  // oscillator's COARSE (semitones) and FINE, or the sample's TUNE and FINE. The open variation is edited
+  // when one is open. Nothing here is a separate offset: the readout above follows what these change.
+  const pg = group(left, 'PITCH');
+  pg.classList.add('col');
+  pg.dataset.test = 'tuner-pitch';
+  const pInfo = h('div', 'tiny', pg);
+  pInfo.dataset.test = 'tuner-pitch-info';
+  const pCtls = h('div', 'col', pg);
+  const pAct = h('div', 'row wrap', pg);
+  const sampleSide = () => t().sound.mode === 'sample' || (t().sound.mode === 'hybrid' && layer === 'sample');
+  let pitchKey = '';
+  const nudge = (d: number) => {
+    follow = true;
+    if (sampleSide()) app.setEditedSample({ tune: Math.max(-24, Math.min(24, app.sampleValue('tune') + d)) }, 'TUNE');
+    else {
+      const def = oscDefs()?.coarse;
+      if (def) app.setEditedParam(def.id, app.paramValue(def.id) + d, def.label);
+    }
+  };
+  const oscDefs = () => {
+    const v = app.voiceOf(t());
+    const list = v >= 0 ? VOICE_PARAMS[v] : undefined;
+    const coarse = list?.find((p) => p.group === 'OSC' && p.label === 'COARSE');
+    const fine = list?.find((p) => p.group === 'OSC' && p.label === 'FINE');
+    return coarse && fine ? { coarse, fine } : null;
+  };
+  const buildPitch = () => {
+    const sampleOn = sampleSide();
+    const key = sampleOn ? 'sample' : `synth:${app.voiceOf(t())}`;
+    if (key === pitchKey) return;
+    pitchKey = key;
+    pCtls.innerHTML = '';
+    if (sampleOn) {
+      const sampleRange = (label: string, k: 'tune' | 'fine', title: string, min: number, max: number, format: (v: number) => string) => {
+        const c = ctl(pCtls, label, title);
+        c.row.dataset.param = 'sample-' + k;
+        range(tp, c.slot, { get: () => Math.round(app.sampleValue(k) as number), set: (v) => { follow = true; app.setEditedSample({ [k]: v }, label); }, min, max, def: 0, bip: true, format, begin: () => app.beginDrag(label), end: () => app.endDrag(), title });
+      };
+      const sgn = (v: number) => (v > 0 ? '+' : '') + v;
+      sampleRange('TUNE', 'tune', 'Sample pitch in semitones (SOUND > SAMPLE has the same control)', -24, 24, sgn);
+      sampleRange('FINE', 'fine', 'Sample fine tune in cents', -100, 100, (v) => sgn(v) + 'C');
+    } else {
+      const d = oscDefs();
+      if (d) {
+        paramCtl(app, pCtls, d.coarse, tp);
+        paramCtl(app, pCtls, d.fine, tp);
+      }
+    }
+  };
+  button(tp, pAct, '−1 ST', () => nudge(-1), { cls: 'small', title: 'One semitone down' }).dataset.test = 'tuner-pitch-down';
+  button(tp, pAct, '+1 ST', () => nudge(1), { cls: 'small', title: 'One semitone up' }).dataset.test = 'tuner-pitch-up';
+  button(tp, pAct, '▶ HEAR', () => void app.auditionSlot(t().id, app.ui.slot), { cls: 'small', title: 'Play this sound now, with the pitch as set here' }).dataset.test = 'tuner-hear';
+  h('div', 'hint', pg, 'DRAG FOR BROAD CHANGES · SHIFT-DRAG OR TYPE A NUMBER FOR FINE ONES. THE DETECTED NOTE CAN DIFFER FROM THE VALUE: PITCH ENVELOPE, FM AND FILTERS SHAPE WHAT YOU HEAR, SO TRUST THE READOUT ONLY WHILE IT SHOWS A CONFIDENT NOTE.');
+  // a drag or a key in the controls is a pitch edit: from then on the readout follows every change
+  for (const ev of ['pointerdown', 'keydown'] as const) pCtls.addEventListener(ev, () => (follow = true), true);
+  tp.add(() => {
+    buildPitch();
+    const v = app.voiceOf(t());
+    const where = app.ui.slot === null ? 'THE BASE SOUND' : 'VARIATION ' + 'ABCD'[app.ui.slot];
+    const shared = v >= 0 && !sampleSide() ? app.project.tracks.filter((x) => app.voiceOf(x) === v && x.id !== t().id) : [];
+    pInfo.textContent = sampleSide()
+      ? `SAMPLE TUNE AND FINE OF ${where}`
+      : oscDefs()
+        ? `${VOICES[v]} OSCILLATOR COARSE AND FINE OF ${where}${app.ui.slot === null && shared.length ? ` · SHARED WITH ${shared.map((x) => x.name).join(', ')}` : ''}`
+        : 'THIS SOUND HAS NO OSCILLATOR PITCH TO SET';
+  });
 
   // ---------------------------------------------------------------- the scale
   const sg = group(left, 'SCALE');
@@ -315,7 +390,7 @@ export function tunerPane(app: App, pane: HTMLElement): PaneParts {
     stabM.l.style.width = (a?.fundamental ? a.stability * 100 : 0) + '%';
     stabM.v.textContent = a?.fundamental ? pct(a.stability) : '';
     tg.classList.toggle('stale', dim);
-    stale.textContent = dim ? 'THE SOUND HAS CHANGED SINCE THIS ANALYSIS: REANALYSE' : rec ? `ANALYSED ${new Date(rec.at).toLocaleTimeString()}` : '';
+    stale.textContent = dim ? (follow ? 'MEASURING THE NEW PITCH…' : 'THE SOUND HAS CHANGED SINCE THIS ANALYSIS: REANALYSE') : rec ? `ANALYSED ${new Date(rec.at).toLocaleTimeString()}` : '';
     // movement
     moveRows.innerHTML = '';
     if (a?.fundamental && a.initial && a.settled) {
@@ -370,9 +445,12 @@ export function tunerPane(app: App, pane: HTMLElement): PaneParts {
         // opening the tab analyses a sound that has never been analysed (one render, on demand), not one that was
         if (!stored()) void run(false);
         else schedule();
-      } else if (timer) {
-        clearTimeout(timer);
-        timer = null;
+      } else {
+        follow = false;
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
       }
     },
   };

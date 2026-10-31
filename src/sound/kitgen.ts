@@ -334,11 +334,24 @@ interface Lean {
   fx?: { type: number; amount: [number, number]; p: [number, number][]; extra?: Partial<Record<number, number>> }[];
 }
 
+/**
+ * The FX bus DRIVE with the CLIP shape is the firmware's RAT distortion, whose COLOUR (P2) feeds
+ * the output back into a gain of up to 2305: above this COLOUR it can self-oscillate into a steady
+ * tone that outlives the drums (from 3 at full DRIVE, TONE and VOLUME; see test/fxclip.test.ts).
+ * The generators stay at or under it; a COLOUR set by hand is left alone.
+ */
+export const CLIP_COLOUR_MAX = 2;
+
+/** Keep a generated or mutated FX bus out of CLIP feedback oscillation (locked COLOUR untouched). */
+export function tameFx(params: number[], locked: { has(p: number): boolean } = new Set<number>()): void {
+  if (params[PAR.FX_TYPE] === 1 && params[PAR.FX_DIST_TYPE] === 2 && !locked.has(PAR.FX_P2) && (params[PAR.FX_P2] ?? 0) > CLIP_COLOUR_MAX) params[PAR.FX_P2] = CLIP_COLOUR_MAX;
+}
+
 const FLAVOURS: Record<KitFlavour, Lean> = {
   machine: { decay: 0.9, drive: 0, lfo: 0.1, fx: [{ type: 0, amount: [0, 0], p: [] }, { type: 4, amount: [15, 30], p: [[40, 70], [50, 70], [80, 110], [30, 60]] }] },
   electro: { decay: 1.25, drive: 5, fm: 1.1, lfo: 0.15, fx: [{ type: 4, amount: [15, 35], p: [[45, 80], [50, 80], [70, 110], [40, 75]] }, { type: 3, amount: [70, 100], p: [[10, 40], [40, 80], [50, 90], [40, 80]] }] },
   acoustic: { decay: 1, drive: 10, fm: 0.7, lfo: 0.05, fx: [{ type: 3, amount: [60, 100], p: [[5, 30], [40, 90], [40, 80], [50, 90]] }, { type: 0, amount: [0, 0], p: [] }] },
-  industrial: { decay: 1.1, drive: 40, fm: 1.3, rate: [60, 127], lfo: 0.3, fx: [{ type: 1, amount: [40, 80], p: [[50, 110], [30, 90], [40, 100], [50, 90]], extra: { [PAR.FX_DIST_TYPE]: 2 } }, { type: 2, amount: [25, 50], p: [[20, 90], [0, 0], [0, 0], [0, 0]] }] },
+  industrial: { decay: 1.1, drive: 40, fm: 1.3, rate: [60, 127], lfo: 0.3, fx: [{ type: 1, amount: [40, 80], p: [[50, 110], [0, CLIP_COLOUR_MAX], [40, 100], [50, 90]], extra: { [PAR.FX_DIST_TYPE]: 2 } }, { type: 2, amount: [25, 50], p: [[20, 90], [0, 0], [0, 0], [0, 0]] }] },
   glitch: { decay: 0.7, drive: 20, fm: 1.4, rate: [20, 127], lfo: 0.55, fx: [{ type: 2, amount: [20, 50], p: [[30, 110], [0, 0], [0, 0], [0, 0]] }, { type: 4, amount: [25, 45], p: [[10, 40], [10, 40], [60, 110], [50, 90]], extra: { [PAR.FX_DELAY_TYPE]: 1 } }] },
   dub: { decay: 1.35, drive: 5, fm: 0.8, lfo: 0.2, fx: [{ type: 4, amount: [30, 50], p: [[60, 100], [60, 100], [40, 80], [70, 100]], extra: { [PAR.FX_DELAY_TYPE]: 1 } }] },
 };
@@ -683,6 +696,7 @@ export function designFx(kit: SynthKit, rng: Rng, flavour: KitFlavour, locked: S
     if (r) set(p, rng.range(r[0], r[1]));
   });
   for (const [p, v] of Object.entries(f.extra ?? {})) set(Number(p), v as number);
+  tameFx(kit.params, locked);
 }
 
 /**
@@ -721,6 +735,7 @@ export function mutateKit(base: SynthKit, o: KitGenOptions & { amount: number; v
   if (voices.length === 6 && rng01(o.seed) < amount * 0.25 && !locked.has(PAR.FX_TYPE)) {
     const r = new Rng(hash32(o.seed, SALT.kit, 1099));
     for (const p of [PAR.FX_P1, PAR.FX_P2, PAR.FX_P3, PAR.FX_P4]) if (!locked.has(p)) kit.params[p] = clamp127(kit.params[p]! + r.bell() * 25 * amount);
+    tameFx(kit.params, locked);
   }
   return kit;
 }

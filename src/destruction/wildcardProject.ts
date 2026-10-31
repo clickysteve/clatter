@@ -40,7 +40,7 @@ import { checkedSeedText } from '../rhythm/seed';
 import { styleById } from '../rhythm/styles';
 import { distributeSounds, generateVariations, mutateSounds } from '../sound/soundgen';
 import { kitPitchPlans, pitchPlanOf } from '../music/tuning';
-import { mutateKit, voiceRolesOf } from '../sound/kitgen';
+import { mutateKit, tameFx, voiceRolesOf } from '../sound/kitgen';
 import { isEmptyStepSound } from '../sound/stepSound';
 import { BPM_MAX, BPM_MIN, MAX_TEMPO_BARS, repairTempoAuto, type TempoAuto, type TempoPoint } from '../transport/tempo';
 import { wildcard as classicWildcard } from './wildcard';
@@ -383,6 +383,7 @@ export function applyWildcard(p: Project, s: WildSettings, input: WildInput): Wi
       // the FX bus: wet/dry and its four parameters move; the type changes only at high intensity
       let any = nudge(PAR.FX_DRY_WET, 0.1 + 0.3 * k);
       for (const par of [PAR.FX_P1, PAR.FX_P2, PAR.FX_P3, PAR.FX_P4]) any = nudge(par, 0.08 + 0.35 * k) || any;
+      tameFx(prm, new Set(p.soundLocks.params));
       if (any) {
         n++;
         report.push('FX BUS MOVED');

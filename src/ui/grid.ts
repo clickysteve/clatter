@@ -880,7 +880,7 @@ export class PatternGrid {
       this.drawOverlay(this.lastHead);
       this.onContext?.(cell, e);
     });
-    const press = (e: PointerEvent, cell: Cell) => ({ track: app.project.tracks[cell.track]!.id, trackIndex: cell.track, step: cell.step, x: e.clientX, y: e.clientY, shift: e.shiftKey, alt: e.altKey });
+    const press = (e: PointerEvent, cell: Cell) => ({ track: app.project.tracks[cell.track]!.id, trackIndex: cell.track, step: cell.step, x: e.clientX, y: e.clientY, shift: e.shiftKey, alt: e.altKey, touch: e.pointerType === 'touch' });
     c.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       // the header: a press selects that step across every track, a drag along it selects the columns
@@ -901,13 +901,6 @@ export class PatternGrid {
       this.gesture.down(press(e, cell));
       this.setCursorStyle(e);
       this.redrawOverlay();
-    });
-    // double-click an existing note: delete it (the first click only selected it)
-    c.addEventListener('dblclick', (e) => {
-      if (e.shiftKey || e.altKey || this.o.readonly) return;
-      const cell = this.cellAt(e);
-      if (!cell) return;
-      app.deleteNote(app.project.tracks[cell.track]!.id, cell.step);
     });
     c.addEventListener('pointermove', (e) => {
       if (this.columns !== null) {

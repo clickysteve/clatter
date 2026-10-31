@@ -5,7 +5,7 @@ import { History } from '../src/app/history';
 import { trackGrid } from '../src/rhythm/pattern';
 import { applyVelOp, dragVelocity } from '../src/rhythm/velocity';
 import { trackCells, trigOutcome } from '../src/ui/gridModel';
-import { DRAG_THRESHOLD, StepGesture, type Press } from '../src/ui/stepGesture';
+import { DRAG_THRESHOLD, TOUCH_DRAG_THRESHOLD, StepGesture, type Press } from '../src/ui/stepGesture';
 import { realize } from '../src/rhythm/realize';
 import { clone } from '../src/model/types';
 
@@ -51,24 +51,50 @@ describe('step creation and deletion', () => {
     expect(hit(2, 5)?.vel).toBe(90);
   });
 
-  it('a click on a hit only selects it; a double-click (deleteNote) removes it, and undo brings it back', () => {
+  it('a click on a hit removes it as one undo step; a click on an empty step adds it again (rapid clicks toggle)', () => {
     const { app, g, press, mv, hit } = setup();
     g.down(press(0, 3));
     g.up(mv(0, 3));
     expect(hit(0, 3)).not.toBeNull();
-    app.select(null);
-    app.ui.cursor = null;
     g.down(press(0, 3));
     g.move(mv(0, 3, DRAG_THRESHOLD - 1, 0));
     g.up(mv(0, 3));
-    expect(hit(0, 3)).not.toBeNull();
-    expect(app.cursorCell()).toEqual({ track: app.project.tracks[0]!.id, step: 3 });
-    expect(app.history.undoLabel).toBe('ADD HIT');
-    app.deleteNote(app.project.tracks[0]!.id, 3);
     expect(hit(0, 3)).toBeNull();
     expect(app.history.undoLabel).toBe('DELETE HIT');
+    expect(app.cursorCell()).toEqual({ track: app.project.tracks[0]!.id, step: 3 });
+    for (let i = 0; i < 6; i++) {
+      g.down(press(0, 3));
+      g.up(mv(0, 3));
+      expect(!!hit(0, 3)).toBe(i % 2 === 0);
+    }
     app.undo();
     expect(hit(0, 3)).not.toBeNull();
+  });
+
+  it('a velocity drag on a hit keeps it, keeps its other properties, and is one undo step', () => {
+    const { app, g, ids, press, mv, hit } = setup();
+    g.down(press(0, 3));
+    g.up(mv(0, 3));
+    app.setHitProps(ids[0]!, 3, { vel: 90, prob: 70 });
+    app.history.clear();
+    g.down(press(0, 3));
+    g.move(mv(0, 3, -20));
+    g.up(mv(0, 3, 0));
+    expect(hit(0, 3)).toMatchObject({ vel: 110, prob: 70 });
+    expect(app.history.undoLabel).toBe('VELOCITY');
+    app.undo();
+    expect(hit(0, 3)).toMatchObject({ vel: 90, prob: 70 });
+  });
+
+  it('a touch press needs a bigger movement to become a drag, so a wobbly tap still toggles', () => {
+    const { g, press, mv, hit } = setup();
+    g.down(press(0, 3));
+    g.up(mv(0, 3));
+    g.down(press(0, 3, { touch: true }));
+    g.move(mv(0, 3, TOUCH_DRAG_THRESHOLD - 1));
+    expect(g.mode).toBe('hit');
+    g.up(mv(0, 3));
+    expect(hit(0, 3)).toBeNull();
   });
 });
 

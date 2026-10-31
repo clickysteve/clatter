@@ -7,10 +7,9 @@ Every gesture is one undo step; selecting is not an edit.
 | Gesture | Effect |
 | --- | --- |
 | Click an empty step | A note at the NEW HIT VELOCITY, heard at once, and the step is selected |
-| Click a note | Selects it; nothing is deleted |
-| Double-click a note | Deletes it (with its step sound and trigger condition) |
+| Click a note | Removes it (with its step sound and trigger condition), one undo step. A press that moves past the drag threshold (4 px, 10 px for touch) is a drag instead and never removes the note |
 | Right-click a step | Selects it (note or empty) and opens the step editor |
-| Press, drag up / down | Velocity of the pressed hit (a new one or an existing one), up is louder, one pixel is one step, 1-127. A `VEL n` plate and a gauge show the value. |
+| Press, drag up / down | Velocity of the pressed hit (the hit stays) (a new one or an existing one), up is louder, one pixel is one step, 1-127. A `VEL n` plate and a gauge show the value. |
 | Press, drag sideways | Paints hits along the track the gesture started on. Existing hits stay. Steps a fast pointer skips are filled. |
 | Shift-drag | Erases hits along the track |
 | Shift-click | Adds the step to the selection, or takes it out again |

@@ -109,9 +109,8 @@ export function helpDialog(): void {
     [
       'EDITING THE GRID',
       [
-        ['CLICK', 'an empty step gets a note and is selected; a click on a note only selects it. The STEP SOUND and step editors under the grid show the selected step'],
-        ['DOUBLE-CLICK', 'delete the note on a step'],
-        ['DRAG UP / DOWN', 'velocity of the hit you pressed (a new one, or the one that is there); the value shows while you drag'],
+        ['CLICK', 'toggles a step: an empty step gets a note, a note is removed. The STEP SOUND and step editors under the grid show the step'],
+        ['DRAG UP / DOWN', 'velocity of the hit you pressed (a new one, or the one that is there; it is not removed); the value shows while you drag'],
         ['DRAG SIDEWAYS', 'paint hits along the track you started on (the hits that are there stay); one undo step'],
         ['SHIFT-DRAG', 'erase hits along the track'],
         ['SHIFT-CLICK', 'add the step to the selection, or take it out again (the VELOCITY tools and DELETE work on all of them)'],
@@ -173,7 +172,7 @@ export function gridKeyDialog(): void {
     [{ ...base, strokes: 3, vel: 90 }, 'Several strokes in one step', 'A split block: a ratchet, a roll or a stutter plays more than once in the step.'],
     [{ ...base, flam: true, vel: 100 }, 'A flam', 'A short block just before the hit: a soft grace note.'],
     [{ ...base, hit: hit(100, 50), prob: 50, vel: 100 }, 'A hit that may not play', 'A thin bar along the top of the step shows its chance. A full-length bar is certain; half length is 50 %. The block is solid when it plays this time round.'],
-    [{ ...base, state: 'silent', hit: hit(100, 50), prob: 50, why: 'chance', vel: 100 }, 'Written, but silent this pass', 'An outlined block: the hit is in your pattern but did not play in the cycle on show (its chance, the track’s density, or CHOP or DESTROY moving or skipping it). Double-click removes it.'],
+    [{ ...base, state: 'silent', hit: hit(100, 50), prob: 50, why: 'chance', vel: 100 }, 'Written, but silent this pass', 'An outlined block: the hit is in your pattern but did not play in the cycle on show (its chance, the track’s density, or CHOP or DESTROY moving or skipping it). Click it to remove it.'],
     [empty, 'An empty step', 'Nothing sounds, and nothing is written. Clicking adds a note (the pointer shows a faint preview of it).'],
     [{ ...base, trig: 'EVERY 4 ON 4' }, 'A step with a trigger condition', 'A small corner mark at the bottom left: the step only plays when its condition holds (a share of the passes, every Nth, first or last, odd or even, fill, previous step). Hover it, or open the TRIGGER tab, to read it.'],
     [{ ...base, state: 'silent', why: 'condition', trig: 'ODD CYCLES' }, 'A conditional step that is silent this pass', 'An outlined block with the corner mark: its condition did not hold on the pass on show (PASS on the TRIGGER tab, or the pass playing now).'],
@@ -225,8 +224,7 @@ export function gridKeyDialog(): void {
 /** The step-editing gestures: the full guide (the line under the grid only hints at them). */
 export const GESTURES: [string, string][] = [
   ['Click an empty step', 'Makes a note and selects it'],
-  ['Click a note', 'Selects it; nothing is deleted'],
-  ['Double-click a note', 'Deletes it'],
+  ['Click a note', 'Removes it'],
   ['Right-click a step', 'Selects it and opens the step editor'],
   ['Drag up / down', 'Sets the velocity (up is louder)'],
   ['Drag sideways', 'Paints notes along the track'],

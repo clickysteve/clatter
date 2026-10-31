@@ -70,7 +70,7 @@ test('a click inside a grid cell edits exactly that cell', async ({ page }) => {
   expect(undone).toBe(before);
 });
 
-test('click adds, a second click only selects, double-click removes, right-click opens the step editor, Escape closes it', async ({ page }) => {
+test('click adds, a second click removes, a rapid run of clicks toggles, right-click opens the step editor, Escape closes it', async ({ page }) => {
   await boot(page);
   const g = await gridGeo(page);
   const tr = 6;
@@ -81,9 +81,9 @@ test('click adds, a second click only selects, double-click removes, right-click
   await page.mouse.click(...at(3));
   expect(await has(3)).toBe(true);
   await page.mouse.click(...at(3));
-  expect(await has(3)).toBe(true); // a click on a note selects it, nothing is deleted
-  await page.mouse.dblclick(...at(3));
-  expect(await has(3)).toBe(false);
+  expect(await has(3)).toBe(false); // a click on a note removes it
+  for (let i = 0; i < 5; i++) await page.mouse.click(...at(3), { delay: 10 });
+  expect(await has(3)).toBe(true);
   await page.mouse.click(...at(3));
   // the step editor under the grid shows the step
   await expect(page.locator('[data-test=pane-sequence]')).toContainText('STEP 4');

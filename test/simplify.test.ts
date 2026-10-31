@@ -129,7 +129,7 @@ describe('one authoritative pattern', () => {
 });
 
 describe('step selection and editing', () => {
-  it('clicking an empty step makes a note and selects it; clicking a note selects it and keeps it', () => {
+  it('clicking an empty step makes a note and selects it; clicking a note removes it', () => {
     const { app, ids, click, hit } = setup();
     click(2, 4);
     expect(hit(2, 4)).not.toBeNull();
@@ -137,12 +137,12 @@ describe('step selection and editing', () => {
     click(5, 9);
     expect(app.cursorCell()).toEqual({ track: ids[5], step: 9 });
     click(2, 4);
-    expect(hit(2, 4)).not.toBeNull();
+    expect(hit(2, 4)).toBeNull();
     expect(app.cursorCell()).toEqual({ track: ids[2], step: 4 });
-    expect(app.noteCount()).toBe(2);
+    expect(app.noteCount()).toBe(1);
   });
 
-  it('double-click (deleteNote) deletes the note, its step sound and its condition; UNDO restores all three', () => {
+  it('deleting a note (click, deleteNote) deletes the note, its step sound and its condition; UNDO restores all three', () => {
     const { app, ids, click, hit } = setup();
     click(1, 3);
     setStepSound(app.pattern, ids[1]!, 3, { v: 2 });
@@ -195,7 +195,7 @@ describe('step selection and editing', () => {
   it('Shift-click builds a multi-step selection; Delete removes exactly those notes in one undo step', () => {
     const { app, ids, click, hit } = setup();
     for (const [t, s] of [[0, 0], [0, 4], [3, 8], [5, 12]] as const) click(t, s);
-    click(0, 0);
+    app.setCursor({ track: ids[0]!, step: 0 });
     click(3, 8, { shift: true });
     click(5, 12, { shift: true });
     expect(app.selectedCells()).toEqual([{ track: ids[0], step: 0 }, { track: ids[3], step: 8 }, { track: ids[5], step: 12 }]);
@@ -208,18 +208,18 @@ describe('step selection and editing', () => {
   });
 
   it('velocity tools act on the picked notes only', () => {
-    const { app, click, hit } = setup();
+    const { app, ids, click, hit } = setup();
     for (const s of [0, 4, 8]) click(0, s);
-    click(0, 0);
+    app.setCursor({ track: ids[0]!, step: 0 });
     click(0, 8, { shift: true });
     app.editVelocity({ k: 'set', v: 40 });
     expect([hit(0, 0)!.vel, hit(0, 4)!.vel, hit(0, 8)!.vel]).toEqual([40, 100, 40]);
   });
 
   it('Delete with nothing but the cursor deletes that one note, never the whole track', () => {
-    const { app, click, hit } = setup();
+    const { app, ids, click, hit } = setup();
     for (const s of [0, 1, 2]) click(0, s);
-    click(0, 1);
+    app.setCursor({ track: ids[0]!, step: 1 });
     app.deleteSelected();
     expect([hit(0, 0) !== null, hit(0, 1) !== null, hit(0, 2) !== null]).toEqual([true, false, true]);
   });

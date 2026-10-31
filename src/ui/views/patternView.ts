@@ -109,8 +109,8 @@ export function patternView(app: App, screen: HTMLElement): View {
   const foot = h('div', 'gridfoot', pb);
   const where = h('div', 'tiny where grow', foot);
   where.style.color = 'var(--ink)';
-  const gestures = h('div', 'hint', foot, 'CLICK ADD · DOUBLE-CLICK DELETE · DRAG ↕ VELOCITY · DRAG ↔ PAINT · ? KEY: ALL GESTURES');
-  gestures.title = 'Click an empty step to add a note, click a note to select it, double-click to delete it, drag up or down for velocity, drag sideways to paint. The ? KEY button lists every gesture.';
+  const gestures = h('div', 'hint', foot, 'CLICK TOGGLE · DRAG ↕ VELOCITY · DRAG ↔ PAINT · ? KEY: ALL GESTURES');
+  gestures.title = 'Click an empty step to add a note, click a note to remove it, drag up or down for velocity, drag sideways to paint. The ? KEY button lists every gesture.';
   let hovered: Cell | null = null;
   const showWhere = () => {
     const c = hovered ?? (() => {

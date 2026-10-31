@@ -6,8 +6,8 @@
  *   press an empty step       the hit is made and selected at once (at the new-hit velocity)
  *     then drag up / down     sets its velocity (up is louder)
  *     then drag sideways      paints hits along the same track
- *   press a hit               selects it; nothing is deleted (a double-click deletes, see the grid)
- *     drag up / down          sets its velocity
+ *   press a hit               selects it; releasing without moving removes it (a click toggles)
+ *     drag up / down          sets its velocity (the hit stays)
  *     drag sideways           paints hits on the empty steps (the hits that are there stay)
  *   Shift-press               release in place: add the step to the selection, or take it out
  *     drag sideways           erases hits along the same track
@@ -24,6 +24,8 @@ import { dragVelocity } from '../rhythm/velocity';
 
 /** Pixels of movement before a press becomes a drag. */
 export const DRAG_THRESHOLD = 4;
+/** A fingertip wobbles more than a mouse: a touch press only becomes a drag past this. */
+export const TOUCH_DRAG_THRESHOLD = 10;
 
 export interface Region {
   t0: number;
@@ -63,6 +65,7 @@ export interface Press {
   y: number;
   shift: boolean;
   alt: boolean;
+  touch?: boolean;
 }
 
 export interface Move {
@@ -138,7 +141,7 @@ export class StepGesture {
     if (ph === 'new' || ph === 'hit' || ph === 'shift') {
       const dx = m.x - s.x;
       const dy = m.y - s.y;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < DRAG_THRESHOLD) return;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < (s.touch ? TOUCH_DRAG_THRESHOLD : DRAG_THRESHOLD)) return;
       const vertical = Math.abs(dy) > Math.abs(dx);
       if (ph === 'shift') {
         if (vertical) return; // Shift only erases, along the track
@@ -175,6 +178,11 @@ export class StepGesture {
     const s = this.start;
     const h = this.host;
     if (ph === 'shift') h.pick(s.track, s.step);
+    // a click on a hit that never became a drag removes it: one click, one undo step
+    if (ph === 'hit') {
+      this.begin('DELETE HIT');
+      h.paint(s.track, s.step, false);
+    }
     this.finish();
   }
 

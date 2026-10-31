@@ -87,7 +87,7 @@ for (const [w, h, scale] of SIZES) {
   });
 }
 
-test('clicking an empty step and clicking a note: select, keep; double-click deletes; Delete removes the selection; the STEP SOUND panel follows', async ({ page }) => {
+test('clicking an empty step and clicking a note: select, keep; click toggles; Delete removes the selection; the STEP SOUND panel follows', async ({ page }) => {
   const errors = await boot(page);
   const g = await geo(page);
   await page.evaluate(() => {
@@ -100,6 +100,8 @@ test('clicking an empty step and clicking a note: select, keep; double-click del
   await page.mouse.click(...g.at(tr, 2));
   expect(await has(2)).toBe(true);
   await page.mouse.click(...g.at(tr, 2));
+  expect(await has(2)).toBe(false);
+  await page.mouse.click(...g.at(tr, 2));
   expect(await has(2)).toBe(true);
   // the STEP SOUND tab shows the step, for a note and for an empty step
   await page.click('[data-test=ws-sound]');
@@ -109,8 +111,8 @@ test('clicking an empty step and clicking a note: select, keep; double-click del
   await expect(page.locator('[data-test=pane-sound]')).toContainText('STEP 7');
   expect(await has(6)).toBe(false);
   await expect(page.locator('[data-test=pane-sound]')).toContainText(/NO HIT/);
-  // double-click deletes, one undo brings it back
-  await page.mouse.dblclick(...g.at(tr, 2));
+  // a click on the note removes it, one undo brings it back
+  await page.mouse.click(...g.at(tr, 2));
   expect(await has(2)).toBe(false);
   await page.keyboard.press('Control+z');
   expect(await has(2)).toBe(true);
@@ -139,7 +141,7 @@ test('the ? KEY lists every gesture; the permanent hint is short', async ({ page
   expect(hint!.length).toBeLessThan(90);
   await page.click('[data-test=grid-key]');
   const dlg = page.locator('.dialog');
-  for (const t of ['Double-click a note', 'Shift-drag', 'Shift-click', 'Right-click a step', 'Delete / Backspace']) await expect(dlg).toContainText(t);
+  for (const t of ['Click a note', 'Shift-drag', 'Shift-click', 'Right-click a step', 'Delete / Backspace']) await expect(dlg).toContainText(t);
   await page.keyboard.press('Escape');
 });
 
